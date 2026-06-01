@@ -4,6 +4,13 @@ out
 dist
 .env.local
 .env
+.env.*.local
+*.pem
+apiclient_key.pem
+wechatpay_public_key.pem
+wechatpay_platform_cert.pem
+certs/
+secrets/
 !.env.example
 npm-debug.log*
 yarn-debug.log*

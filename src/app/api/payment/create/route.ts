@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-import { createPaymentOrder, PaymentError } from "@/lib/server/payment/payment-service";
+import { PaymentError, createPaymentOrder } from "@/lib/server/payment/payment-service";
 import type { CreditPackageId } from "@/types/billing";
 
 export const runtime = "nodejs";
@@ -14,11 +14,19 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as Partial<{ packageId: CreditPackageId }>;
     const order = await createPaymentOrder(user.id, String(body.packageId || "") as CreditPackageId);
-    return NextResponse.json({ orderId: order.id, order });
+
+    return NextResponse.json({
+      orderId: order.id,
+      outTradeNo: order.outTradeNo,
+      status: order.status,
+      paymentProvider: order.paymentProvider,
+      paymentMethod: order.paymentMethod,
+      codeUrl: order.codeUrl
+    });
   } catch (error) {
     if (error instanceof PaymentError) {
       return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
     }
-    return NextResponse.json({ error: { code: "ORDER_CREATE_FAILED", message: "订单创建失败，请稍后重试" } }, { status: 500 });
+    return NextResponse.json({ error: { code: "PAYMENT_CREATE_FAILED", message: "创建支付订单失败，请稍后重试" } }, { status: 500 });
   }
 }

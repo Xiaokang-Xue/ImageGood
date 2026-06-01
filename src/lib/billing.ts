@@ -1,19 +1,16 @@
 import "server-only";
 import { randomUUID } from "crypto";
+import { CREDIT_PACKAGES, findCreditPackage, getCreditPackageUnitPrice } from "@/config/billing-plans";
 import { getDbSnapshot, withDb } from "@/lib/db";
 import type {
+  AdminOrderRecord,
   CreditPackage,
   CreditPackageId,
   CreditTransactionRecord,
   OrderRecord
 } from "@/types/billing";
 
-export const creditPackages: CreditPackage[] = [
-  { id: "starter", name: "体验包", priceCny: 6.9, credits: 10, subtitle: "适合轻量体验" },
-  { id: "standard", name: "标准包", priceCny: 19.9, credits: 40, subtitle: "适合日常修图" },
-  { id: "pro", name: "高级包", priceCny: 49.9, credits: 120, subtitle: "适合内容创作者" },
-  { id: "business", name: "专业包", priceCny: 99, credits: 300, subtitle: "适合高频使用" }
-];
+export const creditPackages = CREDIT_PACKAGES;
 
 export class BillingError extends Error {
   code: string;
@@ -28,11 +25,7 @@ export class BillingError extends Error {
 }
 
 export function unitPrice(packageItem: CreditPackage) {
-  return packageItem.priceCny / packageItem.credits;
-}
-
-export function findCreditPackage(packageId: string) {
-  return creditPackages.find((item) => item.id === packageId);
+  return getCreditPackageUnitPrice(packageItem);
 }
 
 function nowIso() {
@@ -94,13 +87,20 @@ export async function createOrder(userId: string, packageId: CreditPackageId) {
     userId,
     packageId: packageItem.id,
     packageName: packageItem.name,
-    amountCny: packageItem.priceCny,
+    amountCents: packageItem.priceCents,
     credits: packageItem.credits,
     status: "pending",
+    paymentProvider: "manual",
     paymentMethod: "manual",
+    outTradeNo: `MANUAL_${Date.now()}_${randomUUID().slice(0, 8)}`,
+    transactionId: null,
+    codeUrl: null,
     remark: null,
+    errorMessage: null,
     createdAt: nowIso(),
-    paidAt: null
+    updatedAt: nowIso(),
+    paidAt: null,
+    expiredAt: null
   };
 
   await withDb((db) => {
@@ -133,11 +133,33 @@ export async function updateOrderRemark(orderId: string, userId: string, remark:
   });
 }
 
+function attachOrderUser(db: Awaited<ReturnType<typeof getDbSnapshot>>, order: OrderRecord): AdminOrderRecord {
+  const user = db.users.find((item) => item.id === order.userId);
+  return {
+    ...order,
+    userEmail: user?.email ?? "未知用户",
+    userName: user?.name ?? null
+  };
+}
+
 export async function listPendingOrders() {
   const db = await getDbSnapshot();
   return db.orders
     .filter((order) => order.status === "pending")
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((order) => attachOrderUser(db, order));
+}
+
+export async function listAdminOrders() {
+  const db = await getDbSnapshot();
+  return db.orders
+    .slice()
+    .sort((a, b) => {
+      if (a.status === "pending" && b.status !== "pending") return -1;
+      if (a.status !== "pending" && b.status === "pending") return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
+    .map((order) => attachOrderUser(db, order));
 }
 
 export async function confirmOrderPaid(orderId: string) {
@@ -163,10 +185,12 @@ export async function confirmOrderPaid(orderId: string) {
     user.updatedAt = now;
     order.status = "paid";
     order.paidAt = now;
+    order.updatedAt = now;
 
     const transaction: CreditTransactionRecord = {
       id: randomUUID(),
       userId: user.id,
+      orderId: order.id,
       type: "purchase",
       amount: order.credits,
       balanceAfter: user.credits,

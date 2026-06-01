@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listPendingOrders } from "@/lib/billing";
+import { listAdminOrders } from "@/lib/billing";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -13,6 +13,6 @@ export async function GET() {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "没有管理员权限" } }, { status: 403 });
   }
 
-  const orders = await listPendingOrders();
+  const orders = await listAdminOrders();
   return NextResponse.json({ orders });
 }

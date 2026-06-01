@@ -43,9 +43,9 @@ AI Image Studio 是一个 AI P 图网站 MVP。用户可以上传图片，通过
 - 新用户注册赠送 1 次免费生成额度
 - 每次图片生成消耗 1 个积分
 - 积分余额展示
-- 积分包与订单基础能力
-- 手动支付确认流程
-- 管理员确认订单并为用户增加积分
+- 微信支付 Native 扫码支付
+- 支付成功后自动增加积分
+- 管理员订单查看与异常补发
 
 ### 服务端能力
 
@@ -126,6 +126,19 @@ cp .env.example .env.local
 DATABASE_URL="file:./dev.db"
 AUTH_SECRET="please-change-this-secret"
 AUTH_COOKIE_SECURE=false
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+PAYMENT_PROVIDER=wechat
+PAYMENT_MODE=mock
+WECHAT_PAY_APPID=
+WECHAT_PAY_MCH_ID=
+WECHAT_PAY_API_V3_KEY=
+WECHAT_PAY_MERCHANT_SERIAL_NO=
+WECHAT_PAY_PRIVATE_KEY_PATH=
+WECHAT_PAY_PLATFORM_CERT_SERIAL_NO=
+WECHAT_PAY_PLATFORM_CERT_PATH=
+WECHAT_PAY_NOTIFY_URL=
 
 IMAGE_API_MODE=real
 IMAGE_PROVIDER=codex
@@ -271,6 +284,17 @@ pm2 save
 | `DATABASE_URL` | 本地文件数据库路径 | `file:./dev.db` |
 | `AUTH_SECRET` | 登录会话、验证码和重置密码 token 的签名密钥 | `please-change-this-secret` |
 | `AUTH_COOKIE_SECURE` | Cookie 是否只允许 HTTPS 发送 | `false` |
+| `NEXT_PUBLIC_APP_URL` | 网站访问地址，用于生成回调和本地调试链接 | `http://localhost:3000` |
+| `PAYMENT_PROVIDER` | 支付服务提供方 | `wechat` |
+| `PAYMENT_MODE` | 支付模式，`mock` 用于本地调试，`real` 调用微信支付 | `mock` / `real` |
+| `WECHAT_PAY_APPID` | 微信支付绑定的 APPID | `wx...` |
+| `WECHAT_PAY_MCH_ID` | 微信支付商户号 | `1900000000` |
+| `WECHAT_PAY_API_V3_KEY` | 微信支付 APIv3 密钥，只能放在服务端环境变量 | `32 位密钥` |
+| `WECHAT_PAY_MERCHANT_SERIAL_NO` | 商户 API 证书序列号 | `证书序列号` |
+| `WECHAT_PAY_PRIVATE_KEY_PATH` | 商户 API 私钥文件路径 | `/etc/ai-image-studio/certs/apiclient_key.pem` |
+| `WECHAT_PAY_PLATFORM_CERT_SERIAL_NO` | 微信支付平台证书序列号，用于匹配回调头 `Wechatpay-Serial` | `平台证书序列号` |
+| `WECHAT_PAY_PLATFORM_CERT_PATH` | 微信支付平台证书 PEM 文件路径，用于回调验签 | `/etc/ai-image-studio/certs/wechatpay_platform_cert.pem` |
+| `WECHAT_PAY_NOTIFY_URL` | 微信支付异步通知地址，正式环境必须公网 HTTPS 可访问 | `https://example.com/api/payment/wechat/notify` |
 | `IMAGE_API_MODE` | 图片生成模式 | `real` / `mock` |
 | `IMAGE_PROVIDER` | 图片生成服务提供方 | `codex` |
 | `CODEX_IMAGE_API_BASE_URL` | Codex 图片服务地址 | `http://127.0.0.1:8000` |
@@ -307,7 +331,7 @@ Next.js 网站负责前端页面、用户系统、积分订单、任务记录和
 7. 下载生成结果。
 8. 在历史记录中查看之前的生成内容。
 
-## 额度与订单流程
+## 额度与微信支付
 
 当前项目内置积分额度体系：
 
@@ -325,13 +349,53 @@ Next.js 网站负责前端页面、用户系统、积分订单、任务记录和
 | 高级包 | ¥49.9 | 120 次 | ¥0.42/次 | 适合内容创作者 |
 | 专业包 | ¥99 | 300 次 | ¥0.33/次 | 适合高频使用 |
 
-当前支付流程为人工确认模式：
+当前正式购买流程使用微信支付 Native 扫码支付：
 
 1. 用户在 `/pricing` 选择积分包。
-2. 系统创建待确认订单，并跳转到 `/checkout/[orderId]`。
-3. 用户按照页面说明完成转账并填写备注。
-4. 管理员进入 `/admin/orders` 确认订单。
-5. 订单确认后，积分自动增加到账户并写入积分流水。
+2. Next.js 服务端创建本地订单，并调用微信支付 Native 下单接口。
+3. 微信支付返回 `code_url`，前端在 `/checkout/[orderId]` 展示二维码。
+4. 用户使用微信扫码支付。
+5. 微信支付通过 `/api/payment/wechat/notify` 发送异步回调。
+6. 服务端验签、解密回调数据、校验商户订单号和金额。
+7. 订单更新为 `paid`，用户积分自动到账，并写入积分流水。
+
+本地调试可以使用：
+
+```env
+PAYMENT_PROVIDER=wechat
+PAYMENT_MODE=mock
+```
+
+`PAYMENT_MODE=mock` 时，系统不会请求微信支付真实接口，checkout 页面会展示调试二维码和“模拟支付成功”按钮。该按钮只在 mock 模式显示，real 模式不会出现。
+
+正式环境需要：
+
+- 微信支付 APPID
+- 商户号
+- APIv3 密钥
+- 商户 API 证书序列号
+- 商户 API 私钥文件 `apiclient_key.pem`
+- 微信支付平台证书 PEM 文件
+- 公网 HTTPS 域名
+- 可被微信服务器访问的 `WECHAT_PAY_NOTIFY_URL`
+
+商户私钥和微信支付平台证书只应放在服务器文件系统中，通过环境变量配置路径，不要放入 Git 仓库。微信支付 APIv3 密钥也只能放在服务端环境变量中，不能暴露给浏览器。
+
+支付回调链路：
+
+```text
+微信支付服务器
+  ↓
+POST /api/payment/wechat/notify
+  ↓
+验签 + AES-256-GCM 解密 resource
+  ↓
+校验金额、商户订单号和交易状态
+  ↓
+订单标记为已支付并自动增加积分
+```
+
+`/admin/orders` 用于管理员查看订单状态，并保留异常补发积分能力。正常订单不需要管理员确认，支付成功后由微信支付回调自动处理。
 
 设置管理员：
 
@@ -343,12 +407,12 @@ Next.js 网站负责前端页面、用户系统、积分订单、任务记录和
 
 当前项目处于 MVP 阶段，已完成基础用户流程、图片生成链路、任务记录、额度系统和主要页面。它已经具备继续迭代为正式 AI 图片工具产品的基础结构。
 
-部分能力仍适合在正式上线前继续增强，例如正式支付、对象存储、后台管理、局部涂抹编辑和更完整的生成质量控制。
+部分能力仍适合在正式上线前继续增强，例如对象存储、后台管理、局部涂抹编辑和更完整的生成质量控制。
 
 ## 后续规划
 
-- 接入正式支付能力，例如微信支付、支付宝或 Stripe
-- 完善积分包和订单自动确认流程
+- 增加订单退款、关闭订单和主动查单能力
+- 增强微信支付异常告警和后台对账
 - 增加局部涂抹编辑能力
 - 增加批量商品图生成
 - 接入对象存储，替代本地生成文件目录
@@ -360,9 +424,11 @@ Next.js 网站负责前端页面、用户系统、积分订单、任务记录和
 
 - 不要提交 `.env.local`。
 - 不要把 `AUTH_SECRET`、API Key 或其他敏感信息上传到 GitHub。
+- 不要提交微信支付私钥、平台证书、APIv3 密钥或任何 `.pem` 文件。
 - `server/codex_image_api.py` 建议只监听 `127.0.0.1`。
 - 部署到公网时，只需要开放 Next.js 网站端口或 Nginx 的 `80/443` 端口。
 - 不要把 `8000` 端口直接暴露到公网。
+- 微信支付正式模式需要公网 HTTPS 域名，`WECHAT_PAY_NOTIFY_URL` 必须能被微信支付服务器访问。
 - `public/generated/` 用于保存生成结果，生产环境建议定期备份或迁移到对象存储。
 - 生产环境建议使用 Nginx、HTTPS 和 PM2 等进程管理工具。
 

@@ -74,6 +74,7 @@ async function readDb(): Promise<DatabaseShape> {
   await ensureDbFile();
   const raw = await readFile(resolveDbPath(), "utf-8");
   const data = JSON.parse(raw || "{}") as Partial<DatabaseShape>;
+  const now = new Date().toISOString();
 
   return {
     users: Array.isArray(data.users)
@@ -85,8 +86,42 @@ async function readDb(): Promise<DatabaseShape> {
       : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     passwordResetTokens: Array.isArray(data.passwordResetTokens) ? data.passwordResetTokens : [],
-    creditTransactions: Array.isArray(data.creditTransactions) ? data.creditTransactions : [],
-    orders: Array.isArray(data.orders) ? data.orders : [],
+    creditTransactions: Array.isArray(data.creditTransactions)
+      ? data.creditTransactions.map((transaction) => ({
+          ...transaction,
+          orderId: transaction.orderId ?? null
+        }))
+      : [],
+    orders: Array.isArray(data.orders)
+      ? data.orders.map((order, index) => {
+          const legacyAmountCny = (order as unknown as { amountCny?: number }).amountCny;
+          const amountCents =
+            typeof order.amountCents === "number"
+              ? order.amountCents
+              : typeof legacyAmountCny === "number"
+                ? Math.round(legacyAmountCny * 100)
+                : 0;
+
+          return {
+            ...order,
+            amountCents,
+            status: ["pending", "paid", "cancelled", "expired", "failed"].includes(order.status)
+              ? order.status
+              : "pending",
+            paymentProvider: order.paymentProvider === "wechat" ? "wechat" : "manual",
+            paymentMethod: order.paymentMethod === "native" ? "native" : "manual",
+            outTradeNo: order.outTradeNo || `LEGACY_${order.id || index}`,
+            transactionId: order.transactionId ?? null,
+            codeUrl: order.codeUrl ?? null,
+            remark: order.remark ?? null,
+            errorMessage: order.errorMessage ?? null,
+            createdAt: order.createdAt || now,
+            updatedAt: order.updatedAt || order.createdAt || now,
+            paidAt: order.paidAt ?? null,
+            expiredAt: order.expiredAt ?? null
+          };
+        })
+      : [],
     imageTasks: Array.isArray(data.imageTasks) ? data.imageTasks : []
   };
 }

@@ -9,7 +9,16 @@ import type {
   ProductImageRequest,
   ProductImageResponse
 } from "@/types/image";
-import type { CreditPackageId, CreditTransactionsResponse, OrderDetailResponse, OrderRecord } from "@/types/billing";
+import type {
+  AdminOrderRecord,
+  BillingPackagesResponse,
+  CreditPackageId,
+  CreditTransactionsResponse,
+  OrderDetailResponse,
+  OrderRecord,
+  PaymentCreateResponse,
+  PaymentOrderResponse
+} from "@/types/billing";
 import type { ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
@@ -215,6 +224,28 @@ export const apiClient = {
     });
   },
 
+  listBillingPackages() {
+    return requestJson<BillingPackagesResponse>("/api/billing/packages");
+  },
+
+  createPaymentOrder(payload: { packageId: CreditPackageId }) {
+    return requestJson<PaymentCreateResponse>("/api/payment/create", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  getPaymentOrder(id: string) {
+    return requestJson<PaymentOrderResponse>(`/api/payment/orders/${id}`);
+  },
+
+  markMockPaymentPaid(orderId: string) {
+    return requestJson<{ latestCredits: number }>(`/api/payment/mock/mark-paid`, {
+      method: "POST",
+      body: JSON.stringify({ orderId })
+    });
+  },
+
   getOrder(id: string) {
     return requestJson<OrderDetailResponse>(`/api/orders/${id}`);
   },
@@ -231,7 +262,7 @@ export const apiClient = {
   },
 
   listAdminOrders() {
-    return requestJson<{ orders: OrderRecord[] }>("/api/admin/orders");
+    return requestJson<{ orders: AdminOrderRecord[] }>("/api/admin/orders");
   },
 
   confirmAdminOrder(id: string) {

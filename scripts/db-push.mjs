@@ -8,6 +8,9 @@ const dbPath = path.resolve(process.cwd(), filePath);
 const emptyDb = {
   users: [],
   sessions: [],
+  passwordResetTokens: [],
+  creditTransactions: [],
+  orders: [],
   imageTasks: []
 };
 
