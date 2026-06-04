@@ -9,6 +9,14 @@ import { Card } from "@/components/ui/Card";
 import { apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
 import type { CreditPackage, CreditPackageId } from "@/types/billing";
 
+function formatPackagePrice(priceCents: number) {
+  const amount = priceCents / 100;
+  if (priceCents < 100) {
+    return amount.toFixed(2);
+  }
+  return amount.toFixed(priceCents % 100 === 0 ? 0 : 1);
+}
+
 export default function PricingPage() {
   const router = useRouter();
   const [packages, setPackages] = useState<CreditPackage[]>([]);
@@ -79,7 +87,7 @@ export default function PricingPage() {
             <h2 className="text-xl font-bold text-ink">{item.name}</h2>
             <p className="mt-2 text-sm text-muted">{item.subtitle}</p>
             <div className="mt-6">
-              <span className="text-4xl font-bold text-ink">¥{(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 1)}</span>
+              <span className="text-4xl font-bold text-ink">¥{formatPackagePrice(item.priceCents)}</span>
               <span className="ml-2 text-sm font-semibold text-muted">/ {item.credits} 次</span>
             </div>
             <p className="mt-2 text-sm font-semibold text-studio-600">

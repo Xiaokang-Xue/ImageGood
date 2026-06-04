@@ -89,7 +89,8 @@ async function readDb(): Promise<DatabaseShape> {
     creditTransactions: Array.isArray(data.creditTransactions)
       ? data.creditTransactions.map((transaction) => ({
           ...transaction,
-          orderId: transaction.orderId ?? null
+          orderId: transaction.orderId ?? null,
+          taskId: transaction.taskId ?? null
         }))
       : [],
     orders: Array.isArray(data.orders)
@@ -122,7 +123,13 @@ async function readDb(): Promise<DatabaseShape> {
           };
         })
       : [],
-    imageTasks: Array.isArray(data.imageTasks) ? data.imageTasks : []
+    imageTasks: Array.isArray(data.imageTasks)
+      ? data.imageTasks.map((task) => ({
+          ...task,
+          resultImages: Array.isArray(task.resultImages) ? task.resultImages : [],
+          creditCharged: Boolean(task.creditCharged)
+        }))
+      : []
   };
 }
 

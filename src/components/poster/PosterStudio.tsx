@@ -53,12 +53,29 @@ export function PosterStudio() {
         sleep(1000)
       ]);
 
-      if (!response.results[0]) {
-        throw new Error("模型返回结果为空，请稍后重试");
+      let nextResults = response.results ?? [];
+      if (nextResults.length === 0) {
+        const task = await apiClient.waitForTaskDone(response.taskId);
+        if (task.status === "failed") {
+          throw new Error(task.errorMessage || "生成失败，请稍后重试");
+        }
+
+        const url = task.resultImages?.[0] || task.resultImageUrl;
+        if (!url) {
+          throw new Error("生成完成但未检测到结果图片");
+        }
+
+        nextResults = [
+          {
+            id: "poster-result-1",
+            url,
+            title: "生成结果"
+          }
+        ];
       }
 
-      setResults(response.results);
-      setActiveResult(response.results[0]);
+      setResults(nextResults);
+      setActiveResult(nextResults[0]);
       setVariantIndex(0);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (requestError) {

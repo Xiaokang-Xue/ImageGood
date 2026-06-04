@@ -1,6 +1,6 @@
 import type { CreditPackage } from "@/types/billing";
 
-export const CREDIT_PACKAGES: CreditPackage[] = [
+const STANDARD_CREDIT_PACKAGES: CreditPackage[] = [
   {
     id: "starter",
     name: "体验包",
@@ -29,6 +29,19 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     credits: 300,
     subtitle: "适合高频使用"
   }
+];
+
+const PAYMENT_TEST_PACKAGE: CreditPackage = {
+  id: "wechat_test",
+  name: "支付测试包",
+  priceCents: 1,
+  credits: 1,
+  subtitle: "仅用于支付链路测试，完成后可关闭"
+};
+
+export const CREDIT_PACKAGES: CreditPackage[] = [
+  ...STANDARD_CREDIT_PACKAGES,
+  ...(process.env.ENABLE_PAYMENT_TEST_PACKAGE === "true" ? [PAYMENT_TEST_PACKAGE] : [])
 ];
 
 export function getCreditPackageUnitPrice(packageItem: CreditPackage) {

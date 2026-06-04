@@ -141,6 +141,14 @@ export function isUnauthorizedError(error: unknown) {
   return error instanceof ImageApiClientError && error.code === "UNAUTHORIZED";
 }
 
+export function isInsufficientCreditsError(error: unknown) {
+  return error instanceof ImageApiClientError && error.code === "INSUFFICIENT_CREDITS";
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function downloadImage(url: string, filename = `ai-image-result-${Date.now()}.png`) {
   const anchor = document.createElement("a");
   anchor.download = filename;
@@ -278,6 +286,22 @@ export const apiClient = {
 
   getTask(id: string) {
     return requestJson<ImageTaskDetailResponse>(`/api/tasks/${id}`);
+  },
+
+  async waitForTaskDone(id: string, options?: { intervalMs?: number; timeoutMs?: number }) {
+    const intervalMs = options?.intervalMs ?? 2000;
+    const timeoutMs = options?.timeoutMs ?? 60 * 60 * 1000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt <= timeoutMs) {
+      const response = await apiClient.getTask(id);
+      if (response.task.status === "succeeded" || response.task.status === "failed") {
+        return response.task;
+      }
+      await wait(intervalMs);
+    }
+
+    throw new ImageApiClientError("TASK_POLL_TIMEOUT", "图片生成时间较长，请稍后在历史记录中查看结果");
   },
 
   async editImage(payload: EditImageRequest) {

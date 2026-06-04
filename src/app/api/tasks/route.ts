@@ -15,5 +15,5 @@ export async function GET() {
   }
 
   const tasks = await listUserTasks(user.id);
-  return NextResponse.json({ tasks });
+  return NextResponse.json({ ok: true, tasks });
 }

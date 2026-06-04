@@ -40,12 +40,13 @@ export interface HistoryItem {
 }
 
 export interface EditImageResponse {
+  ok?: boolean;
   taskId: string;
-  status: "succeeded";
+  status: "pending" | "processing" | "succeeded" | "failed";
   mode: ImageApiMode;
   provider?: ImageProvider;
-  results: EditImageResult[];
-  historyItem: HistoryItem;
+  results?: EditImageResult[];
+  historyItem?: HistoryItem;
   latestCredits?: number;
 }
 
@@ -67,11 +68,12 @@ export interface ProductImageResult {
 }
 
 export interface ProductImageResponse {
+  ok?: boolean;
   taskId: string;
-  status: "succeeded";
+  status: "pending" | "processing" | "succeeded" | "failed";
   mode: ImageApiMode;
   provider?: ImageProvider;
-  results: ProductImageResult[];
+  results?: ProductImageResult[];
   latestCredits?: number;
 }
 
@@ -90,11 +92,12 @@ export interface PosterImageResult {
 }
 
 export interface PosterImageResponse {
+  ok?: boolean;
   taskId: string;
-  status: "succeeded";
+  status: "pending" | "processing" | "succeeded" | "failed";
   mode: ImageApiMode;
   provider?: ImageProvider;
-  results: PosterImageResult[];
+  results?: PosterImageResult[];
   latestCredits?: number;
 }
 

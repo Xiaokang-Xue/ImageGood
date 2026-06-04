@@ -4,6 +4,7 @@ import { createMockImageProvider } from "@/lib/server/mock-image-provider";
 import type { ImageOutputFormat, ImageQuality, ImageSize } from "@/types/image";
 
 export interface ProviderEditInput {
+  taskId?: string;
   image: File;
   prompt: string;
   size: ImageSize;
@@ -12,6 +13,7 @@ export interface ProviderEditInput {
 }
 
 export interface ProviderGenerateInput {
+  taskId?: string;
   prompt: string;
   size: ImageSize;
   quality: ImageQuality;

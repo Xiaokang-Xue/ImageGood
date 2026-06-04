@@ -2,7 +2,7 @@ export type CreditTransactionType = "grant" | "consume" | "purchase" | "refund" 
 export type OrderStatus = "pending" | "paid" | "cancelled" | "expired" | "failed";
 export type PaymentProvider = "wechat" | "manual";
 export type PaymentMethod = "native" | "manual";
-export type CreditPackageId = "starter" | "standard" | "pro" | "business";
+export type CreditPackageId = "starter" | "standard" | "pro" | "business" | "wechat_test";
 
 export interface CreditPackage {
   id: CreditPackageId;
@@ -20,6 +20,7 @@ export interface CreditTransactionRecord {
   id: string;
   userId: string;
   orderId?: string | null;
+  taskId?: string | null;
   type: CreditTransactionType;
   amount: number;
   balanceAfter: number;

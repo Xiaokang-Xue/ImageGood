@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { ImageOutputFormat } from "@/types/image";
 
@@ -18,9 +18,27 @@ export function bytesToDataUrl(bytes: ArrayBuffer, mimeType = "image/png") {
 }
 
 function extensionFromMime(mimeType: string) {
+  if (mimeType.includes("png")) return "png";
   if (mimeType.includes("jpeg")) return "jpg";
   if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("gif")) return "gif";
   return "png";
+}
+
+function mimeTypeFromBuffer(buffer: Buffer, fallback = "") {
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) {
+    return "image/jpeg";
+  }
+  if (buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
+    return "image/webp";
+  }
+  if (buffer.subarray(0, 6).toString("ascii") === "GIF87a" || buffer.subarray(0, 6).toString("ascii") === "GIF89a") {
+    return "image/gif";
+  }
+  return fallback;
 }
 
 function parseDataUrl(dataUrl: string) {
@@ -71,12 +89,21 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
     } catch {
       return imageUrl;
     }
+  } else if (path.isAbsolute(imageUrl)) {
+    try {
+      buffer = await readFile(imageUrl);
+      mimeType = mimeTypeFromBuffer(buffer);
+      if (!mimeType) return "";
+    } catch {
+      return "";
+    }
   } else {
     return imageUrl;
   }
 
   const extension = extensionFromMime(mimeType);
-  const relativePath = `/generated/${safePathSegment(userId)}/${safePathSegment(taskId)}/result-${index}.${extension}`;
+  const filename = index === 1 ? `result.${extension}` : `result-${index}.${extension}`;
+  const relativePath = `/generated/${safePathSegment(userId)}/${safePathSegment(taskId)}/${filename}`;
   const absolutePath = path.join(process.cwd(), "public", relativePath.slice(1));
 
   await mkdir(path.dirname(absolutePath), { recursive: true });

@@ -15,7 +15,7 @@ import { apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-
 import { toolPrompts } from "@/lib/studio-content";
 import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
-import type { EditTool } from "@/types/image";
+import type { EditImageResult, EditTool, HistoryItem } from "@/types/image";
 
 const steps = ["上传图片", "描述需求", "生成结果", "继续修改"];
 
@@ -77,17 +77,47 @@ export function EditorWorkspace() {
         sleep(1000)
       ]);
 
-      if (!response.results[0]) {
-        throw new Error("模型返回结果为空，请稍后重试");
+      let result = response.results?.[0] as EditImageResult | undefined;
+      let historyItem = response.historyItem as HistoryItem | undefined;
+
+      if (!result) {
+        const task = await apiClient.waitForTaskDone(response.taskId);
+        if (task.status === "failed") {
+          throw new Error(task.errorMessage || "生成失败，请稍后重试");
+        }
+
+        const url = task.resultImages?.[0] || task.resultImageUrl;
+        if (!url) {
+          throw new Error("生成完成但未检测到结果图片");
+        }
+
+        result = {
+          id: "result-1",
+          url,
+          type: "edited",
+          label: "生成结果"
+        };
+        historyItem = {
+          id: task.id,
+          title: "生成结果",
+          createdAt: task.createdAt,
+          thumbnail: url
+        };
       }
 
-      setEditResults(response.results);
-      setSelectedResult(response.results[0]);
+      if (!historyItem) {
+        historyItem = {
+          id: response.taskId,
+          title: "生成结果",
+          createdAt: new Date().toISOString(),
+          thumbnail: result.url
+        };
+      }
+
+      setEditResults([result]);
+      setSelectedResult(result);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
-      addHistoryItem({
-        ...response.historyItem,
-        thumbnail: response.results[0].url
-      });
+      addHistoryItem(historyItem);
     } catch (requestError) {
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/editor");

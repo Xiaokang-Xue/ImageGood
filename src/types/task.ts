@@ -14,15 +14,18 @@ export interface ImageTaskRecord {
   inputImageUrl?: string | null;
   resultImageUrl?: string | null;
   resultImages?: string[] | null;
+  creditCharged?: boolean;
   errorMessage?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ImageTaskListResponse {
+  ok?: boolean;
   tasks: ImageTaskRecord[];
 }
 
 export interface ImageTaskDetailResponse {
+  ok?: boolean;
   task: ImageTaskRecord;
 }
