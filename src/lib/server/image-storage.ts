@@ -55,6 +55,34 @@ function safePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
+function getCodexWorkDir() {
+  return process.env.CODEX_IMAGE_API_WORKDIR || "/data/codex_image_api_runs";
+}
+
+function taskImageUrl(taskId: string, filename: string) {
+  return `/api/task-images/${safePathSegment(taskId)}/${encodeURIComponent(filename)}`;
+}
+
+function codexTaskImageUrl(imagePath: string, taskId: string) {
+  const safeTaskId = safePathSegment(taskId);
+  if (!safeTaskId || !path.isAbsolute(imagePath)) return null;
+
+  const taskDir = path.resolve(getCodexWorkDir(), "tasks", safeTaskId);
+  const resolvedImagePath = path.resolve(imagePath);
+  const relative = path.relative(taskDir, resolvedImagePath);
+
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return null;
+  }
+
+  const filename = path.basename(resolvedImagePath);
+  if (!filename || filename.startsWith("reference_") || filename.startsWith("input.")) {
+    return null;
+  }
+
+  return taskImageUrl(safeTaskId, filename);
+}
+
 export async function saveUploadFile(file: File, userId: string, taskId: string) {
   const extension = extensionFromMime(file.type || "image/png");
   const relativePath = `/generated/${safePathSegment(userId)}/${safePathSegment(taskId)}/input.${extension}`;
@@ -69,6 +97,21 @@ export async function saveUploadFile(file: File, userId: string, taskId: string)
 export async function saveResultImage(imageUrl: string, userId: string, taskId: string, index = 1) {
   if (imageUrl.startsWith("/generated/")) {
     return imageUrl;
+  }
+
+  if (imageUrl.startsWith("/api/task-images/")) {
+    return imageUrl;
+  }
+
+  const codexUrl = codexTaskImageUrl(imageUrl, taskId);
+  if (codexUrl) {
+    try {
+      const buffer = await readFile(imageUrl);
+      const mimeType = mimeTypeFromBuffer(buffer);
+      return mimeType ? codexUrl : "";
+    } catch {
+      return "";
+    }
   }
 
   let mimeType = "image/png";

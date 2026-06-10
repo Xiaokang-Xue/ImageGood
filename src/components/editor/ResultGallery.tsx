@@ -14,10 +14,11 @@ interface ResultGalleryProps {
   loading?: boolean;
   error?: string;
   onSelect: (result: EditImageResult) => void;
+  onContinueEdit?: (result: EditImageResult) => void;
   onRetry?: () => void;
 }
 
-export function ResultGallery({ results, loading, error, onSelect, onRetry }: ResultGalleryProps) {
+export function ResultGallery({ results, loading, error, onSelect, onContinueEdit, onRetry }: ResultGalleryProps) {
   const mainResult = results[0];
 
   return (
@@ -83,7 +84,7 @@ export function ResultGallery({ results, loading, error, onSelect, onRetry }: Re
                 <Download className="h-4 w-4" />
                 下载图片
               </Button>
-              <Button variant="outline" size="sm" onClick={() => onSelect(mainResult)}>
+              <Button variant="outline" size="sm" onClick={() => (onContinueEdit ?? onSelect)(mainResult)}>
                 <PenLine className="h-4 w-4" />
                 继续修改
               </Button>

@@ -7,7 +7,7 @@ export async function GET() {
   const user = await getCurrentUser();
 
   if (!user) {
-    return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "请先登录" } }, { status: 401 });
+    return NextResponse.json({ status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录" } }, { status: 401 });
   }
 
   return NextResponse.json({ user });

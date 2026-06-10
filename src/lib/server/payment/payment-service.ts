@@ -145,7 +145,7 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
   try {
     const payment = await provider.createNativePayment({
       order,
-      description: `AI Image Studio 积分包 - ${order.packageName}`,
+      description: `ImageGood 积分包 - ${order.packageName}`,
       notifyUrl: getNotifyUrl()
     });
 

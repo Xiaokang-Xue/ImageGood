@@ -12,8 +12,8 @@ export async function POST(request: Request) {
     if (!verifyCaptchaAnswer(body?.captchaAnswer)) {
       throw new AuthError("CAPTCHA_INVALID", "验证码错误");
     }
-    const user = await registerUser(body);
-    return NextResponse.json({ user });
+    const result = await registerUser(body);
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json(

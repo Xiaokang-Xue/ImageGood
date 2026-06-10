@@ -19,6 +19,7 @@ import type {
   PaymentCreateResponse,
   PaymentOrderResponse
 } from "@/types/billing";
+import type { AdminAnalyticsResponse } from "@/types/analytics";
 import type { ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
@@ -29,7 +30,6 @@ export interface CaptchaResponse {
 
 export interface ForgotPasswordResponse {
   message: string;
-  resetUrl: string | null;
 }
 
 export class ImageApiClientError extends Error {
@@ -145,6 +145,10 @@ export function isInsufficientCreditsError(error: unknown) {
   return error instanceof ImageApiClientError && error.code === "INSUFFICIENT_CREDITS";
 }
 
+export function isEmailNotVerifiedError(error: unknown) {
+  return error instanceof ImageApiClientError && error.code === "EMAIL_NOT_VERIFIED";
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -218,10 +222,24 @@ export const apiClient = {
     });
   },
 
-  resetPassword(payload: { token: string; newPassword: string }) {
+  resetPassword(payload: { token: string; password: string; confirmPassword: string }) {
     return requestJson<{ ok: boolean; message: string }>("/api/auth/reset-password", {
       method: "POST",
       body: JSON.stringify(payload)
+    });
+  },
+
+  verifyEmail(payload: { token: string }) {
+    return requestJson<{ ok: boolean; message: string }>("/api/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  resendVerificationEmail() {
+    return requestJson<{ ok: boolean; message: string; emailVerified?: boolean }>("/api/auth/resend-verification-email", {
+      method: "POST",
+      body: JSON.stringify({})
     });
   },
 
@@ -271,6 +289,10 @@ export const apiClient = {
 
   listAdminOrders() {
     return requestJson<{ orders: AdminOrderRecord[] }>("/api/admin/orders");
+  },
+
+  getAdminAnalytics() {
+    return requestJson<AdminAnalyticsResponse>("/api/admin/analytics");
   },
 
   confirmAdminOrder(id: string) {

@@ -27,19 +27,20 @@ export function HeroSection() {
       <div className="relative z-10 mx-auto max-w-5xl text-center text-white">
         <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/12 px-4 py-2 text-sm font-medium backdrop-blur">
           <WandSparkles className="h-4 w-4 text-cyan-200" />
-          AI 图片创作工作台
+          ImageGood 图片工具
         </div>
-        <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold leading-tight tracking-normal md:text-6xl">
-          一句话完成修图、换背景、做商品图与封面海报
+        <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold leading-[1.38] tracking-normal md:text-5xl md:leading-[1.32] lg:text-6xl lg:leading-[1.24]">
+          <span className="block">用 ImageGood</span>
+          <span className="block">快速生成高质量图片</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-200">
-          上传图片或输入需求，AI 智能理解，一键生成高质量图片
+          上传图片，描述需求，即可获得 AI 处理结果，适合商品图、封面图、社媒配图和日常修图场景。
         </p>
 
         <div className="mx-auto mt-10 max-w-3xl rounded-lg border border-white/18 bg-white/14 p-3 shadow-2xl backdrop-blur-xl">
           <UploadDropzone
             compact
-            title="把图片拖到这里，立即开始修图"
+            title="上传图片，开始使用 ImageGood"
             subtitle="上传后进入编辑工作台，登录即可生成并保存结果"
             className="min-h-[260px] border-white/25 bg-white/90 text-ink"
             onImageSelected={(imageUrl, file) => {

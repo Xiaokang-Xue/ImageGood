@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { BillingError } from "@/lib/billing";
+import { EmailNotVerifiedError } from "@/lib/server/auth-guards";
 import { ImageRequestError } from "@/lib/server/image-validation";
 
 export function createId(prefix: string) {
@@ -21,6 +22,19 @@ export function imageErrorResponse(error: unknown) {
   }
 
   if (error instanceof BillingError) {
+    return NextResponse.json(
+      {
+        status: "failed",
+        error: {
+          code: error.code,
+          message: error.message
+        }
+      },
+      { status: error.status }
+    );
+  }
+
+  if (error instanceof EmailNotVerifiedError) {
     return NextResponse.json(
       {
         status: "failed",

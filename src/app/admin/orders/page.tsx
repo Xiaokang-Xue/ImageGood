@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -70,10 +71,15 @@ export default function AdminOrdersPage() {
 
   return (
     <main className="mx-auto max-w-[1200px] px-5 py-10">
-      <div className="mb-6">
-        <p className="text-sm font-semibold text-studio-600">管理员</p>
-        <h1 className="mt-2 text-3xl font-bold text-ink">微信支付订单</h1>
-        <p className="mt-3 text-sm text-muted">正常订单由微信支付回调自动加积分。管理员补发仅用于异常处理。</p>
+      <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div>
+          <p className="text-sm font-semibold text-studio-600">管理员</p>
+          <h1 className="mt-2 text-3xl font-bold text-ink">微信支付订单</h1>
+          <p className="mt-3 text-sm text-muted">正常订单由微信支付回调自动加积分。管理员补发仅用于异常处理。</p>
+        </div>
+        <Link href="/admin/analytics">
+          <Button variant="outline">查看运营数据</Button>
+        </Link>
       </div>
 
       {error ? (

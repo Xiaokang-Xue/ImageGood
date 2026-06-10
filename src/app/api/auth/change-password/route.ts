@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "请先登录后再修改密码" } },
+        { status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录后再修改密码" } },
         { status: 401 }
       );
     }
@@ -21,12 +21,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: "密码已更新" });
   } catch (error) {
     if (error instanceof AuthError) {
-      return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
+      return NextResponse.json({ status: "failed", error: { code: error.code, message: error.message } }, { status: error.status });
     }
     if (error instanceof RateLimitError) {
-      return NextResponse.json({ error: { code: "RATE_LIMITED", message: error.message } }, { status: 429 });
+      return NextResponse.json({ status: "failed", error: { code: "RATE_LIMITED", message: error.message } }, { status: 429 });
     }
 
-    return NextResponse.json({ error: { code: "CHANGE_PASSWORD_FAILED", message: "修改密码失败，请稍后重试" } }, { status: 500 });
+    return NextResponse.json(
+      { status: "failed", error: { code: "CHANGE_PASSWORD_FAILED", message: "修改密码失败，请稍后重试" } },
+      { status: 500 }
+    );
   }
 }

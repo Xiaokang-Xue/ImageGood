@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
@@ -11,18 +11,24 @@ import { ResultGallery } from "@/components/editor/ResultGallery";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
-import { apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
+import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
 import { toolPrompts } from "@/lib/studio-content";
 import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
 import type { EditImageResult, EditTool, HistoryItem } from "@/types/image";
 
 const steps = ["上传图片", "描述需求", "生成结果", "继续修改"];
+const editableTools: EditTool[] = ["background", "remove", "enhance", "style", "expand", "custom"];
 
-export function EditorWorkspace() {
+interface EditorWorkspaceProps {
+  initialTool?: string;
+}
+
+export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const {
     uploadedImage,
     uploadedImageFile,
@@ -41,7 +47,15 @@ export function EditorWorkspace() {
     addHistoryItem
   } = useStudioStore();
 
+  useEffect(() => {
+    if (!initialTool || !editableTools.includes(initialTool as EditTool)) return;
+    const tool = initialTool as EditTool;
+    setSelectedTool(tool);
+    setPrompt(toolPrompts[tool]);
+  }, [initialTool, setPrompt, setSelectedTool]);
+
   const originalImage = uploadedImage;
+  const inputPreview = currentImage ?? originalImage;
   const visibleResults = editResults;
   const currentVersion = currentImage ?? selectedResult?.url ?? visibleResults[0]?.url ?? null;
 
@@ -63,10 +77,12 @@ export function EditorWorkspace() {
 
     setLoading(true);
     setError("");
+    setNotice("");
     try {
+      const shouldUseCurrentImageUrl = Boolean(currentImage && currentImage !== uploadedImage && !currentImageFile);
       const [response] = await Promise.all([
         apiClient.editImage({
-          image: currentImageFile ?? uploadedImageFile ?? undefined,
+          image: shouldUseCurrentImageUrl ? undefined : currentImageFile ?? uploadedImageFile ?? undefined,
           imageUrl: currentImage ?? originalImage ?? undefined,
           prompt: finalPrompt,
           tool: finalTool,
@@ -123,10 +139,22 @@ export function EditorWorkspace() {
         router.push("/login?redirect=/editor");
         return;
       }
+      if (isEmailNotVerifiedError(requestError)) {
+        setError(getImageErrorMessage(requestError));
+        return;
+      }
       setError(getImageErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContinueEdit = (result: EditImageResult) => {
+    setSelectedResult(result);
+    setSelectedTool("custom");
+    setPrompt("");
+    setError("");
+    setNotice("已将生成结果设为下一次修改的输入图，请在右侧输入新的修改需求。");
   };
 
   return (
@@ -162,7 +190,20 @@ export function EditorWorkspace() {
             <Link href="/pricing" className="text-studio-700 underline">
               购买积分
             </Link>
+          ) : error.includes("邮箱验证") ? (
+            <Link href="/account" className="text-studio-700 underline">
+              前往账户中心
+            </Link>
           ) : null}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div className="mb-6 flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 sm:flex-row sm:items-center sm:justify-between">
+          <span>{notice}</span>
+          <button type="button" className="text-studio-700 underline" onClick={() => setNotice("")}>
+            知道了
+          </button>
         </div>
       ) : null}
 
@@ -175,14 +216,16 @@ export function EditorWorkspace() {
       <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <Card className="p-5">
           <div className="mb-4">
-            <p className="text-sm font-semibold text-studio-600">原图</p>
-            <h2 className="mt-1 text-xl font-bold text-ink">输入素材</h2>
+            <p className="text-sm font-semibold text-studio-600">当前输入图</p>
+            <h2 className="mt-1 text-xl font-bold text-ink">
+              {inputPreview && inputPreview !== originalImage ? "继续修改素材" : "输入素材"}
+            </h2>
           </div>
           <UploadDropzone
-            value={originalImage}
+            value={inputPreview}
             compact
             title="上传原图"
-            subtitle="拖拽或点击替换当前图片"
+            subtitle="拖拽或点击替换当前图片；继续修改时会使用生成结果作为输入"
             className="min-h-[360px]"
             onImageSelected={(imageUrl, file) => setUploadedImage(imageUrl, file)}
           />
@@ -195,6 +238,7 @@ export function EditorWorkspace() {
             loading={loading}
             error={error}
             onSelect={(result) => setSelectedResult(result)}
+            onContinueEdit={handleContinueEdit}
             onRetry={handleGenerate}
           />
           <BeforeAfter before={originalImage} after={currentVersion} />

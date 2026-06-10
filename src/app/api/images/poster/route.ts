@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertEmailVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import { ImageRequestError } from "@/lib/server/image-validation";
 import { runPosterTask } from "@/lib/server/image-task-service";
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new Error("UNAUTHORIZED");
+    assertEmailVerified(user);
 
     let body: Partial<PosterImageRequest>;
 
@@ -34,8 +36,8 @@ export async function POST(request: Request) {
       throw new ImageRequestError("INVALID_JSON", "请求参数格式不正确");
     }
 
-    const title = typeof body.title === "string" ? body.title : "";
-    const subtitle = typeof body.subtitle === "string" ? body.subtitle : "";
+    const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "ImageGood 封面海报";
+    const subtitle = typeof body.subtitle === "string" ? body.subtitle.trim() : "";
     const usage = normalize(body.usage, usages, "xiaohongshu");
     const style = normalize(body.style, styles, "clean");
     const ratio = normalize(body.ratio, ratios, "3:4");

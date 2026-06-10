@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { PasswordField } from "@/components/ui/PasswordField";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
 import type { CreditTransactionRecord } from "@/types/billing";
 import type { ImageTaskRecord } from "@/types/task";
@@ -22,14 +23,23 @@ export default function AccountPage() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [verificationError, setVerificationError] = useState("");
+
+  const refreshAccount = async () => {
+    const [me, taskResponse, transactionResponse] = await Promise.all([
+      apiClient.me(),
+      apiClient.listTasks(),
+      apiClient.listCreditTransactions()
+    ]);
+    setUser(me.user);
+    setTasks(taskResponse.tasks);
+    setTransactions(transactionResponse.transactions);
+  };
 
   useEffect(() => {
-    Promise.all([apiClient.me(), apiClient.listTasks(), apiClient.listCreditTransactions()])
-      .then(([me, taskResponse, transactionResponse]) => {
-        setUser(me.user);
-        setTasks(taskResponse.tasks);
-        setTransactions(transactionResponse.transactions);
-      })
+    refreshAccount()
       .catch(() => router.push("/login?redirect=/account"))
       .finally(() => setLoading(false));
   }, [router]);
@@ -38,6 +48,22 @@ export default function AccountPage() {
     await apiClient.logout().catch(() => null);
     router.push("/");
     router.refresh();
+  };
+
+  const handleResendVerification = async () => {
+    setVerificationLoading(true);
+    setVerificationMessage("");
+    setVerificationError("");
+    try {
+      const response = await apiClient.resendVerificationEmail();
+      setVerificationMessage(response.message);
+      await refreshAccount();
+      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+    } catch (error) {
+      setVerificationError(getImageErrorMessage(error));
+    } finally {
+      setVerificationLoading(false);
+    }
   };
 
   const succeededTasks = useMemo(() => tasks.filter((task) => task.status === "succeeded"), [tasks]);
@@ -53,6 +79,21 @@ export default function AccountPage() {
     setPasswordError("");
     setPasswordMessage("");
 
+    if (!oldPassword) {
+      setPasswordError("请输入旧密码");
+      setPasswordLoading(false);
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("新密码至少需要 8 位");
+      setPasswordLoading(false);
+      return;
+    }
+    if (oldPassword === newPassword) {
+      setPasswordError("新密码不能和旧密码相同");
+      setPasswordLoading(false);
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setPasswordError("两次输入的新密码不一致");
       setPasswordLoading(false);
@@ -101,6 +142,28 @@ export default function AccountPage() {
             </div>
           </div>
 
+          <div className={`mt-6 rounded-lg border p-4 ${user.emailVerified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className={`text-sm font-bold ${user.emailVerified ? "text-emerald-700" : "text-amber-700"}`}>
+                  {user.emailVerified ? "邮箱已验证" : "邮箱尚未验证"}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {user.emailVerified
+                    ? `验证时间：${user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString("zh-CN") : "已完成"}`
+                    : "完成验证后可使用图片生成和购买积分功能。"}
+                </p>
+              </div>
+              {!user.emailVerified ? (
+                <Button size="sm" loading={verificationLoading} onClick={handleResendVerification}>
+                  重新发送验证邮件
+                </Button>
+              ) : null}
+            </div>
+            {verificationMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700">{verificationMessage}</p> : null}
+            {verificationError ? <p className="mt-3 text-sm font-semibold text-rose-700">{verificationError}</p> : null}
+          </div>
+
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <InfoBlock label="当前积分余额" value={`${user.credits} 积分`} />
             <InfoBlock label="注册时间" value={new Date(user.createdAt).toLocaleDateString("zh-CN")} />
@@ -112,10 +175,10 @@ export default function AccountPage() {
               label="最近一次生成"
               value={latestTask ? new Date(latestTask.createdAt).toLocaleString("zh-CN") : "暂无记录"}
             />
-            <Link href="/pricing" className="rounded-lg border border-studio-200 bg-studio-50 p-4 transition hover:border-studio-300">
-              <p className="text-sm font-semibold text-studio-700">购买积分</p>
-              <p className="mt-2 text-lg font-bold text-ink">每次生成消耗 1 积分</p>
-            </Link>
+            <InfoBlock
+              label="最近登录时间"
+              value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("zh-CN") : "暂无记录"}
+            />
           </div>
 
           <div className="mt-8 rounded-lg border border-line bg-white p-5">
@@ -158,36 +221,9 @@ export default function AccountPage() {
             ) : null}
 
             <form className="mt-5 grid gap-4 md:grid-cols-3" onSubmit={handleChangePassword}>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">旧密码</span>
-                <input
-                  value={oldPassword}
-                  onChange={(event) => setOldPassword(event.target.value)}
-                  type="password"
-                  autoComplete="current-password"
-                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">新密码</span>
-                <input
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">确认新密码</span>
-                <input
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-                />
-              </label>
+              <PasswordInput label="旧密码" value={oldPassword} onChange={setOldPassword} autoComplete="current-password" />
+              <PasswordInput label="新密码" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
+              <PasswordInput label="确认新密码" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
               <div className="md:col-span-3">
                 <Button type="submit" loading={passwordLoading}>
                   保存新密码
@@ -200,8 +236,11 @@ export default function AccountPage() {
         <Card className="p-6">
           <h2 className="text-xl font-bold text-ink">快捷操作</h2>
           <div className="mt-5 grid gap-3">
+            <Link href="/pricing">
+              <Button className="w-full">购买积分</Button>
+            </Link>
             <Link href="/history">
-              <Button className="w-full">查看历史记录</Button>
+              <Button variant="outline" className="w-full">查看历史记录</Button>
             </Link>
             <Link href="/editor">
               <Button variant="outline" className="w-full">开始智能修图</Button>
@@ -223,4 +262,13 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-lg font-bold text-ink">{value}</p>
     </div>
   );
+}
+
+function PasswordInput(props: {
+  label: string;
+  value: string;
+  autoComplete: string;
+  onChange: (value: string) => void;
+}) {
+  return <PasswordField {...props} required />;
 }

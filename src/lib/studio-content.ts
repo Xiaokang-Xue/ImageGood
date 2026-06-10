@@ -85,7 +85,7 @@ export const templates: TemplateItem[] = [
     description: "适合电商主图，主体突出，光影干净。",
     thumbnail: imageAssets.product1,
     usageCount: 28400,
-    route: "/product"
+    route: "/product?template=white-bg"
   },
   {
     id: "template-xhs-cover",
@@ -94,7 +94,7 @@ export const templates: TemplateItem[] = [
     description: "醒目的标题层级和清爽配色，适合内容种草。",
     thumbnail: imageAssets.poster1,
     usageCount: 35600,
-    route: "/poster"
+    route: "/poster?usage=xiaohongshu&style=clean&ratio=3:4"
   },
   {
     id: "template-portrait",
@@ -103,7 +103,7 @@ export const templates: TemplateItem[] = [
     description: "自然修饰五官与光线，保留真实质感。",
     thumbnail: imageAssets.portraitBusiness,
     usageCount: 17320,
-    route: "/editor"
+    route: "/editor?tool=enhance"
   },
   {
     id: "template-checkin",
@@ -112,7 +112,7 @@ export const templates: TemplateItem[] = [
     description: "适合社群打卡和每日内容分享。",
     thumbnail: imageAssets.posterStudy,
     usageCount: 12680,
-    route: "/poster"
+    route: "/poster?usage=checkin&style=clean&ratio=3:4"
   },
   {
     id: "template-lifestyle-product",
@@ -121,7 +121,7 @@ export const templates: TemplateItem[] = [
     description: "把单品放进真实生活场景，提升购买想象。",
     thumbnail: imageAssets.product2,
     usageCount: 24110,
-    route: "/product"
+    route: "/product?template=lifestyle"
   },
   {
     id: "template-campaign",
@@ -130,7 +130,7 @@ export const templates: TemplateItem[] = [
     description: "活动信息清晰，适合社群、门店和私域传播。",
     thumbnail: imageAssets.poster4,
     usageCount: 19750,
-    route: "/poster"
+    route: "/poster?usage=community&style=premium&ratio=3:4"
   },
   {
     id: "template-remove",
@@ -139,7 +139,7 @@ export const templates: TemplateItem[] = [
     description: "清理画面杂物，保留自然背景纹理。",
     thumbnail: imageAssets.edit3,
     usageCount: 21940,
-    route: "/editor"
+    route: "/editor?tool=remove"
   },
   {
     id: "template-festival",
@@ -148,17 +148,8 @@ export const templates: TemplateItem[] = [
     description: "快速生成节日氛围主视觉和促销图。",
     thumbnail: imageAssets.product3,
     usageCount: 16200,
-    route: "/product"
+    route: "/product?template=festival"
   }
 ];
 
 export const industryTemplates = ["美妆个护", "食品饮料", "3C 数码", "家居日用", "服饰鞋包", "母婴玩具"];
-
-export const apiCapabilities = [
-  "图片生成 API",
-  "图片编辑 API",
-  "局部编辑 API",
-  "商品图 API",
-  "海报生成 API",
-  "任务查询 API"
-];

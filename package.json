@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "node scripts/db-generate.mjs",
-    "db:push": "node scripts/db-push.mjs"
+    "db:push": "node scripts/db-push.mjs",
+    "db:migrate-json": "node scripts/migrate-json-db-to-mysql.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
+    "mysql2": "^3.11.5",
     "next": "^14.2.23",
     "openai": "^6.38.0",
     "react": "^18.3.1",

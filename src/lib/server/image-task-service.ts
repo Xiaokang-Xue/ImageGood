@@ -383,7 +383,15 @@ export async function getUserTask(userId: string, taskId: string) {
   if (!ownedTask) return null;
 
   if (ownedTask.status !== "succeeded" || !ownedTask.resultImages?.length) {
-    await recoverTaskResultIfPresent(ownedTask.id);
+    try {
+      await recoverTaskResultIfPresent(ownedTask.id);
+    } catch (error) {
+      taskErrorLog("recover result skipped", {
+        taskId: ownedTask.id,
+        userId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 
   const db = await getDbSnapshot();

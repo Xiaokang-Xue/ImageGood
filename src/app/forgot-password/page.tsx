@@ -10,7 +10,6 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [resetUrl, setResetUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -18,12 +17,10 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError("");
     setMessage("");
-    setResetUrl(null);
 
     try {
       const response = await apiClient.forgotPassword({ email });
       setMessage(response.message);
-      setResetUrl(response.resetUrl);
     } catch (requestError) {
       setError(getImageErrorMessage(requestError));
     } finally {
@@ -35,24 +32,15 @@ export default function ForgotPasswordPage() {
     <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1440px] items-center justify-center px-5 py-12">
       <Card className="w-full max-w-md p-7">
         <p className="text-sm font-semibold text-studio-600">找回密码</p>
-        <h1 className="mt-2 text-2xl font-bold text-ink">生成本地重置链接</h1>
+        <h1 className="mt-2 text-2xl font-bold text-ink">通过邮箱重置密码</h1>
         <p className="mt-2 text-sm leading-6 text-muted">
-          当前为本地开发模式，提交后会在页面上显示可用的重置链接。后续接入邮件服务后，可发送到用户邮箱。
+          输入注册邮箱后，如果该邮箱已注册，我们会发送一封密码重置邮件。重置链接 30 分钟内有效。
         </p>
 
         {error ? <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
         {message ? (
           <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
             {message}
-          </div>
-        ) : null}
-
-        {resetUrl ? (
-          <div className="mt-4 rounded-lg border border-line bg-slate-50 p-4">
-            <p className="text-xs font-semibold text-muted">本地重置链接</p>
-            <Link href={resetUrl} className="mt-2 block break-all text-sm font-semibold text-studio-700 underline">
-              {resetUrl}
-            </Link>
           </div>
         ) : null}
 
@@ -68,7 +56,7 @@ export default function ForgotPasswordPage() {
             />
           </label>
           <Button type="submit" size="lg" loading={loading} className="w-full">
-            生成重置链接
+            发送重置邮件
           </Button>
         </form>
 

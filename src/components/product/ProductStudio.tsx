@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImagePlus, SlidersHorizontal } from "lucide-react";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
-import { apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
+import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
 import { industryTemplates } from "@/lib/studio-content";
 import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
@@ -39,23 +39,98 @@ const styles: Array<{ label: string; value: ProductStyle }> = [
 ];
 
 const ratios: ProductRatio[] = ["1:1", "3:4", "4:3", "16:9"];
+const productTemplates: ProductTemplate[] = ["white-bg", "lifestyle", "festival", "social"];
+const PRODUCT_DRAFT_STORAGE_KEY = "imagegood-product-studio-draft";
+const industrySellingPointPresets: Record<string, string> = {
+  "美妆个护": "突出质地、肤感、精致包装和日常护理场景，画面干净高级",
+  "食品饮料": "突出新鲜感、口感联想、食材细节和自然光氛围",
+  "3C 数码": "突出产品结构、材质细节、科技感和桌面使用场景",
+  "家居日用": "突出生活氛围、空间搭配、实用性和温暖光线",
+  "服饰鞋包": "突出材质纹理、穿搭场景、轮廓比例和品质感",
+  "母婴玩具": "突出安全感、柔和色彩、亲和氛围和使用场景"
+};
 
-export function ProductStudio() {
+function normalizeProductTemplate(value?: string): ProductTemplate {
+  return productTemplates.includes(value as ProductTemplate) ? (value as ProductTemplate) : "white-bg";
+}
+
+interface ProductStudioProps {
+  initialTemplate?: string;
+}
+
+interface ProductStudioDraft {
+  imageUrl: string | null;
+  template: ProductTemplate;
+  scene: ProductScene;
+  style: ProductStyle;
+  sellingPoints: string;
+  selectedIndustry: string | null;
+  ratio: ProductRatio;
+  results: ProductImageResult[];
+}
+
+export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const router = useRouter();
   const setUploadedImage = useStudioStore((state) => state.setUploadedImage);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [template, setTemplate] = useState<ProductTemplate>("white-bg");
+  const [template, setTemplate] = useState<ProductTemplate>(() => normalizeProductTemplate(initialTemplate));
   const [scene, setScene] = useState<ProductScene>("desk");
   const [style, setStyle] = useState<ProductStyle>("premium");
   const [sellingPoints, setSellingPoints] = useState("轻盈质感、细腻光泽、适合日常通勤使用");
+  const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [ratio, setRatio] = useState<ProductRatio>("1:1");
   const [results, setResults] = useState<ProductImageResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PRODUCT_DRAFT_STORAGE_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw) as Partial<ProductStudioDraft>;
+        setImageUrl(typeof draft.imageUrl === "string" ? draft.imageUrl : null);
+        setTemplate(initialTemplate ? normalizeProductTemplate(initialTemplate) : normalizeProductTemplate(draft.template));
+        setScene(scenes.some((item) => item.value === draft.scene) ? (draft.scene as ProductScene) : "desk");
+        setStyle(styles.some((item) => item.value === draft.style) ? (draft.style as ProductStyle) : "premium");
+        setSellingPoints(typeof draft.sellingPoints === "string" ? draft.sellingPoints : "轻盈质感、细腻光泽、适合日常通勤使用");
+        setSelectedIndustry(typeof draft.selectedIndustry === "string" ? draft.selectedIndustry : null);
+        setRatio(ratios.includes(draft.ratio as ProductRatio) ? (draft.ratio as ProductRatio) : "1:1");
+        setResults(Array.isArray(draft.results) ? draft.results : []);
+      } else if (initialTemplate) {
+        setTemplate(normalizeProductTemplate(initialTemplate));
+      }
+    } catch {
+      window.localStorage.removeItem(PRODUCT_DRAFT_STORAGE_KEY);
+    } finally {
+      setHydrated(true);
+    }
+  }, [initialTemplate]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const draft: ProductStudioDraft = {
+      imageUrl,
+      template,
+      scene,
+      style,
+      sellingPoints,
+      selectedIndustry,
+      ratio,
+      results
+    };
+
+    try {
+      window.localStorage.setItem(PRODUCT_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // Ignore storage quota or private-mode failures; the workspace still works in memory.
+    }
+  }, [hydrated, imageUrl, template, scene, style, sellingPoints, selectedIndustry, ratio, results]);
 
   const handleGenerate = async () => {
-    if (!imageFile) {
+    if (!imageFile && !imageUrl) {
       setError("请先上传商品图片");
       return;
     }
@@ -65,12 +140,12 @@ export function ProductStudio() {
     try {
       const [response] = await Promise.all([
         apiClient.createProductImages({
-          image: imageFile,
+          image: imageFile ?? undefined,
           imageUrl: imageUrl ?? undefined,
           template,
           scene,
           style,
-          sellingPoints,
+          sellingPoints: selectedIndustry ? `${sellingPoints}。行业方向：${selectedIndustry}` : sellingPoints,
           ratio
         }),
         sleep(1000)
@@ -105,6 +180,10 @@ export function ProductStudio() {
         router.push("/login?redirect=/product");
         return;
       }
+      if (isEmailNotVerifiedError(requestError)) {
+        setError(getImageErrorMessage(requestError));
+        return;
+      }
       setError(getImageErrorMessage(requestError));
     } finally {
       setLoading(false);
@@ -134,6 +213,10 @@ export function ProductStudio() {
           {error.includes("积分不足") ? (
             <Link href="/pricing" className="text-studio-700 underline">
               购买积分
+            </Link>
+          ) : error.includes("邮箱验证") ? (
+            <Link href="/account" className="text-studio-700 underline">
+              前往账户中心
             </Link>
           ) : null}
         </div>
@@ -165,6 +248,7 @@ export function ProductStudio() {
             onImageSelected={(url, file) => {
               setImageUrl(url);
               setImageFile(file);
+              setError("");
             }}
           />
         </Card>
@@ -254,12 +338,25 @@ export function ProductStudio() {
             <button
               key={item}
               type="button"
-              className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-studio-300 hover:bg-studio-50 hover:text-studio-700"
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                selectedIndustry === item
+                  ? "border-studio-500 bg-studio-50 text-studio-700"
+                  : "border-line bg-white text-slate-600 hover:border-studio-300 hover:bg-studio-50 hover:text-studio-700"
+              }`}
+              onClick={() => {
+                setSelectedIndustry(item);
+                setSellingPoints(industrySellingPointPresets[item] ?? `${item}商品，突出质感、卖点和使用场景`);
+              }}
             >
               {item}
             </button>
           ))}
         </div>
+        {selectedIndustry ? (
+          <p className="mt-4 text-sm font-medium text-studio-700">
+            已应用「{selectedIndustry}」行业方向，可继续调整商品卖点后生成。
+          </p>
+        ) : null}
       </Card>
     </PageShell>
   );

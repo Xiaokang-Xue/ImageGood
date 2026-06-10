@@ -28,6 +28,9 @@ function publicUser(user: {
   avatar?: string | null;
   credits?: number;
   role?: "user" | "admin";
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
+  lastLoginAt?: string | null;
   createdAt: string;
 }): PublicUser {
   return {
@@ -37,6 +40,9 @@ function publicUser(user: {
     avatar: user.avatar ?? null,
     credits: user.credits ?? 0,
     role: user.role ?? "user",
+    emailVerified: Boolean(user.emailVerified),
+    emailVerifiedAt: user.emailVerifiedAt ?? null,
+    lastLoginAt: user.lastLoginAt ?? null,
     createdAt: user.createdAt
   };
 }

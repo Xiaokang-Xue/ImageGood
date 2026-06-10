@@ -65,7 +65,8 @@ export default function HistoryPage() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {tasks.map((task) => {
-            const image = task.resultImageUrl || task.inputImageUrl || "";
+            const resultImage = task.resultImages?.[0] || task.resultImageUrl || "";
+            const image = resultImage || task.inputImageUrl || "";
             return (
               <Card key={task.id} className="overflow-hidden">
                 {image ? (
@@ -95,8 +96,8 @@ export default function HistoryPage() {
                     <Button
                       variant="dark"
                       size="sm"
-                      disabled={!task.resultImageUrl}
-                      onClick={() => task.resultImageUrl && downloadImage(task.resultImageUrl)}
+                      disabled={!resultImage}
+                      onClick={() => resultImage && downloadImage(resultImage)}
                     >
                       <Download className="h-4 w-4" />
                       下载图片

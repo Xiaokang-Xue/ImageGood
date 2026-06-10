@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
+import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
 import type { CreditPackage, CreditPackageId } from "@/types/billing";
 
 function formatPackagePrice(priceCents: number) {
@@ -44,6 +45,10 @@ export default function PricingPage() {
         router.push("/login?redirect=/pricing");
         return;
       }
+      if (isEmailNotVerifiedError(requestError)) {
+        setError(getImageErrorMessage(requestError));
+        return;
+      }
       setError(getImageErrorMessage(requestError));
     } finally {
       setLoadingPackage(null);
@@ -61,8 +66,13 @@ export default function PricingPage() {
       </div>
 
       {error ? (
-        <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-          {error}
+        <div className="mb-6 flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 sm:flex-row sm:items-center sm:justify-between">
+          <span>{error}</span>
+          {error.includes("邮箱验证") ? (
+            <Link href="/account" className="text-studio-700 underline">
+              前往账户中心
+            </Link>
+          ) : null}
         </div>
       ) : null}
 

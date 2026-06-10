@@ -14,6 +14,8 @@ export type ProductRatio = "1:1" | "3:4" | "4:3" | "16:9";
 export type PosterUsage = "xiaohongshu" | "wechat" | "community" | "course" | "checkin";
 export type PosterStyle = "clean" | "premium" | "cute" | "tech" | "handdrawn";
 export type PosterRatio = "3:4" | "1:1" | "16:9" | "9:16" | "4:5";
+export type PosterLayerKey = "title" | "subtitle" | "decoration" | "background";
+export type PosterLayerVisibility = Record<PosterLayerKey, boolean>;
 
 export interface EditImageRequest {
   image?: File;

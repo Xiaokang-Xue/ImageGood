@@ -1,1 +1,1 @@
-console.log("Using the built-in file database. No client generation is required.");
+console.log("No database client generation is required. Run npm run db:push to initialize file or MySQL storage.");

@@ -16,12 +16,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ user });
   } catch (error) {
     if (error instanceof AuthError) {
-      return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
+      return NextResponse.json({ status: "failed", error: { code: error.code, message: error.message } }, { status: error.status });
     }
     if (error instanceof RateLimitError) {
-      return NextResponse.json({ error: { code: "RATE_LIMITED", message: error.message } }, { status: 429 });
+      return NextResponse.json({ status: "failed", error: { code: "RATE_LIMITED", message: error.message } }, { status: 429 });
     }
 
-    return NextResponse.json({ error: { code: "LOGIN_FAILED", message: "登录失败，请稍后重试" } }, { status: 500 });
+    return NextResponse.json(
+      { status: "failed", error: { code: "LOGIN_FAILED", message: "登录失败，请稍后重试" } },
+      { status: 500 }
+    );
   }
 }

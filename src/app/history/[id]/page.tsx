@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
-import { apiClient, downloadImage } from "@/lib/api-client";
+import { apiClient, downloadImage, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
 import type { ImageTaskRecord } from "@/types/task";
 
 const typeLabels: Record<ImageTaskRecord["type"], string> = {
@@ -18,17 +18,25 @@ const typeLabels: Record<ImageTaskRecord["type"], string> = {
 
 export default function HistoryDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const [task, setTask] = useState<ImageTaskRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    setLoading(true);
+    setError("");
     apiClient
       .getTask(params.id)
       .then((response) => setTask(response.task))
-      .catch(() => router.push("/history"))
+      .catch((requestError) => {
+        if (isUnauthorizedError(requestError)) {
+          setError("请先登录后再查看历史记录");
+          return;
+        }
+        setError(getImageErrorMessage(requestError) || "记录不存在或暂时无法访问");
+      })
       .finally(() => setLoading(false));
-  }, [params.id, router]);
+  }, [params.id]);
 
   if (loading) {
     return (
@@ -38,7 +46,28 @@ export default function HistoryDetailPage() {
     );
   }
 
-  if (!task) return null;
+  if (error || !task) {
+    return (
+      <main className="mx-auto max-w-[900px] px-5 py-10">
+        <Card className="p-8 text-center">
+          <h1 className="text-2xl font-bold text-ink">无法打开生成结果</h1>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted">
+            {error || "记录不存在或已被删除。你可以返回历史记录页重新选择。"}
+          </p>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link href="/history">
+              <Button variant="outline">返回历史记录</Button>
+            </Link>
+            {error.includes("登录") ? (
+              <Link href="/login?redirect=/history">
+                <Button>去登录</Button>
+              </Link>
+            ) : null}
+          </div>
+        </Card>
+      </main>
+    );
+  }
 
   const images = task.resultImages?.length ? task.resultImages : task.resultImageUrl ? [task.resultImageUrl] : [];
 

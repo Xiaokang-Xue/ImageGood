@@ -9,9 +9,9 @@ import { PosterCanvas } from "@/components/poster/PosterCanvas";
 import { palettes, PosterSettings } from "@/components/poster/PosterSettings";
 import { PosterVariants } from "@/components/poster/PosterVariants";
 import { Card } from "@/components/ui/Card";
-import { apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
+import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
 import { cn, sleep } from "@/lib/utils";
-import type { PosterImageResult, PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
+import type { PosterImageResult, PosterLayerKey, PosterLayerVisibility, PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
 
 const usageOptions: Array<{
   value: PosterUsage;
@@ -25,13 +25,42 @@ const usageOptions: Array<{
   { value: "checkin", label: "学习打卡图", icon: Trophy }
 ];
 
-export function PosterStudio() {
-  const [usage, setUsage] = useState<PosterUsage>("xiaohongshu");
+const usages: PosterUsage[] = ["xiaohongshu", "wechat", "community", "course", "checkin"];
+const styles: PosterStyle[] = ["clean", "premium", "cute", "tech", "handdrawn"];
+const ratios: PosterRatio[] = ["3:4", "1:1", "16:9", "9:16", "4:5"];
+const defaultLayerVisibility: PosterLayerVisibility = {
+  title: true,
+  subtitle: true,
+  decoration: true,
+  background: true
+};
+
+function normalizeUsage(value?: string): PosterUsage {
+  return usages.includes(value as PosterUsage) ? (value as PosterUsage) : "xiaohongshu";
+}
+
+function normalizeStyle(value?: string): PosterStyle {
+  return styles.includes(value as PosterStyle) ? (value as PosterStyle) : "clean";
+}
+
+function normalizeRatio(value?: string): PosterRatio {
+  return ratios.includes(value as PosterRatio) ? (value as PosterRatio) : "3:4";
+}
+
+interface PosterStudioProps {
+  initialUsage?: string;
+  initialStyle?: string;
+  initialRatio?: string;
+}
+
+export function PosterStudio({ initialUsage, initialStyle, initialRatio }: PosterStudioProps) {
+  const [usage, setUsage] = useState<PosterUsage>(() => normalizeUsage(initialUsage));
   const [title, setTitle] = useState("7 天练出自然英语口语");
   const [subtitle, setSubtitle] = useState("每天 30 分钟 · 轻松开口说英语");
-  const [style, setStyle] = useState<PosterStyle>("clean");
-  const [ratio, setRatio] = useState<PosterRatio>("3:4");
+  const [style, setStyle] = useState<PosterStyle>(() => normalizeStyle(initialStyle));
+  const [ratio, setRatio] = useState<PosterRatio>(() => normalizeRatio(initialRatio));
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [layerVisibility, setLayerVisibility] = useState<PosterLayerVisibility>(defaultLayerVisibility);
   const [results, setResults] = useState<PosterImageResult[]>([]);
   const [activeResult, setActiveResult] = useState<PosterImageResult | null>(null);
   const [variantIndex, setVariantIndex] = useState(0);
@@ -83,10 +112,21 @@ export function PosterStudio() {
         window.location.href = "/login?redirect=/poster";
         return;
       }
+      if (isEmailNotVerifiedError(requestError)) {
+        setError(getImageErrorMessage(requestError));
+        return;
+      }
       setError(getImageErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleLayer = (key: PosterLayerKey) => {
+    setLayerVisibility((current) => ({
+      ...current,
+      [key]: !current[key]
+    }));
   };
 
   return (
@@ -107,6 +147,10 @@ export function PosterStudio() {
           {error.includes("积分不足") ? (
             <Link href="/pricing" className="text-studio-700 underline">
               购买积分
+            </Link>
+          ) : error.includes("邮箱验证") ? (
+            <Link href="/account" className="text-studio-700 underline">
+              前往账户中心
             </Link>
           ) : null}
         </div>
@@ -151,11 +195,13 @@ export function PosterStudio() {
         <PosterCanvas
           title={title}
           subtitle={subtitle}
+          usage={usage}
           style={style}
           ratio={ratio}
           palette={palettes[paletteIndex]}
           variantIndex={variantIndex}
           backgroundImage={activeResult?.url}
+          layers={layerVisibility}
         />
 
         <div className="grid gap-6">
@@ -173,7 +219,7 @@ export function PosterStudio() {
             onPaletteChange={setPaletteIndex}
             onGenerate={handleGenerate}
           />
-          <LayerPanel />
+          <LayerPanel visibility={layerVisibility} onToggle={handleToggleLayer} />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, LogOut, Sparkles, UserRound } from "lucide-react";
@@ -14,8 +14,7 @@ const navItems = [
   { label: "智能修图", href: "/editor" },
   { label: "商品图", href: "/product" },
   { label: "封面海报", href: "/poster" },
-  { label: "模板中心", href: "/templates" },
-  { label: "API 平台", href: "/api-platform" }
+  { label: "模板中心", href: "/templates" }
 ];
 
 export function Header() {
@@ -23,6 +22,7 @@ export function Header() {
   const router = useRouter();
   const [user, setUser] = useState<PublicUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const refreshUser = () => {
@@ -36,6 +36,36 @@ export function Header() {
     window.addEventListener("ai-image-credits-updated", refreshUser);
     return () => window.removeEventListener("ai-image-credits-updated", refreshUser);
   }, [pathname]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (target instanceof Node && menuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   const handleLogout = async () => {
     await apiClient.logout().catch(() => null);
@@ -54,7 +84,7 @@ export function Header() {
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-indigo-500/25">
             <Sparkles className="h-5 w-5" />
           </span>
-          <span className="text-base font-bold tracking-normal text-ink">AI 图片助手</span>
+          <span className="text-base font-bold tracking-normal text-ink">ImageGood</span>
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex">
@@ -84,7 +114,7 @@ export function Header() {
               <Link href="/pricing" className="hidden rounded-lg bg-studio-50 px-3 py-2 text-sm font-semibold text-studio-700 sm:block">
                 积分：{user.credits}
               </Link>
-              <div className="relative">
+              <div className="relative" ref={menuRef}>
                 <button
                   type="button"
                   className="flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-ink transition hover:bg-slate-50"
@@ -122,6 +152,24 @@ export function Header() {
                     >
                       历史记录
                     </Link>
+                    {user.role === "admin" ? (
+                      <>
+                        <Link
+                          href="/admin/analytics"
+                          className="block border-t border-line px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          数据看板
+                        </Link>
+                        <Link
+                          href="/admin/orders"
+                          className="block px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          订单后台
+                        </Link>
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"

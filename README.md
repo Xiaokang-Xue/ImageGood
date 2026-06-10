@@ -1,10 +1,10 @@
-# AI Image Studio
+# ImageGood
 
-AI Image Studio 是一个面向用户的在线 AI 图片编辑与生成网站，支持智能修图、商品图生成、封面海报生成、用户登录、生成记录和额度管理等核心能力。
+ImageGood 是一个面向用户的在线 AI 图片编辑与生成网站，支持智能修图、商品图生成、封面海报生成、用户登录、生成记录和额度管理等核心能力。
 
 ## 项目简介
 
-AI Image Studio 是一个 AI P 图网站 MVP。用户可以上传图片，通过自然语言描述完成图片修改，例如换背景、画面增强、商品图生成和封面海报生成。
+ImageGood 是一个 AI P 图网站 MVP。用户可以上传图片，通过自然语言描述完成图片修改，例如换背景、画面增强、商品图生成和封面海报生成。
 
 项目采用 Next.js 构建前端页面和业务 API，图片生成能力通过服务端接口转发到独立的 Python Codex 图片服务。浏览器不会直接访问图片生成服务，也不会接触敏感密钥。
 
@@ -65,7 +65,7 @@ AI Image Studio 是一个 AI P 图网站 MVP。用户可以上传图片，通过
 - Node.js
 - Node `crypto.scrypt` 密码哈希
 - httpOnly Cookie Session
-- 本地文件数据库，路径由 `DATABASE_URL` 控制
+- 本地文件数据库或 MySQL 数据库，连接方式由 `DATABASE_URL` 控制
 - Python 3
 - Codex CLI / Codex 图片服务
 - OpenAI SDK，可选用于 OpenAI Images API 模式
@@ -151,16 +151,16 @@ IMAGE_MODEL=gpt-image-1
 
 使用 Codex 图片服务时，`OPENAI_API_KEY` 可以不填。部署时请务必把 `AUTH_SECRET` 改成足够长的随机字符串。
 
-### 4. 初始化本地数据库
+### 4. 初始化数据库
 
-当前项目使用内置本地文件数据库，不依赖外部数据库服务。
+本地开发可以使用内置文件数据库；服务器正式运行可以使用 MySQL。项目会根据 `DATABASE_URL` 自动判断存储方式。
 
 ```bash
 npm run db:generate
 npm run db:push
 ```
 
-默认会根据 `DATABASE_URL` 创建 `dev.db` 文件。
+如果 `DATABASE_URL` 使用 `file:`，会创建对应的本地数据库文件；如果使用 `mysql://`，会初始化 MySQL 表结构。
 
 ### 5. 启动 Codex 图片服务
 
@@ -281,7 +281,7 @@ pm2 save
 
 | 变量名 | 说明 | 示例 |
 | --- | --- | --- |
-| `DATABASE_URL` | 本地文件数据库路径 | `file:./dev.db` |
+| `DATABASE_URL` | 数据库地址，支持 `file:` 或 `mysql://` | `file:./dev.db` |
 | `AUTH_SECRET` | 登录会话、验证码和重置密码 token 的签名密钥 | `please-change-this-secret` |
 | `AUTH_COOKIE_SECURE` | Cookie 是否只允许 HTTPS 发送 | `false` |
 | `NEXT_PUBLIC_APP_URL` | 网站访问地址，用于生成回调和本地调试链接 | `http://localhost:3000` |
@@ -304,7 +304,7 @@ pm2 save
 
 ## 图片生成服务说明
 
-AI Image Studio 由两层服务组成：
+ImageGood 由两层服务组成：
 
 ```text
 浏览器
@@ -400,7 +400,8 @@ POST /api/payment/wechat/notify
 设置管理员：
 
 - 当前项目没有写死管理员账号。
-- 在本地数据库文件中找到目标用户，将该用户的 `role` 从 `"user"` 改为 `"admin"`。
+- 文件数据库模式下，在本地数据库文件中找到目标用户，将该用户的 `role` 从 `"user"` 改为 `"admin"`。
+- MySQL 模式下，在 `imagegood_records` 表中找到 `collection = 'users'` 的目标用户记录，更新该 JSON 记录里的 `role` 为 `"admin"`。
 - 重启服务后，该用户即可访问 `/admin/orders`。
 
 ## 开发状态
@@ -429,8 +430,145 @@ POST /api/payment/wechat/notify
 - 部署到公网时，只需要开放 Next.js 网站端口或 Nginx 的 `80/443` 端口。
 - 不要把 `8000` 端口直接暴露到公网。
 - 微信支付正式模式需要公网 HTTPS 域名，`WECHAT_PAY_NOTIFY_URL` 必须能被微信支付服务器访问。
-- `public/generated/` 用于保存生成结果，生产环境建议定期备份或迁移到对象存储。
+- Codex 生成结果默认保留在 `CODEX_IMAGE_API_WORKDIR/tasks`，网站通过 `/api/task-images/...` 受控读取；`public/generated/` 仅用于非 Codex 图片来源或兼容旧数据。
 - 生产环境建议使用 Nginx、HTTPS 和 PM2 等进程管理工具。
+
+## 账号系统与邮件配置
+
+当前账号系统支持本地 JSON 文件数据库和 MySQL 数据库两种存储方式。`DATABASE_URL` 使用 `file:` 开头时会保存到本地文件；使用 `mysql://` 或 `mysql2://` 开头时会连接 MySQL。用户数据、会话、邮箱验证 token、密码重置 token、图片任务、订单、积分流水和访问统计都会通过统一数据层保存。
+
+密码哈希通过 `src/lib/password.ts` 统一封装。运行环境安装 `bcryptjs` 时会优先使用 bcrypt；未安装时会兼容项目已有的 `crypto.scrypt` 哈希，以保证旧账号和本地开发环境不因缺少依赖而无法登录。
+
+### 邮件相关环境变量
+
+```env
+NEXT_PUBLIC_APP_URL=https://imagegood.huoideas.com
+
+EMAIL_PROVIDER=smtp
+SMTP_HOST=
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM="ImageGood <noreply@huoideas.com>"
+
+EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=30
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30
+```
+
+说明：
+
+- `NEXT_PUBLIC_APP_URL` 用于拼接邮箱验证链接和密码重置链接。
+- `SMTP_PASS` 只能放在服务端环境变量中，不要暴露到前端，也不要提交到 GitHub。
+- `SMTP_FROM` 是邮件发件人，建议使用 `名称 <邮箱>` 格式。
+- 生产环境必须配置完整 SMTP，否则注册后的验证邮件和密码找回邮件无法正常发送。
+- 开发环境如果未配置 SMTP，系统会在服务端日志中打印验证链接或重置链接，方便本地调试。
+
+### 注册与邮箱验证
+
+1. 用户在 `/register` 输入昵称、邮箱、密码、确认密码和算术验证码。
+2. 后端校验邮箱格式、密码长度、两次密码一致性和邮箱唯一性。
+3. 注册成功后创建用户，`emailVerified` 默认为 `false`。
+4. 系统生成邮箱验证 token，数据库只保存 `tokenHash`，不会保存明文 token。
+5. 用户点击邮件中的 `/verify-email?token=...` 链接后，系统会标记邮箱为已验证。
+6. 未验证邮箱的用户可以登录，但不能生成图片或购买积分。
+7. 用户可以在 `/account` 重新发送验证邮件。
+
+### 忘记密码
+
+1. 用户在 `/forgot-password` 输入邮箱。
+2. 接口始终返回统一提示：“如果该邮箱已注册，我们会发送密码重置邮件。”
+3. 如果邮箱存在，系统会生成 30 分钟有效的密码重置 token。
+4. 数据库只保存 `tokenHash`，不会保存明文 token。
+5. 用户点击邮件中的 `/reset-password?token=...` 链接后，可以设置新密码。
+6. 密码重置成功后，该用户旧 session 会被清除，需要重新登录。
+
+### 功能限制
+
+以下能力要求用户已登录且邮箱已验证：
+
+- `/api/images/edit`
+- `/api/images/product`
+- `/api/images/poster`
+- `/api/payment/create`
+- `/api/orders`
+
+如果邮箱未验证，接口会返回：
+
+```json
+{
+  "status": "failed",
+  "error": {
+    "code": "EMAIL_NOT_VERIFIED",
+    "message": "请先完成邮箱验证后再使用该功能"
+  }
+}
+```
+
+## MySQL / 阿里云 RDS 配置
+
+项目默认仍可使用本地文件数据库，适合本地开发：
+
+```env
+DATABASE_URL="file:./dev.db"
+```
+
+服务器正式运行建议使用 MySQL。阿里云 RDS 配置完成后，将服务器 `.env.local` 中的 `DATABASE_URL` 改为：
+
+```env
+DATABASE_URL="mysql://imagegood:your-password@rm-2ze743c70lk0ea1s22o.mysql.rds.aliyuncs.com:3306/image_good?connection_limit=5"
+MYSQL_CONNECTION_LIMIT=5
+```
+
+注意：
+
+- 不要把真实数据库密码提交到 GitHub。
+- 如果密码包含 `@`、`#`、`:`、`/` 等特殊字符，需要做 URL 编码。
+- 阿里云 RDS 需要把网站服务器公网 IP 加入白名单。
+- 数据库 `image_good` 需要提前创建，账号 `imagegood` 需要有读写权限。
+- 当前数据层会在 MySQL 中创建 `imagegood_records` 和 `imagegood_meta` 两张表，用于保存账号、会话、订单、积分流水、图片任务和访问统计。
+
+初始化 MySQL 表结构：
+
+```bash
+npm install
+npm run db:push
+```
+
+如果是全新服务器、没有旧账号数据，执行到这里即可启动网站。
+
+如果要把旧 JSON 数据库导入 MySQL，先确认旧文件还在，例如：
+
+```text
+/data/photoshop_data/prod.db
+```
+
+然后执行：
+
+```bash
+npm run db:migrate-json -- /data/photoshop_data/prod.db
+```
+
+迁移完成后再启动 Next.js 网站：
+
+```bash
+npm run dev -- -H 0.0.0.0
+```
+
+生产模式：
+
+```bash
+npm run build
+npm run start -- -H 0.0.0.0
+```
+
+可以在服务器上先测试 MySQL 连通性：
+
+```bash
+mysql -h rm-2ze743c70lk0ea1s22o.mysql.rds.aliyuncs.com -P 3306 -u imagegood -p image_good
+```
+
+如果连接失败，优先检查 RDS 白名单、账号权限、数据库名、服务器网络和 3306 端口访问。
 
 ## License
 
