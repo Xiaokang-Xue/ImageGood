@@ -644,4 +644,4 @@ mysql -h rm-2ze743c70lk0ea1s22o.mysql.rds.aliyuncs.com -P 3306 -u imagegood -p i
 
 ## License
 
-This project is for internal research and product prototyping. License information can be added later.
+Copyright (c) 2026 ImageGood. All rights reserved.
