@@ -29,3 +29,14 @@ export interface ImageTaskDetailResponse {
   ok?: boolean;
   task: ImageTaskRecord;
 }
+
+export interface DeleteImageTaskResponse {
+  ok: boolean;
+  deletedId: string;
+}
+
+export interface DeleteImageTasksResponse {
+  ok: boolean;
+  deletedIds: string[];
+  skippedIds: string[];
+}

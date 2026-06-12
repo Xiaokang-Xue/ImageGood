@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
@@ -18,9 +18,12 @@ const typeLabels: Record<ImageTaskRecord["type"], string> = {
 
 export default function HistoryDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [task, setTask] = useState<ImageTaskRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -70,6 +73,25 @@ export default function HistoryDetailPage() {
   }
 
   const images = task.resultImages?.length ? task.resultImages : task.resultImageUrl ? [task.resultImageUrl] : [];
+  const canDelete = task.status === "succeeded" || task.status === "failed";
+
+  const handleDelete = async () => {
+    if (!canDelete) {
+      setActionError("生成中的任务暂不能删除，请完成后再试");
+      return;
+    }
+    if (!window.confirm("确定删除这条历史记录吗？删除后列表中将不再显示。")) return;
+
+    setDeleting(true);
+    setActionError("");
+    try {
+      await apiClient.deleteTask(task.id);
+      router.push("/history");
+    } catch (requestError) {
+      setActionError(getImageErrorMessage(requestError));
+      setDeleting(false);
+    }
+  };
 
   return (
     <main className="mx-auto max-w-[1200px] px-5 py-10">
@@ -78,18 +100,35 @@ export default function HistoryDetailPage() {
           <p className="text-sm font-semibold text-studio-600">{typeLabels[task.type]}</p>
           <h1 className="mt-2 text-3xl font-bold text-ink">生成结果详情</h1>
         </div>
-        <Link href="/history">
-          <Button variant="outline">返回历史记录</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" loading={deleting} disabled={!canDelete} onClick={handleDelete}>
+            <Trash2 className="h-4 w-4" />
+            删除记录
+          </Button>
+          <Link href="/history">
+            <Button variant="outline">返回历史记录</Button>
+          </Link>
+        </div>
       </div>
+
+      {actionError ? (
+        <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+          {actionError}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="p-5">
           {images.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               {images.map((image, index) => (
                 <div key={image} className="overflow-hidden rounded-lg border border-line bg-white">
-                  <SmartImage src={image} alt={`生成结果 ${index + 1}`} className="h-[420px] w-full rounded-none border-0" />
+                  <SmartImage
+                    src={image}
+                    alt={`生成结果 ${index + 1}`}
+                    className="h-[720px] max-h-[72vh] min-h-[420px] w-full rounded-none border-0 bg-slate-50"
+                    imageClassName="object-contain"
+                  />
                   <div className="p-4">
                     <Button variant="dark" className="w-full" onClick={() => downloadImage(image)}>
                       <Download className="h-4 w-4" />

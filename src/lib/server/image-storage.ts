@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
+import { buildTaskObjectKey, isCosStorageEnabled, uploadBufferToCos } from "@/lib/server/cos-storage";
 import type { ImageOutputFormat } from "@/types/image";
 
 const MIME_TYPES: Record<ImageOutputFormat, string> = {
@@ -55,6 +56,11 @@ function safePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
+function envBoolean(value: string | undefined, fallback = false) {
+  if (value === undefined || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
 function getCodexWorkDir() {
   return process.env.CODEX_IMAGE_API_WORKDIR || "/data/codex_image_api_runs";
 }
@@ -85,32 +91,55 @@ function codexTaskImageUrl(imagePath: string, taskId: string) {
 
 export async function saveUploadFile(file: File, userId: string, taskId: string) {
   const extension = extensionFromMime(file.type || "image/png");
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  if (isCosStorageEnabled()) {
+    const uploaded = await uploadBufferToCos({
+      key: buildTaskObjectKey({
+        userId,
+        taskId,
+        filename: `input.${extension}`
+      }),
+      body: buffer,
+      contentType: file.type || MIME_TYPES.png
+    });
+    return uploaded.url;
+  }
+
   const relativePath = `/generated/${safePathSegment(userId)}/${safePathSegment(taskId)}/input.${extension}`;
   const absolutePath = path.join(process.cwd(), "public", relativePath.slice(1));
 
   await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, Buffer.from(await file.arrayBuffer()));
+  await writeFile(absolutePath, buffer);
 
   return relativePath;
 }
 
 export async function saveResultImage(imageUrl: string, userId: string, taskId: string, index = 1) {
-  if (imageUrl.startsWith("/generated/")) {
+  const cosEnabled = isCosStorageEnabled();
+
+  if (imageUrl.startsWith("/api/storage/images/")) {
     return imageUrl;
   }
 
-  if (imageUrl.startsWith("/api/task-images/")) {
+  if (!cosEnabled && imageUrl.startsWith("/generated/")) {
     return imageUrl;
   }
 
-  const codexUrl = codexTaskImageUrl(imageUrl, taskId);
-  if (codexUrl) {
-    try {
-      const buffer = await readFile(imageUrl);
-      const mimeType = mimeTypeFromBuffer(buffer);
-      return mimeType ? codexUrl : "";
-    } catch {
-      return "";
+  if (!cosEnabled) {
+    if (imageUrl.startsWith("/api/task-images/")) {
+      return imageUrl;
+    }
+
+    const codexUrl = codexTaskImageUrl(imageUrl, taskId);
+    if (codexUrl) {
+      try {
+        const buffer = await readFile(imageUrl);
+        const mimeType = mimeTypeFromBuffer(buffer);
+        return mimeType ? codexUrl : "";
+      } catch {
+        return "";
+      }
     }
   }
 
@@ -121,6 +150,15 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
   if (parsed) {
     mimeType = parsed.mimeType;
     buffer = parsed.buffer;
+  } else if (cosEnabled && imageUrl.startsWith("/generated/")) {
+    try {
+      const absolutePath = path.join(process.cwd(), "public", imageUrl.slice(1));
+      buffer = await readFile(absolutePath);
+      mimeType = mimeTypeFromBuffer(buffer, mimeType);
+      if (!mimeType) return "";
+    } catch {
+      return "";
+    }
   } else if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
     try {
       const response = await fetch(imageUrl);
@@ -133,6 +171,9 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
       return imageUrl;
     }
   } else if (path.isAbsolute(imageUrl)) {
+    if (cosEnabled && !codexTaskImageUrl(imageUrl, taskId)) {
+      return "";
+    }
     try {
       buffer = await readFile(imageUrl);
       mimeType = mimeTypeFromBuffer(buffer);
@@ -146,6 +187,20 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
 
   const extension = extensionFromMime(mimeType);
   const filename = index === 1 ? `result.${extension}` : `result-${index}.${extension}`;
+
+  if (cosEnabled) {
+    const uploaded = await uploadBufferToCos({
+      key: buildTaskObjectKey({
+        userId,
+        taskId,
+        filename
+      }),
+      body: buffer,
+      contentType: mimeType || MIME_TYPES.png
+    });
+    return uploaded.url;
+  }
+
   const relativePath = `/generated/${safePathSegment(userId)}/${safePathSegment(taskId)}/${filename}`;
   const absolutePath = path.join(process.cwd(), "public", relativePath.slice(1));
 
@@ -158,6 +213,32 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
 export async function normalizeResultImages(imageUrls: string[], userId: string, taskId: string) {
   const saved = await Promise.all(imageUrls.map((url, index) => saveResultImage(url, userId, taskId, index + 1)));
   return saved.filter(Boolean);
+}
+
+export async function cleanupLocalTaskDirectoryAfterUpload(taskId: string) {
+  if (!isCosStorageEnabled() || !envBoolean(process.env.TENCENT_COS_CLEAN_LOCAL_TASK_DIR)) {
+    return;
+  }
+
+  const safeTaskId = safePathSegment(taskId);
+  if (!safeTaskId) return;
+
+  const tasksDir = path.resolve(getCodexWorkDir(), "tasks");
+  const taskDir = path.resolve(tasksDir, safeTaskId);
+  const relative = path.relative(tasksDir, taskDir);
+
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    return;
+  }
+
+  try {
+    await rm(taskDir, { recursive: true, force: true });
+  } catch (error) {
+    console.warn("[image-storage] failed to cleanup local task directory", {
+      taskId: safeTaskId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 
 export async function saveBase64Image(input: { base64: string; outputFormat?: ImageOutputFormat }) {

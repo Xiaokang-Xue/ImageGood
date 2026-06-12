@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   BarChart3,
   CheckCircle2,
   CreditCard,
   Eye,
   Image as ImageIcon,
+  MousePointerClick,
   RefreshCcw,
   ShoppingCart,
   UserPlus,
@@ -77,6 +79,10 @@ export default function AdminAnalyticsPage() {
     return Math.max(1, ...(data?.daily.map((item) => item.revenueCents) ?? [1]));
   }, [data]);
 
+  const maxDailyPurchaseClicks = useMemo(() => {
+    return Math.max(1, ...(data?.daily.map((item) => item.purchaseClicks) ?? [1]));
+  }, [data]);
+
   return (
     <main className="mx-auto max-w-[1280px] px-5 py-10 lg:px-8">
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -134,7 +140,7 @@ export default function AdminAnalyticsPage() {
               icon={ShoppingCart}
               label="付费订单"
               value={formatNumber(data.overview.paidOrders)}
-              helper={`待支付 ${formatNumber(data.overview.pendingOrders)} 单 · 今日收入 ${formatCny(data.overview.todayRevenueCents)}`}
+              helper={`今日收入 ${formatCny(data.overview.todayRevenueCents)} · 待付款 ${formatNumber(data.overview.pendingOrders)} 单`}
             />
             <MetricCard
               icon={CreditCard}
@@ -145,6 +151,18 @@ export default function AdminAnalyticsPage() {
           </section>
 
           <section className="mt-4 grid gap-4 md:grid-cols-3">
+            <MetricCard
+              icon={MousePointerClick}
+              label="购买按钮点击"
+              value={formatNumber(data.overview.purchaseClicks)}
+              helper={`点击用户 ${formatNumber(data.overview.purchaseClickUsers)} 人 · 购买页访客 ${formatNumber(data.overview.pricingVisitors)} 人`}
+            />
+            <MetricCard
+              icon={ShoppingCart}
+              label="尝试付款人数"
+              value={formatNumber(data.overview.pendingOrderUsers)}
+              helper={`待付款订单 ${formatNumber(data.overview.pendingOrders)} 单，用于观察支付转化流失`}
+            />
             <MetricCard
               icon={ImageIcon}
               label="生成任务"
@@ -162,6 +180,18 @@ export default function AdminAnalyticsPage() {
               label="邮箱已验证用户"
               value={formatNumber(data.overview.verifiedUsers)}
               helper="用于评估可生成用户规模"
+            />
+            <MetricCard
+              icon={Activity}
+              label="7日活跃用户"
+              value={formatNumber(data.overview.activeUsers7d)}
+              helper={`今日活跃 ${formatNumber(data.overview.todayActiveUsers)} 人 · 功能页访客 ${formatNumber(data.overview.generationPageVisitors)} 人`}
+            />
+            <MetricCard
+              icon={CreditCard}
+              label="结账页访客"
+              value={formatNumber(data.overview.checkoutVisitors)}
+              helper={`结账页访问 ${formatNumber(data.overview.checkoutPageViews)} 次，用于分析支付页到达率`}
             />
           </section>
 
@@ -181,10 +211,12 @@ export default function AdminAnalyticsPage() {
                     <p className="text-sm font-semibold text-slate-600">{formatDate(item.date)}</p>
                     <div className="grid gap-2">
                       <Bar label="访问" value={item.pageViews} max={maxDailyPageViews} tone="blue" />
+                      <Bar label="点击" value={item.purchaseClicks} max={maxDailyPurchaseClicks} tone="emerald" />
                       <Bar label="收入" value={item.revenueCents} max={maxDailyRevenue} tone="violet" money />
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold text-slate-600">
+                    <div className="grid grid-cols-4 gap-2 text-center text-xs font-semibold text-slate-600">
                       <span>注册 {item.registrations}</span>
+                      <span>点击 {item.purchaseClicks}</span>
                       <span>付费 {item.paidOrders}</span>
                       <span>生成 {item.succeededTasks}</span>
                     </div>
@@ -289,7 +321,7 @@ function Bar({
   label: string;
   value: number;
   max: number;
-  tone: "blue" | "violet";
+  tone: "blue" | "violet" | "emerald";
   money?: boolean;
 }) {
   const width = Math.max(4, Math.round((value / max) * 100));
@@ -298,7 +330,13 @@ function Bar({
       <span className="text-xs font-semibold text-slate-500">{label}</span>
       <div className="h-2 overflow-hidden rounded-full bg-white">
         <div
-          className={tone === "blue" ? "h-full rounded-full bg-studio-500" : "h-full rounded-full bg-violet-500"}
+          className={
+            tone === "blue"
+              ? "h-full rounded-full bg-studio-500"
+              : tone === "emerald"
+                ? "h-full rounded-full bg-emerald-500"
+                : "h-full rounded-full bg-violet-500"
+          }
           style={{ width: `${width}%` }}
         />
       </div>

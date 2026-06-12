@@ -8,6 +8,7 @@ import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import { trackClientEvent } from "@/lib/client-analytics";
 import type { CreditPackage, CreditPackageId } from "@/types/billing";
 
 function formatPackagePrice(priceCents: number) {
@@ -34,6 +35,19 @@ export default function PricingPage() {
   }, []);
 
   const handleBuy = async (packageId: CreditPackageId) => {
+    const selectedPackage = packages.find((item) => item.id === packageId);
+    trackClientEvent({
+      type: "purchase_click",
+      path: "/pricing",
+      target: packageId,
+      metadata: {
+        packageId,
+        packageName: selectedPackage?.name ?? packageId,
+        priceCents: selectedPackage?.priceCents ?? null,
+        credits: selectedPackage?.credits ?? null
+      }
+    });
+
     setLoadingPackage(packageId);
     setError("");
 

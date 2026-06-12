@@ -3,11 +3,11 @@ import type { EditTool, PosterStyle, ProductStyle, ProductTemplate } from "@/typ
 import type { TemplateItem } from "@/types/template";
 
 export const toolPrompts: Record<EditTool, string> = {
-  background: "把背景换成干净明亮的商业摄影背景，主体保持不变",
-  remove: "去除画面中的多余杂物，背景自然补全",
-  enhance: "提升图片清晰度、细节和光影表现，画面更干净自然",
-  style: "改成更高级、更专业的商业视觉风格，保持主体内容不变",
-  expand: "将画面边缘自然扩展，适合封面、海报或横竖版裁切",
+  background: "把背景换成干净明亮的商业摄影背景，主体大小、形状、材质和边缘保持不变",
+  remove: "去除画面中的多余杂物，背景自然补全，不改变主体位置和外观",
+  enhance: "提升图片清晰度、细节和光影表现，画面更干净自然，不添加新物体",
+  style: "改成更高级、更专业的商业视觉风格，保持主体内容、比例和真实质感不变",
+  expand: "将画面边缘自然扩展，适合封面、海报或横竖版裁切，不复制主体",
   custom: ""
 };
 

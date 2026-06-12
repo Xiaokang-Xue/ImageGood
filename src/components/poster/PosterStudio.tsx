@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, MessageCircle, Newspaper, PenTool, Trophy } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
@@ -34,6 +34,7 @@ const defaultLayerVisibility: PosterLayerVisibility = {
   decoration: true,
   background: true
 };
+const POSTER_DRAFT_STORAGE_KEY = "imagegood-poster-studio-draft";
 
 function normalizeUsage(value?: string): PosterUsage {
   return usages.includes(value as PosterUsage) ? (value as PosterUsage) : "xiaohongshu";
@@ -53,6 +54,19 @@ interface PosterStudioProps {
   initialRatio?: string;
 }
 
+interface PosterStudioDraft {
+  usage: PosterUsage;
+  title: string;
+  subtitle: string;
+  style: PosterStyle;
+  ratio: PosterRatio;
+  paletteIndex: number;
+  layerVisibility: PosterLayerVisibility;
+  results: PosterImageResult[];
+  activeResult: PosterImageResult | null;
+  variantIndex: number;
+}
+
 export function PosterStudio({ initialUsage, initialStyle, initialRatio }: PosterStudioProps) {
   const [usage, setUsage] = useState<PosterUsage>(() => normalizeUsage(initialUsage));
   const [title, setTitle] = useState("7 天练出自然英语口语");
@@ -66,6 +80,60 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const [variantIndex, setVariantIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(POSTER_DRAFT_STORAGE_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw) as Partial<PosterStudioDraft>;
+        setUsage(initialUsage ? normalizeUsage(initialUsage) : normalizeUsage(draft.usage));
+        setTitle(typeof draft.title === "string" ? draft.title : "7 天练出自然英语口语");
+        setSubtitle(typeof draft.subtitle === "string" ? draft.subtitle : "每天 30 分钟 · 轻松开口说英语");
+        setStyle(initialStyle ? normalizeStyle(initialStyle) : normalizeStyle(draft.style));
+        setRatio(initialRatio ? normalizeRatio(initialRatio) : normalizeRatio(draft.ratio));
+        setPaletteIndex(typeof draft.paletteIndex === "number" && palettes[draft.paletteIndex] ? draft.paletteIndex : 0);
+        setLayerVisibility({
+          ...defaultLayerVisibility,
+          ...(draft.layerVisibility ?? {})
+        });
+        setResults(Array.isArray(draft.results) ? draft.results : []);
+        setActiveResult(draft.activeResult ?? null);
+        setVariantIndex(typeof draft.variantIndex === "number" ? draft.variantIndex : 0);
+      } else {
+        if (initialUsage) setUsage(normalizeUsage(initialUsage));
+        if (initialStyle) setStyle(normalizeStyle(initialStyle));
+        if (initialRatio) setRatio(normalizeRatio(initialRatio));
+      }
+    } catch {
+      window.localStorage.removeItem(POSTER_DRAFT_STORAGE_KEY);
+    } finally {
+      setHydrated(true);
+    }
+  }, [initialRatio, initialStyle, initialUsage]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const draft: PosterStudioDraft = {
+      usage,
+      title,
+      subtitle,
+      style,
+      ratio,
+      paletteIndex,
+      layerVisibility,
+      results,
+      activeResult,
+      variantIndex
+    };
+
+    try {
+      window.localStorage.setItem(POSTER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // Draft persistence is best effort; generation still works without local storage.
+    }
+  }, [activeResult, hydrated, layerVisibility, paletteIndex, ratio, results, style, subtitle, title, usage, variantIndex]);
 
   const handleGenerate = async () => {
     setLoading(true);

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "cos-nodejs-sdk-v5": "^2.14.7",
     "lucide-react": "^0.468.0",
     "mysql2": "^3.11.5",
     "next": "^14.2.23",

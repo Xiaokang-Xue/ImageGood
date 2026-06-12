@@ -20,7 +20,7 @@ import type {
   PaymentOrderResponse
 } from "@/types/billing";
 import type { AdminAnalyticsResponse } from "@/types/analytics";
-import type { ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
+import type { DeleteImageTaskResponse, DeleteImageTasksResponse, ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
 
@@ -308,6 +308,20 @@ export const apiClient = {
 
   getTask(id: string) {
     return requestJson<ImageTaskDetailResponse>(`/api/tasks/${id}`);
+  },
+
+  deleteTask(id: string) {
+    return requestJson<DeleteImageTaskResponse>(`/api/tasks/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({})
+    });
+  },
+
+  deleteTasks(taskIds: string[]) {
+    return requestJson<DeleteImageTasksResponse>("/api/tasks", {
+      method: "DELETE",
+      body: JSON.stringify({ taskIds })
+    });
   },
 
   async waitForTaskDone(id: string, options?: { intervalMs?: number; timeoutMs?: number }) {

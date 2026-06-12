@@ -52,6 +52,7 @@ ImageGood 是一个 AI P 图网站 MVP。用户可以上传图片，通过自然
 - Next.js API Routes 承载业务接口
 - Python Codex 图片服务承载实际出图任务
 - 服务端调用图片生成接口
+- 腾讯云 COS 对象存储，可用于保存用户上传图和生成结果图
 - 环境变量集中配置
 - 敏感密钥只在服务端读取，不暴露到前端
 
@@ -69,6 +70,7 @@ ImageGood 是一个 AI P 图网站 MVP。用户可以上传图片，通过自然
 - Python 3
 - Codex CLI / Codex 图片服务
 - OpenAI SDK，可选用于 OpenAI Images API 模式
+- 腾讯云 COS Node.js SDK，可选用于对象存储模式
 
 ## 项目结构
 
@@ -142,6 +144,7 @@ WECHAT_PAY_NOTIFY_URL=
 
 IMAGE_API_MODE=real
 IMAGE_PROVIDER=codex
+IMAGE_STORAGE_PROVIDER=local
 CODEX_IMAGE_API_BASE_URL=http://127.0.0.1:8000
 CODEX_IMAGE_API_TIMEOUT_SECONDS=900
 
@@ -150,6 +153,23 @@ IMAGE_MODEL=gpt-image-1
 ```
 
 使用 Codex 图片服务时，`OPENAI_API_KEY` 可以不填。部署时请务必把 `AUTH_SECRET` 改成足够长的随机字符串。
+
+如果需要把用户上传图片和生成结果保存到腾讯云 COS，请将图片存储切换为 COS，并配置：
+
+```env
+IMAGE_STORAGE_PROVIDER=cos
+TENCENT_COS_ENABLED=true
+TENCENT_COS_SECRET_ID=
+TENCENT_COS_SECRET_KEY=
+TENCENT_COS_REGION=ap-beijing
+TENCENT_COS_BUCKET=
+TENCENT_COS_KEY_PREFIX=imageGood
+TENCENT_COS_USE_PROXY=true
+TENCENT_COS_PUBLIC_BASE_URL=
+TENCENT_COS_CLEAN_LOCAL_TASK_DIR=false
+```
+
+`TENCENT_COS_USE_PROXY=true` 时，前端会通过 `/api/storage/images/...` 受控读取 COS 图片，适合私有桶。若配置了公开读 CDN 或桶域名，可以填写 `TENCENT_COS_PUBLIC_BASE_URL` 并按需关闭代理。
 
 ### 4. 初始化数据库
 
@@ -297,8 +317,18 @@ pm2 save
 | `WECHAT_PAY_NOTIFY_URL` | 微信支付异步通知地址，正式环境必须公网 HTTPS 可访问 | `https://example.com/api/payment/wechat/notify` |
 | `IMAGE_API_MODE` | 图片生成模式 | `real` / `mock` |
 | `IMAGE_PROVIDER` | 图片生成服务提供方 | `codex` |
+| `IMAGE_STORAGE_PROVIDER` | 图片文件存储方式，`local` 为本地，`cos` 为腾讯云 COS | `local` / `cos` |
 | `CODEX_IMAGE_API_BASE_URL` | Codex 图片服务地址 | `http://127.0.0.1:8000` |
 | `CODEX_IMAGE_API_TIMEOUT_SECONDS` | 图片生成请求超时时间 | `900` |
+| `TENCENT_COS_ENABLED` | 是否启用腾讯云 COS 存储 | `true` / `false` |
+| `TENCENT_COS_SECRET_ID` | 腾讯云 SecretId，只能放在服务端环境变量 | `AKID...` |
+| `TENCENT_COS_SECRET_KEY` | 腾讯云 SecretKey，只能放在服务端环境变量 | `***` |
+| `TENCENT_COS_REGION` | COS Bucket 所在地域 | `ap-beijing` |
+| `TENCENT_COS_BUCKET` | COS Bucket 名称 | `example-1234567890` |
+| `TENCENT_COS_KEY_PREFIX` | COS 对象 key 前缀 | `imageGood` |
+| `TENCENT_COS_USE_PROXY` | 是否通过 Next.js 受控代理读取 COS 图片 | `true` |
+| `TENCENT_COS_PUBLIC_BASE_URL` | 公开读桶或 CDN 域名，可选 | `https://cdn.example.com` |
+| `TENCENT_COS_CLEAN_LOCAL_TASK_DIR` | COS 上传并写库成功后清理当前 Codex 任务目录 | `false` |
 | `OPENAI_API_KEY` | OpenAI API Key，可选 | `sk-xxx` |
 | `IMAGE_MODEL` | OpenAI 图片模型名称，可选 | `gpt-image-1` |
 
@@ -319,6 +349,47 @@ Codex 图片服务 127.0.0.1:8000
 Next.js 网站负责前端页面、用户系统、积分订单、任务记录和业务 API。Python Codex 图片服务负责调用本机 Codex CLI 完成实际出图。
 
 前端只调用 Next.js API，不直接访问 Python 图片服务。这样可以避免把内部服务地址、密钥或执行环境暴露给浏览器。
+
+## 图片对象存储
+
+ImageGood 支持将图片文件保存到腾讯云 COS，适合服务器磁盘空间有限的部署场景。
+
+启用后，系统只会上传当前业务任务产生的文件：
+
+- 用户上传原图：`imageGood/users/{userId}/tasks/{taskId}/input.{ext}`
+- AI 生成结果：`imageGood/users/{userId}/tasks/{taskId}/result.{ext}`
+
+系统不会扫描或批量上传服务器目录，也不会把 `/data/codex_image_api_runs` 下的其他任务文件放入 COS。
+
+推荐配置：
+
+```env
+IMAGE_STORAGE_PROVIDER=cos
+TENCENT_COS_ENABLED=true
+TENCENT_COS_SECRET_ID=你的 SecretId
+TENCENT_COS_SECRET_KEY=你的 SecretKey
+TENCENT_COS_REGION=ap-beijing
+TENCENT_COS_BUCKET=你的 Bucket
+TENCENT_COS_KEY_PREFIX=imageGood
+TENCENT_COS_USE_PROXY=true
+```
+
+如果 COS 桶为私有读，保持 `TENCENT_COS_USE_PROXY=true`。前端图片地址会保存为 `/api/storage/images/...`，服务端会校验登录用户是否拥有对应任务，再从 COS 读取图片返回浏览器。
+
+如果你已经配置了公开读桶或 CDN 域名，可以设置：
+
+```env
+TENCENT_COS_PUBLIC_BASE_URL=https://你的图片域名
+TENCENT_COS_USE_PROXY=false
+```
+
+为了进一步减少本地磁盘占用，可以在确认 COS 上传与历史记录展示稳定后开启：
+
+```env
+TENCENT_COS_CLEAN_LOCAL_TASK_DIR=true
+```
+
+该开关只会删除当前任务目录 `/data/codex_image_api_runs/tasks/{taskId}`，不会删除 `CODEX_IMAGE_API_WORKDIR` 根目录，也不会处理其他服务器目录。
 
 ## 使用流程
 
@@ -408,7 +479,7 @@ POST /api/payment/wechat/notify
 
 当前项目处于 MVP 阶段，已完成基础用户流程、图片生成链路、任务记录、额度系统和主要页面。它已经具备继续迭代为正式 AI 图片工具产品的基础结构。
 
-部分能力仍适合在正式上线前继续增强，例如对象存储、后台管理、局部涂抹编辑和更完整的生成质量控制。
+部分能力仍适合在正式上线前继续增强，例如后台管理、局部涂抹编辑和更完整的生成质量控制。
 
 ## 后续规划
 
@@ -416,7 +487,7 @@ POST /api/payment/wechat/notify
 - 增强微信支付异常告警和后台对账
 - 增加局部涂抹编辑能力
 - 增加批量商品图生成
-- 接入对象存储，替代本地生成文件目录
+- 增强对象存储清理策略和 CDN 加速配置
 - 增加完整后台管理系统
 - 增强图片生成质量控制和失败重试机制
 - 增加团队空间或商家工作台
@@ -426,11 +497,12 @@ POST /api/payment/wechat/notify
 - 不要提交 `.env.local`。
 - 不要把 `AUTH_SECRET`、API Key 或其他敏感信息上传到 GitHub。
 - 不要提交微信支付私钥、平台证书、APIv3 密钥或任何 `.pem` 文件。
+- 腾讯云 COS 的 SecretId 和 SecretKey 只能放在服务器 `.env.local` 中，不要提交到 GitHub。
 - `server/codex_image_api.py` 建议只监听 `127.0.0.1`。
 - 部署到公网时，只需要开放 Next.js 网站端口或 Nginx 的 `80/443` 端口。
 - 不要把 `8000` 端口直接暴露到公网。
 - 微信支付正式模式需要公网 HTTPS 域名，`WECHAT_PAY_NOTIFY_URL` 必须能被微信支付服务器访问。
-- Codex 生成结果默认保留在 `CODEX_IMAGE_API_WORKDIR/tasks`，网站通过 `/api/task-images/...` 受控读取；`public/generated/` 仅用于非 Codex 图片来源或兼容旧数据。
+- 本地存储模式下，Codex 生成结果默认保留在 `CODEX_IMAGE_API_WORKDIR/tasks`，网站通过 `/api/task-images/...` 受控读取；COS 模式下，上传图和结果图会保存到 COS。
 - 生产环境建议使用 Nginx、HTTPS 和 PM2 等进程管理工具。
 
 ## 账号系统与邮件配置

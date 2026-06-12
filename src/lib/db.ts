@@ -6,6 +6,8 @@ import type { AnalyticsEventRecord } from "@/types/analytics";
 import type { CreditTransactionRecord, OrderRecord } from "@/types/billing";
 import type { ImageTaskRecord } from "@/types/task";
 
+const ANALYTICS_EVENT_TYPES = new Set(["page_view", "purchase_click"]);
+
 export interface DbUser {
   id: string;
   email: string;
@@ -210,9 +212,12 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
       : [],
     analyticsEvents: Array.isArray(data.analyticsEvents)
       ? data.analyticsEvents
-          .filter((event) => event && event.type === "page_view" && typeof event.path === "string")
+          .filter((event) => event && ANALYTICS_EVENT_TYPES.has(event.type) && typeof event.path === "string")
           .map((event) => ({
             ...event,
+            type: event.type === "purchase_click" ? "purchase_click" : "page_view",
+            target: event.target ?? null,
+            metadata: event.metadata && typeof event.metadata === "object" ? event.metadata : null,
             referrer: event.referrer ?? null,
             userId: event.userId ?? null,
             userAgent: event.userAgent ?? null

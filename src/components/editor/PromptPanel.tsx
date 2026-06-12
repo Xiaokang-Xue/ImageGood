@@ -67,6 +67,13 @@ export function PromptPanel({
                     : "border-line bg-white text-slate-700 hover:border-studio-200 hover:bg-studio-50"
                 )}
                 onClick={() => {
+                  if (active) {
+                    onToolChange("custom");
+                    if (prompt === toolPrompts[tool.key]) {
+                      onPromptChange("");
+                    }
+                    return;
+                  }
                   onToolChange(tool.key);
                   onPromptChange(toolPrompts[tool.key]);
                 }}

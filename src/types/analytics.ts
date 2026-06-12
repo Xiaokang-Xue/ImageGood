@@ -1,9 +1,11 @@
-export type AnalyticsEventType = "page_view";
+export type AnalyticsEventType = "page_view" | "purchase_click";
 
 export interface AnalyticsEventRecord {
   id: string;
   type: AnalyticsEventType;
   path: string;
+  target?: string | null;
+  metadata?: Record<string, string | number | boolean | null> | null;
   referrer?: string | null;
   visitorId: string;
   sessionId: string;
@@ -21,6 +23,7 @@ export interface AnalyticsMetric {
 export interface AnalyticsDailyPoint {
   date: string;
   pageViews: number;
+  purchaseClicks: number;
   registrations: number;
   paidOrders: number;
   revenueCents: number;
@@ -46,6 +49,16 @@ export interface AdminAnalyticsResponse {
     failedTasks: number;
     paidOrders: number;
     pendingOrders: number;
+    pendingOrderUsers: number;
+    purchaseClicks: number;
+    purchaseClickUsers: number;
+    pricingPageViews: number;
+    pricingVisitors: number;
+    checkoutPageViews: number;
+    checkoutVisitors: number;
+    generationPageVisitors: number;
+    activeUsers7d: number;
+    todayActiveUsers: number;
     revenueCents: number;
     todayRevenueCents: number;
     creditsConsumed: number;

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { appendAnalyticsEvent } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import type { AnalyticsEventType } from "@/types/analytics";
 
 export const runtime = "nodejs";
 
@@ -20,10 +21,33 @@ function cleanText(value: unknown, maxLength: number) {
   return text ? text.slice(0, maxLength) : null;
 }
 
+function cleanEventType(value: unknown): AnalyticsEventType {
+  return value === "purchase_click" ? "purchase_click" : "page_view";
+}
+
+function cleanMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .slice(0, 12)
+    .map(([key, item]) => {
+      if (typeof item === "string") return [key.slice(0, 40), item.slice(0, 120)] as const;
+      if (typeof item === "number" && Number.isFinite(item)) return [key.slice(0, 40), item] as const;
+      if (typeof item === "boolean" || item === null) return [key.slice(0, 40), item] as const;
+      return null;
+    })
+    .filter(Boolean) as Array<readonly [string, string | number | boolean | null]>;
+
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
 export async function POST(request: NextRequest) {
   const payload = (await request.json().catch(() => ({}))) as Partial<{
+    type: AnalyticsEventType;
     path: string;
     referrer: string;
+    target: string;
+    metadata: Record<string, string | number | boolean | null>;
     visitorId: string;
     sessionId: string;
   }>;
@@ -39,8 +63,10 @@ export async function POST(request: NextRequest) {
   const userAgent = cleanText(request.headers.get("user-agent"), 300);
   const event = {
     id: randomUUID(),
-    type: "page_view" as const,
+    type: cleanEventType(payload.type),
     path: cleanPath(payload.path),
+    target: cleanText(payload.target, 120),
+    metadata: cleanMetadata(payload.metadata),
     referrer: cleanText(payload.referrer, 240),
     visitorId,
     sessionId,

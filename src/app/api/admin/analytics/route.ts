@@ -29,6 +29,14 @@ function lastDays(days: number) {
   return keys;
 }
 
+function eventIdentity(event: { userId?: string | null; visitorId: string }) {
+  return event.userId || event.visitorId;
+}
+
+function pathStartsWith(path: string, prefixes: string[]) {
+  return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`));
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
@@ -43,11 +51,23 @@ export async function GET() {
   const todayKey = today.toISOString().slice(0, 10);
   const paidOrders = db.orders.filter((order) => order.status === "paid");
   const pendingOrders = db.orders.filter((order) => order.status === "pending");
+  const pendingOrderUsers = new Set(pendingOrders.map((order) => order.userId)).size;
   const succeededTasks = db.imageTasks.filter((task) => task.status === "succeeded");
   const failedTasks = db.imageTasks.filter((task) => task.status === "failed");
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view");
+  const purchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
   const todayPageViews = pageViews.filter((event) => new Date(event.createdAt).getTime() >= today.getTime());
   const uniqueVisitors = new Set(pageViews.map((event) => event.visitorId)).size;
+  const purchaseClickUsers = new Set(purchaseClicks.map(eventIdentity)).size;
+  const pricingPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
+  const checkoutPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
+  const generationPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/editor", "/product", "/poster"]));
+  const activeCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const activeUserEvents7d = pageViews.filter((event) => {
+    if (!event.userId) return false;
+    return new Date(event.createdAt).getTime() >= activeCutoff;
+  });
+  const todayActiveUserEvents = todayPageViews.filter((event) => event.userId);
   const creditsConsumed = db.creditTransactions
     .filter((transaction) => transaction.type === "consume")
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
@@ -56,6 +76,7 @@ export async function GET() {
   const daily = dayKeys.map((key) => ({
     date: key,
     pageViews: pageViews.filter((event) => dateKey(event.createdAt) === key).length,
+    purchaseClicks: purchaseClicks.filter((event) => dateKey(event.createdAt) === key).length,
     registrations: db.users.filter((item) => dateKey(item.createdAt) === key).length,
     paidOrders: paidOrders.filter((order) => dateKey(order.paidAt) === key).length,
     revenueCents: paidOrders
@@ -110,6 +131,16 @@ export async function GET() {
       failedTasks: failedTasks.length,
       paidOrders: paidOrders.length,
       pendingOrders: pendingOrders.length,
+      pendingOrderUsers,
+      purchaseClicks: purchaseClicks.length,
+      purchaseClickUsers,
+      pricingPageViews: pricingPageViews.length,
+      pricingVisitors: new Set(pricingPageViews.map((event) => event.visitorId)).size,
+      checkoutPageViews: checkoutPageViews.length,
+      checkoutVisitors: new Set(checkoutPageViews.map((event) => event.visitorId)).size,
+      generationPageVisitors: new Set(generationPageViews.map((event) => event.visitorId)).size,
+      activeUsers7d: new Set(activeUserEvents7d.map((event) => event.userId)).size,
+      todayActiveUsers: new Set(todayActiveUserEvents.map((event) => event.userId)).size,
       revenueCents: paidOrders.reduce((sum, order) => sum + order.amountCents, 0),
       todayRevenueCents: paidOrders
         .filter((order) => dateKey(order.paidAt) === todayKey)

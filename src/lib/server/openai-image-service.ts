@@ -23,7 +23,7 @@ type OpenAIImageClient = {
   };
 };
 
-type OpenAIConstructor = new (options: { apiKey: string }) => OpenAIImageClient;
+type OpenAIConstructor = new (options: { apiKey: string; baseURL?: string }) => OpenAIImageClient;
 type ToFile = (value: Buffer, filename: string, options: { type: string }) => Promise<unknown>;
 
 let client: OpenAIImageClient | null = null;
@@ -31,6 +31,11 @@ let toOpenAIFile: ToFile | null = null;
 
 function getImageModel() {
   return process.env.IMAGE_MODEL || "gpt-image-1";
+}
+
+function getOpenAIBaseUrl() {
+  const value = (process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE_URL || "").trim();
+  return value || undefined;
 }
 
 async function loadOpenAISdk() {
@@ -56,7 +61,8 @@ async function getClient() {
   if (!client) {
     const OpenAI = await loadOpenAISdk();
     client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: getOpenAIBaseUrl()
     });
   }
 

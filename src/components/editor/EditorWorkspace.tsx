@@ -40,6 +40,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     selectedResult,
     history,
     setUploadedImage,
+    setCurrentImage,
     setPrompt,
     setSelectedTool,
     setEditResults,
@@ -57,7 +58,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const originalImage = uploadedImage;
   const inputPreview = currentImage ?? originalImage;
   const visibleResults = editResults;
-  const currentVersion = currentImage ?? selectedResult?.url ?? visibleResults[0]?.url ?? null;
+  const currentVersion = selectedResult?.url ?? visibleResults[0]?.url ?? currentImage ?? null;
 
   const activeStep = useMemo(() => {
     if (editResults.length > 0) return 3;
@@ -70,7 +71,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     const finalPrompt = prompt.trim() || toolPrompts[selectedTool] || "提升图片整体质感，画面更干净自然";
     const finalTool: EditTool = selectedTool || "custom";
 
-    if (!currentImageFile && !uploadedImageFile) {
+    if (!currentImageFile && !uploadedImageFile && !currentImage && !uploadedImage) {
       setError("请先上传需要处理的图片");
       return;
     }
@@ -151,6 +152,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
 
   const handleContinueEdit = (result: EditImageResult) => {
     setSelectedResult(result);
+    setCurrentImage(result.url, null);
     setSelectedTool("custom");
     setPrompt("");
     setError("");

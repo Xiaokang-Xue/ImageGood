@@ -4,7 +4,7 @@ import { getDbSnapshot, withDb } from "@/lib/db";
 import { queryCodexTaskResult, recoverCodexTaskResult } from "@/lib/server/codex-image-provider";
 import { buildEditPrompt, buildPosterPrompt, buildProductPrompt } from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
-import { normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
+import { cleanupLocalTaskDirectoryAfterUpload, normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
 import type {
   EditTool,
   ImageOutputFormat,
@@ -171,6 +171,7 @@ async function recoverTaskResultIfPresent(taskId: string) {
 
   const saved = await saveResults(task.userId, task.id, [recovered.url]);
   const result = await markTaskSucceeded(task.id, saved);
+  await cleanupLocalTaskDirectoryAfterUpload(task.id);
   taskLog("recovered result from codex workdir", {
     taskId: task.id,
     userId: task.userId,
@@ -261,6 +262,7 @@ export async function runEditTask(input: {
     });
     const saved = await saveResults(input.userId, task.id, [generated.url]);
     const result = await markTaskSucceeded(task.id, saved);
+    await cleanupLocalTaskDirectoryAfterUpload(task.id);
 
     taskLog("succeeded", {
       taskId: task.id,
@@ -311,6 +313,7 @@ export async function runProductTask(input: {
     });
     const saved = await saveResults(input.userId, task.id, [generated.url]);
     const result = await markTaskSucceeded(task.id, saved);
+    await cleanupLocalTaskDirectoryAfterUpload(task.id);
 
     taskLog("succeeded", {
       taskId: task.id,
@@ -356,6 +359,7 @@ export async function runPosterTask(input: {
     });
     const saved = await saveResults(input.userId, task.id, [generated.url]);
     const result = await markTaskSucceeded(task.id, saved);
+    await cleanupLocalTaskDirectoryAfterUpload(task.id);
 
     taskLog("succeeded", {
       taskId: task.id,
@@ -396,4 +400,52 @@ export async function getUserTask(userId: string, taskId: string) {
 
   const db = await getDbSnapshot();
   return db.imageTasks.find((task) => task.userId === userId && task.id === taskId) || null;
+}
+
+function isDeletableTask(task: ImageTaskRecord) {
+  return task.status === "succeeded" || task.status === "failed";
+}
+
+export async function deleteUserTask(userId: string, taskId: string) {
+  return withDb((db) => {
+    const task = db.imageTasks.find((item) => item.userId === userId && item.id === taskId);
+    if (!task) {
+      return { deleted: false as const, reason: "not_found" as const };
+    }
+    if (!isDeletableTask(task)) {
+      return { deleted: false as const, reason: "in_progress" as const };
+    }
+
+    db.imageTasks = db.imageTasks.filter((item) => item.id !== task.id);
+    return { deleted: true as const, id: task.id };
+  });
+}
+
+export async function deleteUserTasks(userId: string, taskIds: string[]) {
+  const uniqueIds = [...new Set(taskIds.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+
+  return withDb((db) => {
+    const deletedIds: string[] = [];
+    const skippedIds: string[] = [];
+    const idsToDelete = new Set<string>();
+
+    for (const taskId of uniqueIds) {
+      const task = db.imageTasks.find((item) => item.userId === userId && item.id === taskId);
+      if (!task || !isDeletableTask(task)) {
+        skippedIds.push(taskId);
+        continue;
+      }
+      idsToDelete.add(task.id);
+      deletedIds.push(task.id);
+    }
+
+    if (idsToDelete.size > 0) {
+      db.imageTasks = db.imageTasks.filter((task) => !idsToDelete.has(task.id));
+    }
+
+    return {
+      deletedIds,
+      skippedIds
+    };
+  });
 }
