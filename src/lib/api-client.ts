@@ -17,6 +17,7 @@ import type {
   OrderDetailResponse,
   OrderRecord,
   PaymentCreateResponse,
+  PaymentProvider,
   PaymentOrderResponse
 } from "@/types/billing";
 import type { AdminAnalyticsResponse } from "@/types/analytics";
@@ -254,7 +255,7 @@ export const apiClient = {
     return requestJson<BillingPackagesResponse>("/api/billing/packages");
   },
 
-  createPaymentOrder(payload: { packageId: CreditPackageId }) {
+  createPaymentOrder(payload: { packageId: CreditPackageId; provider?: Exclude<PaymentProvider, "manual"> }) {
     return requestJson<PaymentCreateResponse>("/api/payment/create", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -263,6 +264,10 @@ export const apiClient = {
 
   getPaymentOrder(id: string) {
     return requestJson<PaymentOrderResponse>(`/api/payment/orders/${id}`);
+  },
+
+  getPaymentOrderByOutTradeNo(outTradeNo: string) {
+    return requestJson<PaymentOrderResponse>(`/api/payment/orders/by-out-trade-no/${encodeURIComponent(outTradeNo)}`);
   },
 
   markMockPaymentPaid(orderId: string) {

@@ -1,7 +1,7 @@
 export type CreditTransactionType = "grant" | "consume" | "purchase" | "refund" | "admin_adjust";
 export type OrderStatus = "pending" | "paid" | "cancelled" | "expired" | "failed";
-export type PaymentProvider = "wechat" | "manual";
-export type PaymentMethod = "native" | "manual";
+export type PaymentProvider = "wechat" | "alipay" | "manual";
+export type PaymentMethod = "native" | "page" | "manual";
 export type CreditPackageId = "starter" | "standard" | "pro" | "business" | "wechat_test";
 
 export interface CreditPackage {
@@ -41,6 +41,7 @@ export interface OrderRecord {
   outTradeNo: string;
   transactionId?: string | null;
   codeUrl?: string | null;
+  paymentUrl?: string | null;
   remark?: string | null;
   errorMessage?: string | null;
   createdAt: string;
@@ -68,7 +69,8 @@ export interface PaymentCreateResponse {
   status: OrderStatus;
   paymentProvider: PaymentProvider;
   paymentMethod: PaymentMethod;
-  codeUrl: string;
+  codeUrl?: string | null;
+  paymentUrl?: string | null;
 }
 
 export interface PaymentOrderResponse {
@@ -78,6 +80,7 @@ export interface PaymentOrderResponse {
   amountCents: number;
   credits: number;
   codeUrl: string | null;
+  paymentUrl: string | null;
   paidAt: string | null;
   currentCredits: number;
   paymentProvider: PaymentProvider;

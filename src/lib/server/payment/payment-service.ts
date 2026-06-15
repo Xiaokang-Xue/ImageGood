@@ -3,10 +3,16 @@ import { randomUUID } from "crypto";
 import { access } from "fs/promises";
 import { CREDIT_PACKAGES, findCreditPackage } from "@/config/billing-plans";
 import { getDbSnapshot, withDb } from "@/lib/db";
+import { AlipayProvider, alipayAmountToCents, parseAlipayNotify } from "@/lib/server/payment/alipay-provider";
 import { MockPaymentProvider } from "@/lib/server/payment/mock-payment-provider";
 import { WechatPayProvider, parseWechatPaymentNotify } from "@/lib/server/payment/wechat-pay-provider";
 import type { CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
-import type { PaymentProvider, WechatPaymentNotification } from "@/lib/server/payment/payment-provider";
+import type {
+  PaymentProvider,
+  PaymentProviderName,
+  WechatPaymentNotification
+} from "@/lib/server/payment/payment-provider";
+import type { AlipayNotification } from "@/lib/server/payment/alipay-provider";
 import type { PublicUser } from "@/types/user";
 
 export class PaymentError extends Error {
@@ -43,8 +49,11 @@ export function getPaymentMode(): "mock" | "real" {
   return process.env.PAYMENT_MODE === "real" ? "real" : "mock";
 }
 
-function getPaymentProvider(): PaymentProvider {
+function getPaymentProvider(providerName: PaymentProviderName): PaymentProvider {
   if (getPaymentMode() === "real") {
+    if (providerName === "alipay") {
+      return new AlipayProvider();
+    }
     return new WechatPayProvider();
   }
   return new MockPaymentProvider();
@@ -62,7 +71,7 @@ async function assertReadableFile(filePath: string | undefined, label: string) {
   }
 }
 
-async function assertRealPaymentConfigReady() {
+async function assertWechatPaymentConfigReady() {
   if (getPaymentMode() !== "real") return;
 
   const required = [
@@ -84,7 +93,37 @@ async function assertRealPaymentConfigReady() {
   await assertReadableFile(process.env.WECHAT_PAY_PLATFORM_CERT_PATH, "微信支付平台证书");
 }
 
-function getNotifyUrl() {
+async function assertAlipayConfigReady() {
+  if (getPaymentMode() !== "real") return;
+  if (process.env.ALIPAY_ENABLED !== "true") {
+    throw new PaymentError("ALIPAY_DISABLED", "支付宝支付暂未启用", 503);
+  }
+
+  const required = [
+    ["ALIPAY_APP_ID", "支付宝 AppID"],
+    ["ALIPAY_APP_PRIVATE_KEY", "支付宝应用私钥"],
+    ["ALIPAY_PUBLIC_KEY", "支付宝公钥"],
+    ["ALIPAY_NOTIFY_URL", "支付宝异步通知地址"],
+    ["ALIPAY_RETURN_URL", "支付宝返回地址"]
+  ] as const;
+
+  for (const [envName, label] of required) {
+    if (!process.env[envName]) {
+      throw new PaymentError("PAYMENT_CONFIG_INCOMPLETE", `${label}未配置`, 503);
+    }
+  }
+}
+
+async function assertPaymentConfigReady(providerName: PaymentProviderName) {
+  if (providerName === "alipay") {
+    await assertAlipayConfigReady();
+    return;
+  }
+
+  await assertWechatPaymentConfigReady();
+}
+
+function getWechatNotifyUrl() {
   if (process.env.WECHAT_PAY_NOTIFY_URL) {
     return process.env.WECHAT_PAY_NOTIFY_URL;
   }
@@ -93,11 +132,35 @@ function getNotifyUrl() {
   return `${appUrl.replace(/\/$/, "")}/api/payment/wechat/notify`;
 }
 
+function getAlipayNotifyUrl() {
+  if (process.env.ALIPAY_NOTIFY_URL) {
+    return process.env.ALIPAY_NOTIFY_URL;
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return `${appUrl.replace(/\/$/, "")}/api/payment/alipay/notify`;
+}
+
+function getAlipayReturnUrl(orderId: string) {
+  const baseUrl =
+    process.env.ALIPAY_RETURN_URL ||
+    `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/checkout/alipay/return`;
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}orderId=${encodeURIComponent(orderId)}`;
+}
+
 function generateOutTradeNo() {
   return `AIIMG_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-function createPendingOrder(userId: string, packageId: CreditPackageId): OrderRecord {
+function providerForOrder(order: OrderRecord): PaymentProviderName | undefined {
+  if (order.paymentProvider === "wechat" || order.paymentProvider === "alipay") {
+    return order.paymentProvider;
+  }
+  return undefined;
+}
+
+function createPendingOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName): OrderRecord {
   const packageItem = findCreditPackage(packageId);
   if (!packageItem) {
     throw new PaymentError("INVALID_PACKAGE", "积分包不存在", 404);
@@ -112,11 +175,12 @@ function createPendingOrder(userId: string, packageId: CreditPackageId): OrderRe
     amountCents: packageItem.priceCents,
     credits: packageItem.credits,
     status: "pending",
-    paymentProvider: "wechat",
-    paymentMethod: "native",
+    paymentProvider: providerName,
+    paymentMethod: providerName === "alipay" ? "page" : "native",
     outTradeNo: generateOutTradeNo(),
     transactionId: null,
     codeUrl: null,
+    paymentUrl: null,
     remark: null,
     errorMessage: null,
     createdAt: now,
@@ -130,10 +194,14 @@ export async function listPaymentPackages() {
   return CREDIT_PACKAGES;
 }
 
-export async function createPaymentOrder(userId: string, packageId: CreditPackageId) {
-  await assertRealPaymentConfigReady();
-  const provider = getPaymentProvider();
-  const order = createPendingOrder(userId, packageId);
+export async function createPaymentOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName = "wechat") {
+  if (providerName !== "wechat" && providerName !== "alipay") {
+    throw new PaymentError("INVALID_PAYMENT_PROVIDER", "不支持的支付方式", 400);
+  }
+
+  await assertPaymentConfigReady(providerName);
+  const provider = getPaymentProvider(providerName);
+  const order = createPendingOrder(userId, packageId, providerName);
 
   await withDb((db) => {
     if (db.orders.some((item) => item.outTradeNo === order.outTradeNo)) {
@@ -143,10 +211,11 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
   });
 
   try {
-    const payment = await provider.createNativePayment({
+    const payment = await provider.createPayment({
       order,
       description: `ImageGood 积分包 - ${order.packageName}`,
-      notifyUrl: getNotifyUrl()
+      notifyUrl: providerName === "alipay" ? getAlipayNotifyUrl() : getWechatNotifyUrl(),
+      returnUrl: providerName === "alipay" ? getAlipayReturnUrl(order.id) : undefined
     });
 
     const updated = await withDb((db) => {
@@ -154,7 +223,10 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
       if (!current) {
         throw new PaymentError("ORDER_NOT_FOUND", "订单不存在", 404);
       }
-      current.codeUrl = payment.codeUrl;
+      current.paymentProvider = payment.provider;
+      current.paymentMethod = payment.paymentMethod;
+      current.codeUrl = payment.codeUrl ?? null;
+      current.paymentUrl = payment.paymentUrl ?? null;
       current.updatedAt = nowIso();
       return current;
     });
@@ -165,6 +237,7 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
       orderId: order.id,
       outTradeNo: order.outTradeNo,
       paymentMode: getPaymentMode(),
+      paymentProvider: providerName,
       ...paymentErrorDetails(error)
     });
 
@@ -214,6 +287,7 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     amountCents: order.amountCents,
     credits: order.credits,
     codeUrl: order.codeUrl ?? null,
+    paymentUrl: order.paymentUrl ?? null,
     paidAt: order.paidAt ?? null,
     currentCredits: owner?.credits ?? 0,
     paymentProvider: order.paymentProvider,
@@ -225,17 +299,32 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
   };
 }
 
+export async function getPaymentOrderResponseByOutTradeNo(
+  outTradeNo: string,
+  user: PublicUser
+): Promise<PaymentOrderResponse | null> {
+  const db = await getDbSnapshot();
+  const order = db.orders.find((item) => item.outTradeNo === outTradeNo);
+  if (!order) return null;
+  return getPaymentOrderResponse(order.id, user);
+}
+
 function assertSuccessfulPayment(order: OrderRecord, payment: {
   outTradeNo: string;
   amountCents: number;
   tradeState: string;
+  provider?: PaymentProviderName;
   mchid?: string;
 }) {
   if (payment.tradeState !== "SUCCESS") {
     throw new PaymentError("PAYMENT_NOT_SUCCESS", "支付状态不是成功");
   }
 
-  if (getPaymentMode() === "real" && payment.mchid && payment.mchid !== process.env.WECHAT_PAY_MCH_ID) {
+  if (payment.provider && order.paymentProvider !== payment.provider) {
+    throw new PaymentError("PAYMENT_PROVIDER_MISMATCH", "支付渠道不匹配", 400);
+  }
+
+  if (payment.provider === "wechat" && getPaymentMode() === "real" && payment.mchid && payment.mchid !== process.env.WECHAT_PAY_MCH_ID) {
     throw new PaymentError("MCH_ID_MISMATCH", "商户号不匹配", 400);
   }
 
@@ -252,8 +341,10 @@ export async function markOrderPaid(input: {
   outTradeNo: string;
   amountCents: number;
   tradeState: string;
+  provider?: PaymentProviderName;
   transactionId?: string | null;
   mchid?: string;
+  paidAt?: string | null;
   reason?: string;
   transactionType?: CreditTransactionRecord["type"];
 }) {
@@ -265,6 +356,7 @@ export async function markOrderPaid(input: {
     }
 
     if (order.status === "paid") {
+      assertSuccessfulPayment(order, input);
       const user = db.users.find((item) => item.id === order.userId);
       return { order, latestCredits: user?.credits ?? 0, alreadyPaid: true };
     }
@@ -284,7 +376,7 @@ export async function markOrderPaid(input: {
       throw new PaymentError("USER_NOT_FOUND", "用户不存在", 404);
     }
 
-    const now = nowIso();
+    const now = input.paidAt || nowIso();
     user.credits += order.credits;
     user.updatedAt = now;
     order.status = "paid";
@@ -328,9 +420,35 @@ export async function processWechatPayment(payment: WechatPaymentNotification) {
     outTradeNo: payment.out_trade_no,
     amountCents: payment.amount?.total ?? 0,
     tradeState: payment.trade_state,
+    provider: "wechat",
     transactionId: payment.transaction_id ?? null,
     mchid: payment.mchid,
     reason: "微信支付购买积分包",
+    transactionType: "purchase"
+  });
+}
+
+export async function handleAlipayPaymentNotify(rawBody: string) {
+  const payment = parseAlipayNotify(rawBody);
+  await processAlipayPayment(payment);
+}
+
+export async function processAlipayPayment(payment: AlipayNotification) {
+  if (getPaymentMode() === "real" && payment.app_id !== process.env.ALIPAY_APP_ID) {
+    throw new PaymentError("APP_ID_MISMATCH", "支付宝 AppID 不匹配", 400);
+  }
+
+  if (payment.trade_status !== "TRADE_SUCCESS" && payment.trade_status !== "TRADE_FINISHED") {
+    throw new PaymentError("PAYMENT_NOT_SUCCESS", "支付宝交易状态不是成功", 400);
+  }
+
+  await markOrderPaid({
+    outTradeNo: payment.out_trade_no,
+    amountCents: alipayAmountToCents(payment.total_amount),
+    tradeState: "SUCCESS",
+    provider: "alipay",
+    transactionId: payment.trade_no ?? null,
+    reason: "支付宝购买积分包",
     transactionType: "purchase"
   });
 }
@@ -350,8 +468,9 @@ export async function markMockPaymentPaid(user: PublicUser, orderId: string) {
     outTradeNo: order.outTradeNo,
     amountCents: order.amountCents,
     tradeState: "SUCCESS",
+    provider: providerForOrder(order),
     transactionId: `MOCK_${Date.now()}`,
-    mchid: process.env.WECHAT_PAY_MCH_ID || "mock_mchid",
+    mchid: order.paymentProvider === "wechat" ? process.env.WECHAT_PAY_MCH_ID || "mock_mchid" : undefined,
     reason: "本地调试模式支付成功",
     transactionType: "purchase"
   });
@@ -371,8 +490,9 @@ export async function adminAdjustOrderCredits(orderId: string) {
     outTradeNo: order.outTradeNo,
     amountCents: order.amountCents,
     tradeState: "SUCCESS",
+    provider: providerForOrder(order),
     transactionId: `ADMIN_ADJUST_${Date.now()}`,
-    mchid: process.env.WECHAT_PAY_MCH_ID || "admin_adjust",
+    mchid: order.paymentProvider === "wechat" ? process.env.WECHAT_PAY_MCH_ID || "admin_adjust" : undefined,
     reason: `管理员异常补发积分：${order.packageName}`,
     transactionType: "admin_adjust"
   });

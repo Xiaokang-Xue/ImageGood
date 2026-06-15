@@ -15,6 +15,18 @@ const statusLabels: Record<AdminOrderRecord["status"], string> = {
   failed: "失败"
 };
 
+const providerLabels: Record<AdminOrderRecord["paymentProvider"], string> = {
+  wechat: "微信支付",
+  alipay: "支付宝支付",
+  manual: "手动订单"
+};
+
+const methodLabels: Record<AdminOrderRecord["paymentMethod"], string> = {
+  native: "Native 扫码",
+  page: "电脑网站支付",
+  manual: "人工处理"
+};
+
 function formatCny(amountCents: number) {
   return `¥${(amountCents / 100).toFixed(2)}`;
 }
@@ -23,6 +35,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [providerFilter, setProviderFilter] = useState<"all" | AdminOrderRecord["paymentProvider"]>("all");
   const [error, setError] = useState("");
 
   const loadOrders = useCallback(() => {
@@ -74,8 +87,8 @@ export default function AdminOrdersPage() {
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <p className="text-sm font-semibold text-studio-600">管理员</p>
-          <h1 className="mt-2 text-3xl font-bold text-ink">微信支付订单</h1>
-          <p className="mt-3 text-sm text-muted">正常订单由微信支付回调自动加积分。管理员补发仅用于异常处理。</p>
+          <h1 className="mt-2 text-3xl font-bold text-ink">支付订单</h1>
+          <p className="mt-3 text-sm text-muted">正常订单由支付平台异步通知自动加积分。管理员补发仅用于异常处理。</p>
         </div>
         <Link href="/admin/analytics">
           <Button variant="outline">查看运营数据</Button>
@@ -91,16 +104,40 @@ export default function AdminOrdersPage() {
         </Card>
       ) : null}
 
+      {!loading && !error ? (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {[
+            ["all", "全部"],
+            ["wechat", "微信支付"],
+            ["alipay", "支付宝支付"],
+            ["manual", "手动订单"]
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                providerFilter === value ? "border-studio-300 bg-studio-50 text-studio-700" : "border-line bg-white text-muted"
+              }`}
+              onClick={() => setProviderFilter(value as typeof providerFilter)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {loading ? (
         <Card className="p-8 text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-studio-100 border-t-studio-500" />
           <p className="mt-4 text-sm font-semibold text-muted">订单信息加载中…</p>
         </Card>
-      ) : !error && orders.length === 0 ? (
+      ) : !error && orders.filter((order) => providerFilter === "all" || order.paymentProvider === providerFilter).length === 0 ? (
         <Card className="p-8 text-center text-sm font-semibold text-muted">当前没有待处理订单。</Card>
       ) : !error ? (
         <div className="grid gap-4">
-          {orders.map((order) => (
+          {orders
+            .filter((order) => providerFilter === "all" || order.paymentProvider === providerFilter)
+            .map((order) => (
             <Card key={order.id} className="p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
@@ -115,9 +152,9 @@ export default function AdminOrdersPage() {
                     <p>订单 ID：{order.id}</p>
                     <p>用户邮箱：{order.userEmail}</p>
                     <p>用户昵称：{order.userName || "未填写"}</p>
-                    <p>支付渠道：微信支付 / Native 扫码</p>
+                    <p>支付渠道：{providerLabels[order.paymentProvider]} / {methodLabels[order.paymentMethod]}</p>
                     <p>商户订单号：{order.outTradeNo}</p>
-                    <p>微信交易号：{order.transactionId || "未返回"}</p>
+                    <p>平台交易号：{order.transactionId || "未返回"}</p>
                     <p>创建时间：{new Date(order.createdAt).toLocaleString("zh-CN")}</p>
                     <p>支付时间：{order.paidAt ? new Date(order.paidAt).toLocaleString("zh-CN") : "未支付"}</p>
                   </div>

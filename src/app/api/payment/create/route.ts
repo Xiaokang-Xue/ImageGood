@@ -3,6 +3,7 @@ import { emailNotVerifiedBody } from "@/lib/server/auth-guards";
 import { getCurrentUser } from "@/lib/session";
 import { PaymentError, createPaymentOrder } from "@/lib/server/payment/payment-service";
 import type { CreditPackageId } from "@/types/billing";
+import type { PaymentProviderName } from "@/lib/server/payment/payment-provider";
 
 export const runtime = "nodejs";
 
@@ -16,8 +17,9 @@ export async function POST(request: Request) {
       return NextResponse.json(emailNotVerifiedBody(), { status: 403 });
     }
 
-    const body = (await request.json()) as Partial<{ packageId: CreditPackageId }>;
-    const order = await createPaymentOrder(user.id, String(body.packageId || "") as CreditPackageId);
+    const body = (await request.json()) as Partial<{ packageId: CreditPackageId; provider: PaymentProviderName }>;
+    const provider = body.provider === "alipay" ? "alipay" : "wechat";
+    const order = await createPaymentOrder(user.id, String(body.packageId || "") as CreditPackageId, provider);
 
     return NextResponse.json({
       orderId: order.id,
@@ -25,7 +27,8 @@ export async function POST(request: Request) {
       status: order.status,
       paymentProvider: order.paymentProvider,
       paymentMethod: order.paymentMethod,
-      codeUrl: order.codeUrl
+      codeUrl: order.codeUrl ?? null,
+      paymentUrl: order.paymentUrl ?? null
     });
   } catch (error) {
     if (error instanceof PaymentError) {

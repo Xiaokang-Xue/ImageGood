@@ -189,11 +189,18 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
             status: ["pending", "paid", "cancelled", "expired", "failed"].includes(order.status)
               ? order.status
               : "pending",
-            paymentProvider: order.paymentProvider === "wechat" ? "wechat" : "manual",
-            paymentMethod: order.paymentMethod === "native" ? "native" : "manual",
+            paymentProvider:
+              order.paymentProvider === "wechat" || order.paymentProvider === "alipay"
+                ? order.paymentProvider
+                : "manual",
+            paymentMethod:
+              order.paymentMethod === "native" || order.paymentMethod === "page"
+                ? order.paymentMethod
+                : "manual",
             outTradeNo: order.outTradeNo || `LEGACY_${order.id || index}`,
             transactionId: order.transactionId ?? null,
             codeUrl: order.codeUrl ?? null,
+            paymentUrl: order.paymentUrl ?? null,
             remark: order.remark ?? null,
             errorMessage: order.errorMessage ?? null,
             createdAt: order.createdAt || now,

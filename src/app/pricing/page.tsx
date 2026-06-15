@@ -2,14 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, CreditCard, QrCode } from "lucide-react";
 import Link from "next/link";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
 import { trackClientEvent } from "@/lib/client-analytics";
-import type { CreditPackage, CreditPackageId } from "@/types/billing";
+import type { CreditPackage, CreditPackageId, PaymentProvider } from "@/types/billing";
 
 function formatPackagePrice(priceCents: number) {
   const amount = priceCents / 100;
@@ -24,6 +24,7 @@ export default function PricingPage() {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPackage, setLoadingPackage] = useState<CreditPackageId | null>(null);
+  const [paymentProvider, setPaymentProvider] = useState<Exclude<PaymentProvider, "manual">>("wechat");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -44,7 +45,8 @@ export default function PricingPage() {
         packageId,
         packageName: selectedPackage?.name ?? packageId,
         priceCents: selectedPackage?.priceCents ?? null,
-        credits: selectedPackage?.credits ?? null
+        credits: selectedPackage?.credits ?? null,
+        paymentProvider
       }
     });
 
@@ -52,7 +54,11 @@ export default function PricingPage() {
     setError("");
 
     try {
-      const response = await apiClient.createPaymentOrder({ packageId });
+      const response = await apiClient.createPaymentOrder({ packageId, provider: paymentProvider });
+      if (response.paymentProvider === "alipay" && response.paymentUrl) {
+        window.location.href = response.paymentUrl;
+        return;
+      }
       router.push(`/checkout/${response.orderId}`);
     } catch (requestError) {
       if (isUnauthorizedError(requestError)) {
@@ -90,6 +96,42 @@ export default function PricingPage() {
         </div>
       ) : null}
 
+      <Card className="mx-auto mb-8 max-w-2xl p-4">
+        <p className="mb-3 text-sm font-semibold text-ink">选择支付方式</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+              paymentProvider === "wechat"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                : "border-line bg-white text-slate-700 hover:border-studio-200"
+            }`}
+            onClick={() => setPaymentProvider("wechat")}
+          >
+            <QrCode className="h-5 w-5" />
+            <span>
+              <span className="block text-sm font-bold">微信支付</span>
+              <span className="block text-xs text-muted">扫码完成支付</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+              paymentProvider === "alipay"
+                ? "border-sky-300 bg-sky-50 text-sky-800"
+                : "border-line bg-white text-slate-700 hover:border-studio-200"
+            }`}
+            onClick={() => setPaymentProvider("alipay")}
+          >
+            <CreditCard className="h-5 w-5" />
+            <span>
+              <span className="block text-sm font-bold">支付宝支付</span>
+              <span className="block text-xs text-muted">跳转支付宝收银台</span>
+            </span>
+          </button>
+        </div>
+      </Card>
+
       {loading ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
@@ -124,7 +166,7 @@ export default function PricingPage() {
               </p>
               <p className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                微信支付成功后自动到账
+                支付成功后自动到账
               </p>
             </div>
             <Button className="mt-6 w-full" loading={loadingPackage === item.id} onClick={() => handleBuy(item.id)}>

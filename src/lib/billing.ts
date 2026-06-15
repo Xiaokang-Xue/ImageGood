@@ -95,6 +95,7 @@ export async function createOrder(userId: string, packageId: CreditPackageId) {
     outTradeNo: `MANUAL_${Date.now()}_${randomUUID().slice(0, 8)}`,
     transactionId: null,
     codeUrl: null,
+    paymentUrl: null,
     remark: null,
     errorMessage: null,
     createdAt: nowIso(),

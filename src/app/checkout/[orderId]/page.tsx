@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Clock3, RefreshCcw, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, CreditCard, RefreshCcw, XCircle } from "lucide-react";
 import { QrCode } from "@/components/payment/QrCode";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -124,12 +124,13 @@ export default function CheckoutPage() {
   const isPaid = order.status === "paid";
   const isPending = order.status === "pending";
   const isClosed = order.status === "failed" || order.status === "expired" || order.status === "cancelled";
+  const isAlipay = order.paymentProvider === "alipay";
 
   return (
     <main className="mx-auto max-w-[1000px] px-5 py-10">
       <div className="mb-6">
-        <p className="text-sm font-semibold text-studio-600">微信支付</p>
-        <h1 className="mt-2 text-3xl font-bold text-ink">扫码购买积分</h1>
+        <p className="text-sm font-semibold text-studio-600">{isAlipay ? "支付宝支付" : "微信支付"}</p>
+        <h1 className="mt-2 text-3xl font-bold text-ink">{isAlipay ? "购买积分" : "扫码购买积分"}</h1>
         <p className="mt-3 text-sm text-muted">支付成功后，积分会自动到账。</p>
       </div>
 
@@ -162,7 +163,7 @@ export default function CheckoutPage() {
               <div className="flex items-start gap-3 text-studio-800">
                 <Clock3 className="mt-0.5 h-5 w-5" />
                 <div>
-                  <p className="text-sm font-bold">等待微信支付完成，请勿关闭页面</p>
+                  <p className="text-sm font-bold">等待{isAlipay ? "支付宝" : "微信"}支付完成，请勿关闭页面</p>
                   <p className="mt-1 text-sm">页面会自动刷新支付状态。</p>
                 </div>
               </div>
@@ -196,10 +197,20 @@ export default function CheckoutPage() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="text-xl font-bold text-ink">微信支付二维码</h2>
-          {order.codeUrl && isPending ? (
+          <h2 className="text-xl font-bold text-ink">{isAlipay ? "支付宝收银台" : "微信支付二维码"}</h2>
+          {!isAlipay && order.codeUrl && isPending ? (
             <div className="mt-5 rounded-lg border border-line bg-white p-4">
               <QrCode value={order.codeUrl} className="aspect-square w-full" />
+            </div>
+          ) : isAlipay && order.paymentUrl && isPending ? (
+            <div className="mt-5 flex aspect-square items-center justify-center rounded-lg border border-sky-200 bg-sky-50 p-6 text-center">
+              <div>
+                <CreditCard className="mx-auto h-12 w-12 text-sky-600" />
+                <p className="mt-4 text-sm font-bold text-sky-800">请前往支付宝收银台完成支付</p>
+                <a href={order.paymentUrl} className="mt-5 inline-flex">
+                  <Button>打开支付宝支付</Button>
+                </a>
+              </div>
             </div>
           ) : isPaid ? (
             <div className="mt-5 flex aspect-square items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center">
@@ -210,10 +221,14 @@ export default function CheckoutPage() {
             </div>
           ) : (
             <div className="mt-5 flex aspect-square items-center justify-center rounded-lg border border-rose-200 bg-rose-50 p-6 text-center text-sm font-semibold text-rose-700">
-              支付二维码生成失败
+              {isAlipay ? "支付宝支付链接生成失败" : "支付二维码生成失败"}
             </div>
           )}
-          <p className="mt-4 text-sm leading-6 text-muted">请使用微信扫码支付。支付完成后，系统会通过微信支付回调自动为账户增加积分。</p>
+          <p className="mt-4 text-sm leading-6 text-muted">
+            {isAlipay
+              ? "请在支付宝收银台完成支付。页面跳转不作为到账依据，积分会在支付宝异步通知验签成功后自动到账。"
+              : "请使用微信扫码支付。支付完成后，系统会通过微信支付回调自动为账户增加积分。"}
+          </p>
 
           {order.paymentMode === "mock" && isPending ? (
             <Button className="mt-5 w-full" variant="outline" loading={mockPaying} onClick={handleMockPaid}>

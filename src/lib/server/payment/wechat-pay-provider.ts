@@ -24,7 +24,7 @@ function requireEnv(name: string) {
 }
 
 export class WechatPayProvider implements PaymentProvider {
-  async createNativePayment(input: CreateNativePaymentInput): Promise<CreateNativePaymentResult> {
+  async createPayment(input: CreateNativePaymentInput): Promise<CreateNativePaymentResult> {
     const appid = requireEnv("WECHAT_PAY_APPID");
     const mchid = requireEnv("WECHAT_PAY_MCH_ID");
     const serialNo = requireEnv("WECHAT_PAY_MERCHANT_SERIAL_NO");
@@ -77,7 +77,12 @@ export class WechatPayProvider implements PaymentProvider {
       throw new Error(payload?.message || payload?.code || `微信支付下单失败：${response.status}`);
     }
 
-    return { codeUrl: payload.code_url };
+    return {
+      provider: "wechat",
+      paymentMethod: "native",
+      codeUrl: payload.code_url,
+      raw: payload
+    };
   }
 }
 
