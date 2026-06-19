@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { emailNotVerifiedBody } from "@/lib/server/auth-guards";
+import { contactNotVerifiedBody, hasVerifiedContact } from "@/lib/server/auth-guards";
 import { getCurrentUser } from "@/lib/session";
 import { PaymentError, createPaymentOrder } from "@/lib/server/payment/payment-service";
 import type { CreditPackageId } from "@/types/billing";
@@ -13,12 +13,12 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录后再购买积分" } }, { status: 401 });
     }
-    if (!user.emailVerified) {
-      return NextResponse.json(emailNotVerifiedBody(), { status: 403 });
+    if (!hasVerifiedContact(user)) {
+      return NextResponse.json(contactNotVerifiedBody(), { status: 403 });
     }
 
     const body = (await request.json()) as Partial<{ packageId: CreditPackageId; provider: PaymentProviderName }>;
-    const provider = body.provider === "alipay" ? "alipay" : "wechat";
+    const provider = body.provider === "wechat" ? "wechat" : "alipay";
     const order = await createPaymentOrder(user.id, String(body.packageId || "") as CreditPackageId, provider);
 
     return NextResponse.json({

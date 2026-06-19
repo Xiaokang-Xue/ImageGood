@@ -3,6 +3,12 @@
 import { useRef, useState } from "react";
 import { ImagePlus, UploadCloud } from "lucide-react";
 import { SmartImage } from "@/components/ui/SmartImage";
+import {
+  ImageNormalizationError,
+  isPotentialImageFile,
+  prepareImageFileForUpload,
+  shouldNormalizeImageFile
+} from "@/lib/client-image-normalizer";
 import { cn } from "@/lib/utils";
 
 interface UploadDropzoneProps {
@@ -24,15 +30,31 @@ export function UploadDropzone({
 }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
-  const readFile = (file?: File) => {
-    if (!file || !file.type.startsWith("image/")) {
+  const readFile = async (file?: File) => {
+    if (!file || !isPotentialImageFile(file)) {
+      setUploadError("请选择图片文件");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => onImageSelected(String(reader.result), file);
-    reader.readAsDataURL(file);
+    const needsNormalization = shouldNormalizeImageFile(file);
+    setIsProcessing(needsNormalization);
+    setUploadError("");
+    try {
+      const uploadFile = await prepareImageFileForUpload(file);
+      const previewUrl = URL.createObjectURL(uploadFile);
+      onImageSelected(previewUrl, uploadFile);
+    } catch (error) {
+      setUploadError(
+        error instanceof ImageNormalizationError
+          ? error.message
+          : "图片格式自动处理失败，请更换图片后再试"
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -52,13 +74,14 @@ export function UploadDropzone({
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        readFile(event.dataTransfer.files[0]);
+        void readFile(event.dataTransfer.files[0]);
       }}
     >
       <button
         type="button"
-        className="absolute inset-0 z-10 cursor-pointer"
+        className="absolute inset-0 z-10 cursor-pointer disabled:cursor-wait"
         aria-label={title}
+        disabled={isProcessing}
         onClick={() => inputRef.current?.click()}
       />
       <input
@@ -66,10 +89,16 @@ export function UploadDropzone({
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(event) => readFile(event.target.files?.[0])}
+        onChange={(event) => void readFile(event.target.files?.[0])}
       />
 
-      {value ? (
+      {isProcessing ? (
+        <div className="flex h-full min-h-[inherit] flex-col items-center justify-center px-6 text-center">
+          <div className="mb-5 h-12 w-12 animate-spin rounded-full border-4 border-studio-100 border-t-studio-500" />
+          <p className="text-lg font-semibold text-ink">正在优化图片格式</p>
+          <p className="mt-2 max-w-sm text-sm leading-6 text-muted">仅在图片格式不兼容或超过 10MB 时自动转换</p>
+        </div>
+      ) : value ? (
         <SmartImage src={value} alt="上传预览" className="h-full min-h-[inherit] w-full rounded-none border-0" />
       ) : (
         <div className="flex h-full min-h-[inherit] flex-col items-center justify-center px-6 text-center">
@@ -87,6 +116,12 @@ export function UploadDropzone({
       {value ? (
         <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 rounded-lg bg-white/88 px-4 py-3 text-sm text-slate-700 opacity-0 shadow-lg backdrop-blur transition group-hover:opacity-100">
           点击重新上传或拖拽替换图片
+        </div>
+      ) : null}
+
+      {uploadError ? (
+        <div className="absolute inset-x-4 bottom-4 z-20 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 shadow-sm">
+          {uploadError}
         </div>
       ) : null}
     </div>

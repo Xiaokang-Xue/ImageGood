@@ -10,14 +10,17 @@ const ANALYTICS_EVENT_TYPES = new Set(["page_view", "purchase_click"]);
 
 export interface DbUser {
   id: string;
-  email: string;
-  passwordHash: string;
+  email?: string | null;
+  passwordHash?: string | null;
   name: string;
   avatar?: string | null;
   credits: number;
   role: "user" | "admin";
   emailVerified: boolean;
   emailVerifiedAt?: string | null;
+  phone?: string | null;
+  phoneVerified: boolean;
+  phoneVerifiedAt?: string | null;
   lastLoginAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -49,11 +52,25 @@ export interface DbEmailVerificationToken {
   createdAt: string;
 }
 
+export interface DbSmsCode {
+  id: string;
+  phone: string;
+  codeHash: string;
+  scene: "register" | "login" | "bind_phone" | "change_phone" | "reset_password";
+  expiresAt: string;
+  usedAt?: string | null;
+  createdAt: string;
+  ip?: string | null;
+  sendStatus?: string | null;
+  failedAttempts?: number;
+}
+
 interface DatabaseShape {
   users: DbUser[];
   sessions: DbSession[];
   emailVerificationTokens: DbEmailVerificationToken[];
   passwordResetTokens: DbPasswordResetToken[];
+  smsCodes: DbSmsCode[];
   creditTransactions: CreditTransactionRecord[];
   orders: OrderRecord[];
   imageTasks: ImageTaskRecord[];
@@ -67,6 +84,7 @@ const COLLECTIONS: DbCollectionName[] = [
   "sessions",
   "emailVerificationTokens",
   "passwordResetTokens",
+  "smsCodes",
   "creditTransactions",
   "orders",
   "imageTasks",
@@ -78,6 +96,7 @@ const EMPTY_DB: DatabaseShape = {
   sessions: [],
   emailVerificationTokens: [],
   passwordResetTokens: [],
+  smsCodes: [],
   creditTransactions: [],
   orders: [],
   imageTasks: [],
@@ -142,6 +161,7 @@ function cloneEmptyDb(): DatabaseShape {
     sessions: [],
     emailVerificationTokens: [],
     passwordResetTokens: [],
+    smsCodes: [],
     creditTransactions: [],
     orders: [],
     imageTasks: [],
@@ -160,12 +180,24 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
           role: user.role === "admin" ? "admin" : "user",
           emailVerified: Boolean(user.emailVerified),
           emailVerifiedAt: user.emailVerifiedAt ?? null,
+          phone: user.phone ?? null,
+          phoneVerified: Boolean(user.phoneVerified),
+          phoneVerifiedAt: user.phoneVerifiedAt ?? null,
           lastLoginAt: user.lastLoginAt ?? null
         }))
       : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     emailVerificationTokens: Array.isArray(data.emailVerificationTokens) ? data.emailVerificationTokens : [],
     passwordResetTokens: Array.isArray(data.passwordResetTokens) ? data.passwordResetTokens : [],
+    smsCodes: Array.isArray(data.smsCodes)
+      ? data.smsCodes.map((item) => ({
+          ...item,
+          usedAt: item.usedAt ?? null,
+          ip: item.ip ?? null,
+          sendStatus: item.sendStatus ?? null,
+          failedAttempts: typeof item.failedAttempts === "number" ? item.failedAttempts : 0
+        }))
+      : [],
     creditTransactions: Array.isArray(data.creditTransactions)
       ? data.creditTransactions.map((transaction) => ({
           ...transaction,

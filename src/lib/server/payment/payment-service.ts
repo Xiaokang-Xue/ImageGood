@@ -194,7 +194,7 @@ export async function listPaymentPackages() {
   return CREDIT_PACKAGES;
 }
 
-export async function createPaymentOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName = "wechat") {
+export async function createPaymentOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName = "alipay") {
   if (providerName !== "wechat" && providerName !== "alipay") {
     throw new PaymentError("INVALID_PAYMENT_PROVIDER", "不支持的支付方式", 400);
   }

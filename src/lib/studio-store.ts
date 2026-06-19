@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import type { EditImageResult, EditTool, HistoryItem } from "@/types/image";
 
 interface StudioState {
@@ -27,6 +28,18 @@ type PersistedStudioState = Pick<
   StudioState,
   "uploadedImage" | "uploadedImageFile" | "currentImage" | "currentImageFile" | "prompt" | "selectedTool" | "editResults" | "selectedResult" | "history"
 >;
+
+function persistableResult(result: EditImageResult | null) {
+  if (!result || !isPersistableImageUrl(result.url)) return null;
+  return result;
+}
+
+function persistableHistoryItem(item: HistoryItem) {
+  if (!isPersistableImageUrl(item.thumbnail)) {
+    return { ...item, thumbnail: "" };
+  }
+  return item;
+}
 
 export const useStudioStore = create<StudioState>()(
   persist<StudioState, [], [], PersistedStudioState>(
@@ -66,16 +79,23 @@ export const useStudioStore = create<StudioState>()(
     }),
     {
       name: "imagegood-editor-workspace",
+      storage: createJSONStorage(() => ({
+        getItem: safeStorageGet,
+        setItem: (key, value) => {
+          safeStorageSet(key, value);
+        },
+        removeItem: safeStorageRemove
+      })),
       partialize: (state) => ({
-        uploadedImage: state.uploadedImage,
+        uploadedImage: isPersistableImageUrl(state.uploadedImage) ? state.uploadedImage : null,
         uploadedImageFile: null,
-        currentImage: state.currentImage,
+        currentImage: isPersistableImageUrl(state.currentImage) ? state.currentImage : null,
         currentImageFile: null,
         prompt: state.prompt,
         selectedTool: state.selectedTool,
-        editResults: state.editResults,
-        selectedResult: state.selectedResult,
-        history: state.history.slice(-20)
+        editResults: state.editResults.filter((result) => isPersistableImageUrl(result.url)).slice(-5),
+        selectedResult: persistableResult(state.selectedResult),
+        history: state.history.slice(-10).map(persistableHistoryItem)
       })
     }
   )

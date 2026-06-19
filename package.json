@@ -9,9 +9,13 @@
     "lint": "next lint",
     "db:generate": "node scripts/db-generate.mjs",
     "db:push": "node scripts/db-push.mjs",
-    "db:migrate-json": "node scripts/migrate-json-db-to-mysql.mjs"
+    "db:migrate-json": "node scripts/migrate-json-db-to-mysql.mjs",
+    "ops:daily-report": "tsx scripts/send-daily-feishu-report.ts"
   },
   "dependencies": {
+    "@alicloud/dysmsapi20170525": "^3.1.0",
+    "@alicloud/openapi-client": "^0.4.14",
+    "@alicloud/tea-util": "^1.4.10",
     "clsx": "^2.1.1",
     "cos-nodejs-sdk-v5": "^2.14.7",
     "lucide-react": "^0.468.0",
@@ -32,6 +36,7 @@
     "eslint-config-next": "^14.2.23",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

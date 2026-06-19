@@ -10,6 +10,7 @@ import { palettes, PosterSettings } from "@/components/poster/PosterSettings";
 import { PosterVariants } from "@/components/poster/PosterVariants";
 import { Card } from "@/components/ui/Card";
 import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { cn, sleep } from "@/lib/utils";
 import type { PosterImageResult, PosterLayerKey, PosterLayerVisibility, PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
 
@@ -67,6 +68,15 @@ interface PosterStudioDraft {
   variantIndex: number;
 }
 
+function persistablePosterResult(result: PosterImageResult | null) {
+  if (!result || !isPersistableImageUrl(result.url)) return null;
+  return result;
+}
+
+function persistablePosterResults(results: PosterImageResult[]) {
+  return results.filter((result) => isPersistableImageUrl(result.url)).slice(-8);
+}
+
 export function PosterStudio({ initialUsage, initialStyle, initialRatio }: PosterStudioProps) {
   const [usage, setUsage] = useState<PosterUsage>(() => normalizeUsage(initialUsage));
   const [title, setTitle] = useState("7 天练出自然英语口语");
@@ -84,7 +94,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(POSTER_DRAFT_STORAGE_KEY);
+      const raw = safeStorageGet(POSTER_DRAFT_STORAGE_KEY);
       if (raw) {
         const draft = JSON.parse(raw) as Partial<PosterStudioDraft>;
         setUsage(initialUsage ? normalizeUsage(initialUsage) : normalizeUsage(draft.usage));
@@ -97,8 +107,8 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
           ...defaultLayerVisibility,
           ...(draft.layerVisibility ?? {})
         });
-        setResults(Array.isArray(draft.results) ? draft.results : []);
-        setActiveResult(draft.activeResult ?? null);
+        setResults(Array.isArray(draft.results) ? persistablePosterResults(draft.results) : []);
+        setActiveResult(persistablePosterResult(draft.activeResult ?? null));
         setVariantIndex(typeof draft.variantIndex === "number" ? draft.variantIndex : 0);
       } else {
         if (initialUsage) setUsage(normalizeUsage(initialUsage));
@@ -106,7 +116,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
         if (initialRatio) setRatio(normalizeRatio(initialRatio));
       }
     } catch {
-      window.localStorage.removeItem(POSTER_DRAFT_STORAGE_KEY);
+      safeStorageRemove(POSTER_DRAFT_STORAGE_KEY);
     } finally {
       setHydrated(true);
     }
@@ -123,16 +133,12 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
       ratio,
       paletteIndex,
       layerVisibility,
-      results,
-      activeResult,
+      results: persistablePosterResults(results),
+      activeResult: persistablePosterResult(activeResult),
       variantIndex
     };
 
-    try {
-      window.localStorage.setItem(POSTER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
-    } catch {
-      // Draft persistence is best effort; generation still works without local storage.
-    }
+    safeStorageSet(POSTER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
   }, [activeResult, hydrated, layerVisibility, paletteIndex, ratio, results, style, subtitle, title, usage, variantIndex]);
 
   const handleGenerate = async () => {
@@ -216,7 +222,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
             <Link href="/pricing" className="text-studio-700 underline">
               购买积分
             </Link>
-          ) : error.includes("邮箱验证") ? (
+          ) : error.includes("验证") ? (
             <Link href="/account" className="text-studio-700 underline">
               前往账户中心
             </Link>

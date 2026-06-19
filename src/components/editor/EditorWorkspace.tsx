@@ -11,7 +11,8 @@ import { ResultGallery } from "@/components/editor/ResultGallery";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
-import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import { apiClient, getImageErrorMessage, imageUrlToUploadFile, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { toolPrompts } from "@/lib/studio-content";
 import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
@@ -81,46 +82,75 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     setNotice("");
     try {
       const shouldUseCurrentImageUrl = Boolean(currentImage && currentImage !== uploadedImage && !currentImageFile);
-      const [response] = await Promise.all([
-        apiClient.editImage({
-          image: shouldUseCurrentImageUrl ? undefined : currentImageFile ?? uploadedImageFile ?? undefined,
-          imageUrl: currentImage ?? originalImage ?? undefined,
-          prompt: finalPrompt,
-          tool: finalTool,
-          size: "1024x1024",
-          quality: "auto",
-          outputFormat: "png"
-        }),
-        sleep(1000)
-      ]);
+      const selectedInputFile = shouldUseCurrentImageUrl ? null : currentImageFile ?? uploadedImageFile ?? null;
+      const selectedInputUrl = currentImage ?? originalImage ?? undefined;
 
-      let result = response.results?.[0] as EditImageResult | undefined;
-      let historyItem = response.historyItem as HistoryItem | undefined;
+      const submitEdit = async (imageOverride?: File) => {
+        const [response] = await Promise.all([
+          apiClient.editImage({
+            image: imageOverride ?? selectedInputFile ?? undefined,
+            imageUrl: imageOverride ? undefined : currentImage ?? originalImage ?? undefined,
+            prompt: finalPrompt,
+            tool: finalTool,
+            size: "1024x1024",
+            quality: "auto",
+            outputFormat: "png"
+          }),
+          sleep(1000)
+        ]);
 
-      if (!result) {
-        const task = await apiClient.waitForTaskDone(response.taskId);
-        if (task.status === "failed") {
-          throw new Error(task.errorMessage || "生成失败，请稍后重试");
+        let result = response.results?.[0] as EditImageResult | undefined;
+        let historyItem = response.historyItem as HistoryItem | undefined;
+
+        if (!result) {
+          const task = await apiClient.waitForTaskDone(response.taskId);
+          if (task.status === "failed") {
+            throw new Error(task.errorMessage || "生成失败，请稍后重试");
+          }
+
+          const url = task.resultImages?.[0] || task.resultImageUrl;
+          if (!url) {
+            throw new Error("生成完成但未检测到结果图片");
+          }
+
+          result = {
+            id: "result-1",
+            url,
+            type: "edited",
+            label: "生成结果"
+          };
+          historyItem = {
+            id: task.id,
+            title: "生成结果",
+            createdAt: task.createdAt,
+            thumbnail: url
+          };
         }
 
-        const url = task.resultImages?.[0] || task.resultImageUrl;
-        if (!url) {
-          throw new Error("生成完成但未检测到结果图片");
+        return { response, result, historyItem };
+      };
+
+      let generation: Awaited<ReturnType<typeof submitEdit>>;
+      try {
+        generation = await submitEdit();
+      } catch (firstError) {
+        if (!isImageCompatibilityError(firstError)) {
+          throw firstError;
         }
 
-        result = {
-          id: "result-1",
-          url,
-          type: "edited",
-          label: "生成结果"
-        };
-        historyItem = {
-          id: task.id,
-          title: "生成结果",
-          createdAt: task.createdAt,
-          thumbnail: url
-        };
+        const retrySourceFile =
+          selectedInputFile ?? (selectedInputUrl ? await imageUrlToUploadFile(selectedInputUrl, "edit-input") : null);
+        if (!retrySourceFile) {
+          throw firstError;
+        }
+
+        setNotice("系统已自动优化图片格式，正在重新生成。");
+        const normalizedFile = await forceNormalizeImageFileForUpload(retrySourceFile);
+        generation = await submitEdit(normalizedFile);
       }
+
+      const { response, result } = generation;
+      let { historyItem } = generation;
 
       if (!historyItem) {
         historyItem = {
@@ -142,6 +172,10 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
       }
       if (isEmailNotVerifiedError(requestError)) {
         setError(getImageErrorMessage(requestError));
+        return;
+      }
+      if (isImageCompatibilityError(requestError)) {
+        setError("系统已自动优化图片格式，但模型仍无法读取该图片，请更换图片后再试");
         return;
       }
       setError(getImageErrorMessage(requestError));
@@ -192,7 +226,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
             <Link href="/pricing" className="text-studio-700 underline">
               购买积分
             </Link>
-          ) : error.includes("邮箱验证") ? (
+          ) : error.includes("验证") ? (
             <Link href="/account" className="text-studio-700 underline">
               前往账户中心
             </Link>

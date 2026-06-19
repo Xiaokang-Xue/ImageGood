@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
-import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import { apiClient, getImageErrorMessage, imageUrlToUploadFile, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
+import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
 import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
@@ -69,6 +71,10 @@ interface ProductStudioDraft {
   results: ProductImageResult[];
 }
 
+function persistableProductResults(results: ProductImageResult[]) {
+  return results.filter((result) => isPersistableImageUrl(result.url)).slice(-8);
+}
+
 export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const router = useRouter();
   const setUploadedImage = useStudioStore((state) => state.setUploadedImage);
@@ -87,22 +93,22 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(PRODUCT_DRAFT_STORAGE_KEY);
+      const raw = safeStorageGet(PRODUCT_DRAFT_STORAGE_KEY);
       if (raw) {
         const draft = JSON.parse(raw) as Partial<ProductStudioDraft>;
-        setImageUrl(typeof draft.imageUrl === "string" ? draft.imageUrl : null);
+        setImageUrl(isPersistableImageUrl(draft.imageUrl) ? draft.imageUrl : null);
         setTemplate(initialTemplate ? normalizeProductTemplate(initialTemplate) : normalizeProductTemplate(draft.template));
         setScene(scenes.some((item) => item.value === draft.scene) ? (draft.scene as ProductScene) : "desk");
         setStyle(styles.some((item) => item.value === draft.style) ? (draft.style as ProductStyle) : "premium");
         setSellingPoints(typeof draft.sellingPoints === "string" ? draft.sellingPoints : "轻盈质感、细腻光泽、适合日常通勤使用");
         setSelectedIndustry(typeof draft.selectedIndustry === "string" ? draft.selectedIndustry : null);
         setRatio(ratios.includes(draft.ratio as ProductRatio) ? (draft.ratio as ProductRatio) : "1:1");
-        setResults(Array.isArray(draft.results) ? draft.results : []);
+        setResults(Array.isArray(draft.results) ? persistableProductResults(draft.results) : []);
       } else if (initialTemplate) {
         setTemplate(normalizeProductTemplate(initialTemplate));
       }
     } catch {
-      window.localStorage.removeItem(PRODUCT_DRAFT_STORAGE_KEY);
+      safeStorageRemove(PRODUCT_DRAFT_STORAGE_KEY);
     } finally {
       setHydrated(true);
     }
@@ -112,21 +118,17 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
     if (!hydrated) return;
 
     const draft: ProductStudioDraft = {
-      imageUrl,
+      imageUrl: isPersistableImageUrl(imageUrl) ? imageUrl : null,
       template,
       scene,
       style,
       sellingPoints,
       selectedIndustry,
       ratio,
-      results
+      results: persistableProductResults(results)
     };
 
-    try {
-      window.localStorage.setItem(PRODUCT_DRAFT_STORAGE_KEY, JSON.stringify(draft));
-    } catch {
-      // Ignore storage quota or private-mode failures; the workspace still works in memory.
-    }
+    safeStorageSet(PRODUCT_DRAFT_STORAGE_KEY, JSON.stringify(draft));
   }, [hydrated, imageUrl, template, scene, style, sellingPoints, selectedIndustry, ratio, results]);
 
   const handleGenerate = async () => {
@@ -138,39 +140,60 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
     setLoading(true);
     setError("");
     try {
-      const [response] = await Promise.all([
-        apiClient.createProductImages({
-          image: imageFile ?? undefined,
-          imageUrl: imageUrl ?? undefined,
-          template,
-          scene,
-          style,
-          sellingPoints: selectedIndustry ? `${sellingPoints}。行业方向：${selectedIndustry}` : sellingPoints,
-          ratio
-        }),
-        sleep(1000)
-      ]);
+      const submitProduct = async (imageOverride?: File) => {
+        const [response] = await Promise.all([
+          apiClient.createProductImages({
+            image: imageOverride ?? imageFile ?? undefined,
+            imageUrl: imageOverride ? undefined : imageUrl ?? undefined,
+            template,
+            scene,
+            style,
+            sellingPoints: selectedIndustry ? `${sellingPoints}。行业方向：${selectedIndustry}` : sellingPoints,
+            ratio
+          }),
+          sleep(1000)
+        ]);
 
-      let nextResults = response.results ?? [];
-      if (nextResults.length === 0) {
-        const task = await apiClient.waitForTaskDone(response.taskId);
-        if (task.status === "failed") {
-          throw new Error(task.errorMessage || "生成失败，请稍后重试");
-        }
-
-        const url = task.resultImages?.[0] || task.resultImageUrl;
-        if (!url) {
-          throw new Error("生成完成但未检测到结果图片");
-        }
-
-        nextResults = [
-          {
-            id: "product-result-1",
-            url,
-            template: "商品图",
-            title: "生成结果"
+        let nextResults = response.results ?? [];
+        if (nextResults.length === 0) {
+          const task = await apiClient.waitForTaskDone(response.taskId);
+          if (task.status === "failed") {
+            throw new Error(task.errorMessage || "生成失败，请稍后重试");
           }
-        ];
+
+          const url = task.resultImages?.[0] || task.resultImageUrl;
+          if (!url) {
+            throw new Error("生成完成但未检测到结果图片");
+          }
+
+          nextResults = [
+            {
+              id: "product-result-1",
+              url,
+              template: "商品图",
+              title: "生成结果"
+            }
+          ];
+        }
+
+        return nextResults;
+      };
+
+      let nextResults: ProductImageResult[];
+      try {
+        nextResults = await submitProduct();
+      } catch (firstError) {
+        if (!isImageCompatibilityError(firstError)) {
+          throw firstError;
+        }
+
+        const retrySourceFile = imageFile ?? (imageUrl ? await imageUrlToUploadFile(imageUrl, "product-input") : null);
+        if (!retrySourceFile) {
+          throw firstError;
+        }
+
+        const normalizedFile = await forceNormalizeImageFileForUpload(retrySourceFile);
+        nextResults = await submitProduct(normalizedFile);
       }
 
       setResults(nextResults);
@@ -182,6 +205,10 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       }
       if (isEmailNotVerifiedError(requestError)) {
         setError(getImageErrorMessage(requestError));
+        return;
+      }
+      if (isImageCompatibilityError(requestError)) {
+        setError("系统已自动优化图片格式，但模型仍无法读取该图片，请更换图片后再试");
         return;
       }
       setError(getImageErrorMessage(requestError));
@@ -214,7 +241,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
             <Link href="/pricing" className="text-studio-700 underline">
               购买积分
             </Link>
-          ) : error.includes("邮箱验证") ? (
+          ) : error.includes("验证") ? (
             <Link href="/account" className="text-studio-700 underline">
               前往账户中心
             </Link>

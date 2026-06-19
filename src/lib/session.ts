@@ -23,25 +23,34 @@ function createSessionToken() {
 
 function publicUser(user: {
   id: string;
-  email: string;
+  email?: string | null;
+  phone?: string | null;
   name: string;
   avatar?: string | null;
   credits?: number;
   role?: "user" | "admin";
   emailVerified?: boolean;
   emailVerifiedAt?: string | null;
+  phoneVerified?: boolean;
+  phoneVerifiedAt?: string | null;
   lastLoginAt?: string | null;
   createdAt: string;
 }): PublicUser {
+  const emailVerified = Boolean(user.emailVerified);
+  const phoneVerified = Boolean(user.phoneVerified);
   return {
     id: user.id,
-    email: user.email,
+    email: user.email ?? null,
+    phone: user.phone ?? null,
     name: user.name,
     avatar: user.avatar ?? null,
     credits: user.credits ?? 0,
     role: user.role ?? "user",
-    emailVerified: Boolean(user.emailVerified),
+    emailVerified,
     emailVerifiedAt: user.emailVerifiedAt ?? null,
+    phoneVerified,
+    phoneVerifiedAt: user.phoneVerifiedAt ?? null,
+    hasVerifiedContact: emailVerified || phoneVerified,
     lastLoginAt: user.lastLoginAt ?? null,
     createdAt: user.createdAt
   };

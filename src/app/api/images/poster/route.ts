@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assertEmailVerified } from "@/lib/server/auth-guards";
+import { assertContactVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import { ImageRequestError } from "@/lib/server/image-validation";
 import { runPosterTask } from "@/lib/server/image-task-service";
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new Error("UNAUTHORIZED");
-    assertEmailVerified(user);
+    assertContactVerified(user);
 
     let body: Partial<PosterImageRequest>;
 

@@ -26,6 +26,12 @@ export default function AccountPage() {
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("");
   const [verificationError, setVerificationError] = useState("");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneCountdown, setPhoneCountdown] = useState(0);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   const refreshAccount = async () => {
     const [me, taskResponse, transactionResponse] = await Promise.all([
@@ -43,6 +49,12 @@ export default function AccountPage() {
       .catch(() => router.push("/login?redirect=/account"))
       .finally(() => setLoading(false));
   }, [router]);
+
+  useEffect(() => {
+    if (phoneCountdown <= 0) return;
+    const timer = window.setTimeout(() => setPhoneCountdown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [phoneCountdown]);
 
   const handleLogout = async () => {
     await apiClient.logout().catch(() => null);
@@ -63,6 +75,59 @@ export default function AccountPage() {
       setVerificationError(getImageErrorMessage(error));
     } finally {
       setVerificationLoading(false);
+    }
+  };
+
+  const phoneScene = user?.phone ? "change_phone" : "bind_phone";
+
+  const sendPhoneCode = async () => {
+    setPhoneError("");
+    setPhoneMessage("");
+    if (!/^1[3-9]\d{9}$/.test(phoneInput)) {
+      setPhoneError("请输入正确的手机号");
+      return;
+    }
+
+    setPhoneLoading(true);
+    try {
+      const response = await apiClient.sendSmsCode({ phone: phoneInput, scene: phoneScene });
+      setPhoneMessage(response.message || "验证码已发送");
+      setPhoneCountdown(60);
+    } catch (error) {
+      setPhoneError(getImageErrorMessage(error));
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const handleBindPhone = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPhoneError("");
+    setPhoneMessage("");
+
+    if (!/^1[3-9]\d{9}$/.test(phoneInput)) {
+      setPhoneError("请输入正确的手机号");
+      return;
+    }
+    if (!phoneCode.trim()) {
+      setPhoneError("请输入短信验证码");
+      return;
+    }
+
+    setPhoneLoading(true);
+    try {
+      const response = await apiClient.bindPhone({ phone: phoneInput, code: phoneCode, scene: phoneScene });
+      setPhoneMessage(response.message || "手机号已更新");
+      setPhoneInput("");
+      setPhoneCode("");
+      setPhoneCountdown(0);
+      setUser(response.user);
+      await refreshAccount();
+      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+    } catch (error) {
+      setPhoneError(getImageErrorMessage(error));
+    } finally {
+      setPhoneLoading(false);
     }
   };
 
@@ -138,23 +203,67 @@ export default function AccountPage() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-ink">{user.name}</h2>
-              <p className="mt-1 text-sm text-muted">{user.email}</p>
+              <p className="mt-1 text-sm text-muted">{user.email || "手机号账号"}</p>
             </div>
+          </div>
+
+          <div className={`mt-6 rounded-lg border p-4 ${user.phoneVerified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className={`text-sm font-bold ${user.phoneVerified ? "text-emerald-700" : "text-amber-700"}`}>
+                  {user.phoneVerified ? "手机号已验证" : "手机号尚未绑定"}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {user.phone
+                    ? `当前手机号：${user.phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2")}`
+                    : "绑定手机号后，可以使用短信验证码登录并使用完整功能。"}
+                </p>
+              </div>
+            </div>
+
+            <form className="mt-4 grid gap-3 md:grid-cols-[1fr_160px_120px]" onSubmit={handleBindPhone}>
+              <input
+                value={phoneInput}
+                onChange={(event) => setPhoneInput(event.target.value.replace(/\D/g, "").slice(0, 11))}
+                inputMode="tel"
+                placeholder={user.phone ? "输入新手机号" : "输入手机号"}
+                className="h-11 rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
+              />
+              <input
+                value={phoneCode}
+                onChange={(event) => setPhoneCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric"
+                placeholder="短信验证码"
+                className="h-11 rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
+              />
+              <Button type="button" variant="outline" loading={phoneLoading} disabled={phoneCountdown > 0} onClick={sendPhoneCode}>
+                {phoneCountdown > 0 ? `${phoneCountdown}s` : "发送验证码"}
+              </Button>
+              <div className="md:col-span-3">
+                <Button type="submit" loading={phoneLoading}>
+                  {user.phone ? "更换手机号" : "绑定手机号"}
+                </Button>
+              </div>
+            </form>
+            {phoneMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700">{phoneMessage}</p> : null}
+            {phoneError ? <p className="mt-3 text-sm font-semibold text-rose-700">{phoneError}</p> : null}
           </div>
 
           <div className={`mt-6 rounded-lg border p-4 ${user.emailVerified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className={`text-sm font-bold ${user.emailVerified ? "text-emerald-700" : "text-amber-700"}`}>
-                  {user.emailVerified ? "邮箱已验证" : "邮箱尚未验证"}
+                  {user.emailVerified ? "邮箱已验证" : user.email ? "邮箱尚未验证" : "邮箱未绑定"}
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {user.emailVerified
-                    ? `验证时间：${user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString("zh-CN") : "已完成"}`
-                    : "完成验证后可使用图片生成和购买积分功能。"}
+                  {!user.email
+                    ? "当前账号未绑定邮箱。"
+                    : user.emailVerified
+                      ? `验证时间：${user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString("zh-CN") : "已完成"}`
+                      : "完成手机号或邮箱任一验证后可使用图片生成和购买积分功能。"}
                 </p>
               </div>
-              {!user.emailVerified ? (
+              {user.email && !user.emailVerified ? (
                 <Button size="sm" loading={verificationLoading} onClick={handleResendVerification}>
                   重新发送验证邮件
                 </Button>

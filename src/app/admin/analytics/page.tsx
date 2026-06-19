@@ -129,9 +129,9 @@ export default function AdminAnalyticsPage() {
             />
             <MetricCard
               icon={Users}
-              label="注册用户"
+              label="累计已注册用户"
               value={formatNumber(data.overview.totalUsers)}
-              helper={`今日新增 ${formatNumber(data.overview.todayRegistrations)} 人 · 邮箱验证率 ${percent(
+              helper={`今日新注册 ${formatNumber(data.overview.todayRegistrations)} 人 · 联系方式验证率 ${percent(
                 data.overview.verifiedUsers,
                 data.overview.totalUsers
               )}`}
@@ -177,15 +177,15 @@ export default function AdminAnalyticsPage() {
             />
             <MetricCard
               icon={UserPlus}
-              label="邮箱已验证用户"
+              label="已验证联系方式用户"
               value={formatNumber(data.overview.verifiedUsers)}
               helper="用于评估可生成用户规模"
             />
             <MetricCard
               icon={Activity}
-              label="7日活跃用户"
+              label="近7日访问过网站的登录用户"
               value={formatNumber(data.overview.activeUsers7d)}
-              helper={`今日活跃 ${formatNumber(data.overview.todayActiveUsers)} 人 · 功能页访客 ${formatNumber(data.overview.generationPageVisitors)} 人`}
+              helper={`今日访问过网站的登录用户 ${formatNumber(data.overview.todayActiveUsers)} 人 · 生成页访问设备 ${formatNumber(data.overview.generationPageVisitors)} 个`}
             />
             <MetricCard
               icon={CreditCard}
@@ -247,7 +247,7 @@ export default function AdminAnalyticsPage() {
                             {page.views} 次
                           </span>
                         </div>
-                        <p className="mt-2 text-xs text-muted">独立访客 {page.uniqueVisitors} 人</p>
+                        <p className="mt-2 text-xs text-muted">访问设备/浏览器 {page.uniqueVisitors} 个</p>
                       </div>
                     ))}
                   </div>

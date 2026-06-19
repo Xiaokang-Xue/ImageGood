@@ -125,7 +125,7 @@ export async function GET() {
       uniqueVisitors,
       totalUsers: db.users.length,
       todayRegistrations: db.users.filter((item) => dateKey(item.createdAt) === todayKey).length,
-      verifiedUsers: db.users.filter((item) => item.emailVerified).length,
+      verifiedUsers: db.users.filter((item) => item.emailVerified || item.phoneVerified).length,
       totalTasks: db.imageTasks.length,
       succeededTasks: succeededTasks.length,
       failedTasks: failedTasks.length,

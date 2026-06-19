@@ -36,6 +36,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [providerFilter, setProviderFilter] = useState<"all" | AdminOrderRecord["paymentProvider"]>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | AdminOrderRecord["status"]>("all");
   const [error, setError] = useState("");
 
   const loadOrders = useCallback(() => {
@@ -82,6 +83,12 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const filteredOrders = orders.filter((order) => {
+    const matchesProvider = providerFilter === "all" || order.paymentProvider === providerFilter;
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+    return matchesProvider && matchesStatus;
+  });
+
   return (
     <main className="mx-auto max-w-[1200px] px-5 py-10">
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -105,24 +112,49 @@ export default function AdminOrdersPage() {
       ) : null}
 
       {!loading && !error ? (
-        <div className="mb-5 flex flex-wrap gap-2">
-          {[
-            ["all", "全部"],
-            ["wechat", "微信支付"],
-            ["alipay", "支付宝支付"],
-            ["manual", "手动订单"]
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                providerFilter === value ? "border-studio-300 bg-studio-50 text-studio-700" : "border-line bg-white text-muted"
-              }`}
-              onClick={() => setProviderFilter(value as typeof providerFilter)}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="mb-5 grid gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm font-semibold text-muted">支付方式</span>
+            {[
+              ["all", "全部"],
+              ["wechat", "微信支付"],
+              ["alipay", "支付宝支付"],
+              ["manual", "手动订单"]
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                  providerFilter === value ? "border-studio-300 bg-studio-50 text-studio-700" : "border-line bg-white text-muted"
+                }`}
+                onClick={() => setProviderFilter(value as typeof providerFilter)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm font-semibold text-muted">订单状态</span>
+            {[
+              ["all", "全部"],
+              ["pending", "待支付"],
+              ["paid", "已完成"],
+              ["failed", "失败"],
+              ["expired", "已过期"],
+              ["cancelled", "已取消"]
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                  statusFilter === value ? "border-studio-300 bg-studio-50 text-studio-700" : "border-line bg-white text-muted"
+                }`}
+                onClick={() => setStatusFilter(value as typeof statusFilter)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -131,13 +163,11 @@ export default function AdminOrdersPage() {
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-studio-100 border-t-studio-500" />
           <p className="mt-4 text-sm font-semibold text-muted">订单信息加载中…</p>
         </Card>
-      ) : !error && orders.filter((order) => providerFilter === "all" || order.paymentProvider === providerFilter).length === 0 ? (
-        <Card className="p-8 text-center text-sm font-semibold text-muted">当前没有待处理订单。</Card>
+      ) : !error && filteredOrders.length === 0 ? (
+        <Card className="p-8 text-center text-sm font-semibold text-muted">当前没有符合条件的订单。</Card>
       ) : !error ? (
         <div className="grid gap-4">
-          {orders
-            .filter((order) => providerFilter === "all" || order.paymentProvider === providerFilter)
-            .map((order) => (
+          {filteredOrders.map((order) => (
             <Card key={order.id} className="p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">

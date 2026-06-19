@@ -1,6 +1,7 @@
 "use client";
 
 import type { AnalyticsEventType } from "@/types/analytics";
+import { safeBrowserId } from "@/lib/safe-client-storage";
 
 interface TrackClientEventInput {
   type?: AnalyticsEventType;
@@ -8,18 +9,6 @@ interface TrackClientEventInput {
   referrer?: string;
   target?: string;
   metadata?: Record<string, string | number | boolean | null>;
-}
-
-function browserId(storage: Storage, key: string) {
-  const existing = storage.getItem(key);
-  if (existing) return existing;
-
-  const next =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  storage.setItem(key, next);
-  return next;
 }
 
 export function trackClientEvent(input: TrackClientEventInput = {}) {
@@ -31,8 +20,8 @@ export function trackClientEvent(input: TrackClientEventInput = {}) {
     referrer: input.referrer ?? document.referrer ?? "",
     target: input.target ?? null,
     metadata: input.metadata ?? null,
-    visitorId: browserId(window.localStorage, "imagegood_visitor_id"),
-    sessionId: browserId(window.sessionStorage, "imagegood_session_id")
+    visitorId: safeBrowserId(window.localStorage, "imagegood_visitor_id"),
+    sessionId: safeBrowserId(window.sessionStorage, "imagegood_session_id")
   });
 
   if (navigator.sendBeacon) {

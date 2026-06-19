@@ -24,6 +24,7 @@ import type { AdminAnalyticsResponse } from "@/types/analytics";
 import type { DeleteImageTaskResponse, DeleteImageTasksResponse, ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
+import { prepareImageFileForUpload } from "@/lib/client-image-normalizer";
 
 export interface CaptchaResponse {
   question: string;
@@ -43,15 +44,70 @@ export class ImageApiClientError extends Error {
   }
 }
 
+function normalizeImageMime(type: string) {
+  const mime = type.split(";")[0]?.trim().toLowerCase() || "";
+  if (mime === "image/jpg") return "image/jpeg";
+  return mime;
+}
+
 function fileExtensionFromMime(type: string) {
   if (type === "image/jpeg") return "jpg";
   if (type === "image/webp") return "webp";
+  if (type === "image/heic") return "heic";
+  if (type === "image/heif") return "heif";
+  if (type === "image/avif") return "avif";
   return "png";
+}
+
+function mimeFromExtension(pathOrName: string) {
+  const pathname = pathOrName.split("?")[0]?.split("#")[0] || "";
+  const extension = pathname.toLowerCase().match(/\.[^.]+$/)?.[0] || "";
+
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+  if (extension === ".png") return "image/png";
+  if (extension === ".webp") return "image/webp";
+  if (extension === ".heic") return "image/heic";
+  if (extension === ".heif") return "image/heif";
+  if (extension === ".avif") return "image/avif";
+  return "";
+}
+
+function mimeFromBytes(bytes: Uint8Array) {
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 12 &&
+    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
+    String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif")) {
+    return "image/avif";
+  }
+  if (bytes.length >= 12) {
+    const brand = String.fromCharCode(...bytes.slice(4, 12));
+    if (brand.includes("ftypheic") || brand.includes("ftypheix") || brand.includes("ftyphevc") || brand.includes("ftyphevx")) {
+      return "image/heic";
+    }
+    if (brand.includes("ftypmif1") || brand.includes("ftypmsf1")) {
+      return "image/heif";
+    }
+  }
+  return "";
+}
+
+function mimeFromArrayBuffer(buffer: ArrayBuffer) {
+  return mimeFromBytes(new Uint8Array(buffer));
 }
 
 function dataUrlToFile(dataUrl: string, filename: string) {
   const [header, base64] = dataUrl.split(",");
-  const mime = header.match(/data:(.*?);base64/)?.[1] || "image/png";
+  const headerMime = normalizeImageMime(header.match(/data:(.*?);base64/)?.[1] || "");
   const bytes = window.atob(base64);
   const chunks = new Uint8Array(bytes.length);
 
@@ -59,10 +115,12 @@ function dataUrlToFile(dataUrl: string, filename: string) {
     chunks[index] = bytes.charCodeAt(index);
   }
 
-  return new File([chunks], filename, { type: mime });
+  const detectedMime = mimeFromBytes(chunks);
+  const mime = detectedMime || headerMime || mimeFromExtension(filename) || "application/octet-stream";
+  return new File([chunks], `${filename}.${fileExtensionFromMime(mime)}`, { type: mime });
 }
 
-async function imageUrlToFile(imageUrl: string, filename: string) {
+export async function imageUrlToUploadFile(imageUrl: string, filename: string) {
   if (imageUrl.startsWith("data:")) {
     return dataUrlToFile(imageUrl, filename);
   }
@@ -73,18 +131,24 @@ async function imageUrlToFile(imageUrl: string, filename: string) {
     throw new ImageApiClientError("IMAGE_READ_FAILED", "无法读取当前图片，请重新上传后再试");
   }
 
-  const blob = await response.blob();
-  return new File([blob], `${filename}.${fileExtensionFromMime(blob.type)}`, {
-    type: blob.type || "image/png"
+  const arrayBuffer = await response.arrayBuffer();
+  const responseMime = normalizeImageMime(response.headers.get("content-type") || "");
+  const detectedMime = mimeFromArrayBuffer(arrayBuffer);
+  const extensionMime = mimeFromExtension(imageUrl);
+  const mime = detectedMime || responseMime || extensionMime || "application/octet-stream";
+
+  return new File([arrayBuffer], `${filename}.${fileExtensionFromMime(mime)}`, {
+    type: mime
   });
 }
 
 async function resolveImageFile(image?: File, imageUrl?: string, filename = "input-image") {
-  if (image) return image;
+  if (image) return prepareImageFileForUpload(image);
   if (!imageUrl) return undefined;
 
   try {
-    return await imageUrlToFile(imageUrl, filename);
+    const file = await imageUrlToUploadFile(imageUrl, filename);
+    return await prepareImageFileForUpload(file);
   } catch (error) {
     if (error instanceof ImageApiClientError) throw error;
     throw new ImageApiClientError("IMAGE_READ_FAILED", "无法读取当前图片，请重新上传后再试");
@@ -147,8 +211,10 @@ export function isInsufficientCreditsError(error: unknown) {
 }
 
 export function isEmailNotVerifiedError(error: unknown) {
-  return error instanceof ImageApiClientError && error.code === "EMAIL_NOT_VERIFIED";
+  return error instanceof ImageApiClientError && (error.code === "EMAIL_NOT_VERIFIED" || error.code === "CONTACT_NOT_VERIFIED");
 }
+
+export const isContactNotVerifiedError = isEmailNotVerifiedError;
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -191,8 +257,36 @@ export const apiClient = {
     });
   },
 
+  sendSmsCode(payload: { phone: string; scene: "register" | "login" | "bind_phone" | "change_phone" }) {
+    return requestJson<{ ok: boolean; message: string }>("/api/auth/sms/send-code", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  registerPhone(payload: { name: string; phone: string; code: string; password: string; confirmPassword: string }) {
+    return requestJson<AuthResponse>("/api/auth/register-phone", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
   login(payload: { email: string; password: string; captchaAnswer: string }) {
     return requestJson<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  loginPhone(payload: { phone: string; code?: string; password?: string }) {
+    return requestJson<AuthResponse>("/api/auth/login-phone", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  bindPhone(payload: { phone: string; code: string; scene: "bind_phone" | "change_phone" }) {
+    return requestJson<AuthResponse & { message?: string }>("/api/auth/phone", {
       method: "POST",
       body: JSON.stringify(payload)
     });

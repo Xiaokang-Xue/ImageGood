@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assertEmailVerified } from "@/lib/server/auth-guards";
+import { assertContactVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import {
   getFormString,
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new Error("UNAUTHORIZED");
-    assertEmailVerified(user);
+    assertContactVerified(user);
 
     const formData = await request.formData();
     const image = getRequiredImageFile(formData);

@@ -33,6 +33,17 @@ function taskErrorLog(message: string, payload: Record<string, unknown>) {
   console.error(`[image-task] ${message}`, payload);
 }
 
+function userFacingImageError(error: unknown) {
+  const message = error instanceof Error ? error.message : "生成失败，请稍后重试";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("invalid image file") || lower.includes("image file or mode") || lower.includes("unsupported image")) {
+    return "图片格式需要自动优化，系统正在重新处理";
+  }
+
+  return message;
+}
+
 function createTask(input: {
   userId: string;
   type: ImageTaskType;
@@ -90,7 +101,7 @@ async function updateTask(taskId: string, patch: Partial<ImageTaskRecord>) {
 }
 
 async function failTask(taskId: string, error: unknown) {
-  const message = error instanceof Error ? error.message : "生成失败，请稍后重试";
+  const message = userFacingImageError(error);
 
   await withDb((db) => {
     const task = db.imageTasks.find((item) => item.id === taskId);

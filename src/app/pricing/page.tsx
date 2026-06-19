@@ -24,7 +24,7 @@ export default function PricingPage() {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPackage, setLoadingPackage] = useState<CreditPackageId | null>(null);
-  const [paymentProvider, setPaymentProvider] = useState<Exclude<PaymentProvider, "manual">>("wechat");
+  const [paymentProvider, setPaymentProvider] = useState<Exclude<PaymentProvider, "manual">>("alipay");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function PricingPage() {
       {error ? (
         <div className="mb-6 flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
-          {error.includes("邮箱验证") ? (
+          {error.includes("验证") ? (
             <Link href="/account" className="text-studio-700 underline">
               前往账户中心
             </Link>

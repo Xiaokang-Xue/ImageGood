@@ -58,7 +58,7 @@ export function HeroSection() {
             </Button>
           </Link>
           <Link href="/templates">
-            <Button size="lg" variant="secondary" className="bg-white/92">
+            <Button size="lg" variant="secondary" className="border border-white/25 bg-white/10 text-white ring-white/20 hover:bg-white/18">
               浏览热门模板
             </Button>
           </Link>
