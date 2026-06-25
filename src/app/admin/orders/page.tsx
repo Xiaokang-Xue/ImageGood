@@ -31,12 +31,15 @@ function formatCny(amountCents: number) {
   return `¥${(amountCents / 100).toFixed(2)}`;
 }
 
+const PAGE_SIZE = 10;
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [providerFilter, setProviderFilter] = useState<"all" | AdminOrderRecord["paymentProvider"]>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | AdminOrderRecord["status"]>("all");
+  const [page, setPage] = useState(1);
   const [error, setError] = useState("");
 
   const loadOrders = useCallback(() => {
@@ -88,6 +91,14 @@ export default function AdminOrdersPage() {
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesProvider && matchesStatus;
   });
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedOrders = filteredOrders.slice(pageStart, pageStart + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [providerFilter, statusFilter]);
 
   return (
     <main className="mx-auto max-w-[1200px] px-5 py-10">
@@ -155,6 +166,23 @@ export default function AdminOrdersPage() {
               </button>
             ))}
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3 text-sm text-muted">
+            <span>
+              共 {filteredOrders.length} 条订单
+              {filteredOrders.length > 0 ? `，当前显示第 ${pageStart + 1}-${Math.min(pageStart + PAGE_SIZE, filteredOrders.length)} 条` : ""}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                上一页
+              </Button>
+              <span className="text-sm font-semibold text-slate-600">
+                {safePage} / {totalPages}
+              </span>
+              <Button type="button" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+                下一页
+              </Button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -167,7 +195,7 @@ export default function AdminOrdersPage() {
         <Card className="p-8 text-center text-sm font-semibold text-muted">当前没有符合条件的订单。</Card>
       ) : !error ? (
         <div className="grid gap-4">
-          {filteredOrders.map((order) => (
+          {pagedOrders.map((order) => (
             <Card key={order.id} className="p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
@@ -180,7 +208,7 @@ export default function AdminOrdersPage() {
                   <h2 className="mt-1 text-xl font-bold text-ink">{formatCny(order.amountCents)} / {order.credits} 积分</h2>
                   <div className="mt-3 grid gap-1 text-sm text-muted">
                     <p>订单 ID：{order.id}</p>
-                    <p>用户邮箱：{order.userEmail}</p>
+                    <p>用户账号：{order.userEmail}</p>
                     <p>用户昵称：{order.userName || "未填写"}</p>
                     <p>支付渠道：{providerLabels[order.paymentProvider]} / {methodLabels[order.paymentMethod]}</p>
                     <p>商户订单号：{order.outTradeNo}</p>

@@ -13,7 +13,9 @@ import type { ImageTaskRecord } from "@/types/task";
 const typeLabels: Record<ImageTaskRecord["type"], string> = {
   edit: "智能修图",
   product: "商品图生成",
-  poster: "封面海报生成"
+  poster: "封面海报生成",
+  text_to_image: "文生图",
+  remove_background: "智能抠图"
 };
 
 export default function HistoryDetailPage() {

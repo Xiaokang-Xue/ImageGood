@@ -1,4 +1,8 @@
-import { editImage as editImageWithOpenAI, generateImage as generateImageWithOpenAI } from "@/lib/server/openai-image-service";
+import {
+  editImage as editImageWithOpenAI,
+  generateImage as generateImageWithOpenAI,
+  removeBackground as removeBackgroundWithOpenAI
+} from "@/lib/server/openai-image-service";
 import { createCodexImageProvider } from "@/lib/server/codex-image-provider";
 import { createMockImageProvider } from "@/lib/server/mock-image-provider";
 import type { ImageOutputFormat, ImageQuality, ImageSize } from "@/types/image";
@@ -20,6 +24,14 @@ export interface ProviderGenerateInput {
   outputFormat: ImageOutputFormat;
 }
 
+export interface ProviderRemoveBackgroundInput {
+  taskId?: string;
+  image: File;
+  prompt: string;
+  size: ImageSize;
+  quality: ImageQuality;
+}
+
 export interface ProviderImageResult {
   url: string;
 }
@@ -28,6 +40,7 @@ export interface ImageProviderService {
   name: "codex" | "openai" | "mock";
   editImage(input: ProviderEditInput): Promise<ProviderImageResult>;
   generateImage(input: ProviderGenerateInput): Promise<ProviderImageResult>;
+  removeBackground(input: ProviderRemoveBackgroundInput): Promise<ProviderImageResult>;
 }
 
 function shouldUseMockProvider() {
@@ -47,7 +60,8 @@ export function getImageProviderService(): ImageProviderService {
     return {
       name: "openai",
       editImage: editImageWithOpenAI,
-      generateImage: generateImageWithOpenAI
+      generateImage: generateImageWithOpenAI,
+      removeBackground: removeBackgroundWithOpenAI
     };
   }
 

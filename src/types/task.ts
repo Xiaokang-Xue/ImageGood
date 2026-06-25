@@ -1,14 +1,15 @@
 import type { EditTool, ImageProvider } from "@/types/image";
 
-export type ImageTaskType = "edit" | "product" | "poster";
+export type ImageTaskType = "edit" | "product" | "poster" | "text_to_image" | "remove_background";
 export type ImageTaskStatus = "pending" | "processing" | "succeeded" | "failed";
+export type ImageTaskTool = EditTool | "product" | "poster" | "text_to_image" | "remove_background";
 
 export interface ImageTaskRecord {
   id: string;
   userId: string;
   type: ImageTaskType;
   prompt: string;
-  tool?: EditTool | "product" | "poster" | null;
+  tool?: ImageTaskTool | null;
   status: ImageTaskStatus;
   provider?: ImageProvider | null;
   inputImageUrl?: string | null;

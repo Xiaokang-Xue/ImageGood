@@ -199,13 +199,14 @@ export default function AdminAnalyticsPage() {
             <Card className="p-6">
               <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-studio-600">近 14 天趋势</p>
+                  <p className="text-sm font-semibold text-studio-600">近 60 天趋势</p>
                   <h2 className="mt-1 text-xl font-bold text-ink">访问、注册与付费</h2>
                 </div>
                 <BarChart3 className="h-5 w-5 text-studio-600" />
               </div>
 
-              <div className="grid gap-4">
+              <div className="max-h-[620px] overflow-y-auto pr-1">
+                <div className="grid gap-4">
                 {data.daily.map((item) => (
                   <div key={item.date} className="grid gap-3 rounded-lg border border-line bg-slate-50 p-4 md:grid-cols-[80px_minmax(0,1fr)_160px] md:items-center">
                     <p className="text-sm font-semibold text-slate-600">{formatDate(item.date)}</p>
@@ -222,14 +223,42 @@ export default function AdminAnalyticsPage() {
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             </Card>
 
             <div className="grid gap-6">
               <Card className="p-6">
                 <div className="mb-5">
+                  <p className="text-sm font-semibold text-studio-600">用户来源</p>
+                  <h2 className="mt-1 text-xl font-bold text-ink">了解到 ImageGood 的渠道</h2>
+                </div>
+                {data.acquisitionChannels.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-muted">
+                    暂无渠道反馈。用户支付成功后可选择来源渠道。
+                  </p>
+                ) : (
+                  <div className="grid gap-3">
+                    {data.acquisitionChannels.map((item, index) => (
+                      <div key={item.channel} className="rounded-lg border border-line bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="min-w-0 truncate text-sm font-bold text-ink">
+                            {index + 1}. {item.channel}
+                          </p>
+                          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-studio-700 ring-1 ring-line">
+                            {item.count} 人
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <div className="mb-5">
                   <p className="text-sm font-semibold text-studio-600">热门页面</p>
-                  <h2 className="mt-1 text-xl font-bold text-ink">访问路径排行</h2>
+                  <h2 className="mt-1 text-xl font-bold text-ink">功能访问排行</h2>
                 </div>
                 {data.topPages.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-muted">
@@ -241,7 +270,7 @@ export default function AdminAnalyticsPage() {
                       <div key={page.path} className="rounded-lg border border-line bg-slate-50 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="min-w-0 truncate text-sm font-bold text-ink">
-                            {index + 1}. {page.path}
+                            {index + 1}. {page.label}
                           </p>
                           <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-studio-700 ring-1 ring-line">
                             {page.views} 次

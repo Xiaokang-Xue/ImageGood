@@ -136,9 +136,10 @@ export async function updateOrderRemark(orderId: string, userId: string, remark:
 
 function attachOrderUser(db: Awaited<ReturnType<typeof getDbSnapshot>>, order: OrderRecord): AdminOrderRecord {
   const user = db.users.find((item) => item.id === order.userId);
+  const userAccount = user?.email || user?.phone?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") || "未知用户";
   return {
     ...order,
-    userEmail: user?.email ?? "未知用户",
+    userEmail: userAccount,
     userName: user?.name ?? null
   };
 }

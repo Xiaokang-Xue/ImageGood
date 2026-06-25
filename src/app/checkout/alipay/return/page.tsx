@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock3, RefreshCcw, XCircle } from "lucide-react";
+import { PaymentSourceSurvey } from "@/components/payment/PaymentSourceSurvey";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
@@ -34,6 +35,7 @@ function AlipayReturnContent() {
   const [loading, setLoading] = useState(true);
   const [mockPaying, setMockPaying] = useState(false);
   const [error, setError] = useState("");
+  const [sourceSurveySubmitted, setSourceSurveySubmitted] = useState(false);
   const paidEventSent = useRef(false);
 
   const loadOrder = useCallback(
@@ -69,6 +71,10 @@ function AlipayReturnContent() {
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  useEffect(() => {
+    setSourceSurveySubmitted(false);
+  }, [order?.orderId]);
 
   useEffect(() => {
     if (!order || order.status !== "pending") return undefined;
@@ -156,11 +162,28 @@ function AlipayReturnContent() {
           </div>
         ) : null}
 
+        {isPaid && order ? (
+          <div className="mt-6">
+            <PaymentSourceSurvey
+              orderId={order.orderId}
+              packageName={order.packageName}
+              amountCents={order.amountCents}
+              paymentProvider={order.paymentProvider}
+              onSubmittedChange={setSourceSurveySubmitted}
+            />
+          </div>
+        ) : null}
+
         <div className="mt-6 flex flex-wrap gap-3">
-          {isPaid ? (
+          {isPaid && sourceSurveySubmitted ? (
             <Link href="/editor">
               <Button>继续生成图片</Button>
             </Link>
+          ) : null}
+          {isPaid && !sourceSurveySubmitted ? (
+            <Button type="button" disabled>
+              请选择来源渠道后继续生成图片
+            </Button>
           ) : null}
           {isClosed ? (
             <Link href="/pricing">

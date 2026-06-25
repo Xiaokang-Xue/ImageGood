@@ -40,7 +40,7 @@ interface StoredCreditTransaction {
 
 interface StoredAnalyticsEvent {
   id: string;
-  type: "page_view" | "purchase_click";
+  type: "page_view" | "purchase_click" | "acquisition_channel";
   path: string;
   visitorId: string;
   userId?: string | null;
@@ -269,7 +269,8 @@ export async function getDailyAnalyticsReport(input: {
   const allPurchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
   const allPricingPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const allCheckoutPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
-  const allGenerationPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/editor", "/product", "/poster"]));
+  const generationPaths = ["/editor", "/text-to-image", "/remove-background", "/product", "/poster"];
+  const allGenerationPageViews = allPageViews.filter((event) => pathStartsWith(event.path, generationPaths));
   const allSucceededTasks = db.imageTasks.filter((task) => task.status === "succeeded");
   const allFailedTasks = db.imageTasks.filter((task) => task.status === "failed");
   const allCreditsConsumed = db.creditTransactions
@@ -284,7 +285,7 @@ export async function getDailyAnalyticsReport(input: {
   );
   const pricingPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const checkoutPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
-  const generationPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/editor", "/product", "/poster"]));
+  const generationPageViews = pageViews.filter((event) => pathStartsWith(event.path, generationPaths));
 
   const tasksInRange = db.imageTasks.filter((task) => inRange(task.createdAt, start, end));
   const succeededTasks = tasksInRange.filter((task) => task.status === "succeeded");

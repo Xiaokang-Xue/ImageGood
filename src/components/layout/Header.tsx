@@ -11,7 +11,9 @@ import type { PublicUser } from "@/types/user";
 
 const navItems = [
   { label: "首页", href: "/" },
-  { label: "智能修图", href: "/editor" },
+  { label: "AI 修图", href: "/editor" },
+  { label: "文生图", href: "/text-to-image" },
+  { label: "智能抠图", href: "/remove-background" },
   { label: "商品图", href: "/product" },
   { label: "封面海报", href: "/poster" },
   { label: "模板中心", href: "/templates" }

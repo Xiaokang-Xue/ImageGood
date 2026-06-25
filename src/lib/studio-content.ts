@@ -44,10 +44,22 @@ export const posterStyleLabels: Record<PosterStyle, string> = {
 
 export const taskCards = [
   {
-    title: "修一张图",
-    description: "上传照片，用自然语言描述修改点。",
+    title: "AI 修图",
+    description: "上传图片，说出想法，快速完成图片修改。",
     route: "/editor",
     accent: "from-blue-500 to-indigo-500"
+  },
+  {
+    title: "文生图",
+    description: "输入一句描述，生成头像、海报和创意场景图。",
+    route: "/text-to-image",
+    accent: "from-indigo-500 to-violet-500"
+  },
+  {
+    title: "智能抠图",
+    description: "一键去除图片背景，获得透明 PNG 素材。",
+    route: "/remove-background",
+    accent: "from-teal-400 to-cyan-500"
   },
   {
     title: "换背景",

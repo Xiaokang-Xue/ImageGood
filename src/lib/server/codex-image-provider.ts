@@ -1,4 +1,9 @@
-import type { ImageProviderService, ProviderEditInput, ProviderGenerateInput } from "@/lib/server/image-provider";
+import type {
+  ImageProviderService,
+  ProviderEditInput,
+  ProviderGenerateInput,
+  ProviderRemoveBackgroundInput
+} from "@/lib/server/image-provider";
 import { readdir, readFile, stat } from "fs/promises";
 import path from "path";
 
@@ -261,22 +266,26 @@ async function requestCodexJob(endpoint: string, init: RequestInit, taskId?: str
 }
 
 export function createCodexImageProvider(): ImageProviderService {
+  const requestReferenceJob = (input: ProviderEditInput | ProviderRemoveBackgroundInput) => {
+    const formData = new FormData();
+    formData.append("prompt", input.prompt);
+    formData.append("jobId", input.taskId || "");
+    formData.append("image", input.image, input.image.name || "reference.png");
+
+    return requestCodexJob(
+      "/v1/jobs/reference",
+      {
+        method: "POST",
+        body: formData
+      },
+      input.taskId
+    );
+  };
+
   return {
     name: "codex",
     editImage(input: ProviderEditInput) {
-      const formData = new FormData();
-      formData.append("prompt", input.prompt);
-      formData.append("jobId", input.taskId || "");
-      formData.append("image", input.image, input.image.name || "reference.png");
-
-      return requestCodexJob(
-        "/v1/jobs/reference",
-        {
-          method: "POST",
-          body: formData
-        },
-        input.taskId
-      );
+      return requestReferenceJob(input);
     },
     generateImage(input: ProviderGenerateInput) {
       return requestCodexJob(
@@ -290,6 +299,9 @@ export function createCodexImageProvider(): ImageProviderService {
         },
         input.taskId
       );
+    },
+    removeBackground(input: ProviderRemoveBackgroundInput) {
+      return requestReferenceJob(input);
     }
   };
 }

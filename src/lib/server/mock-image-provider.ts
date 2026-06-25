@@ -9,6 +9,9 @@ export function createMockImageProvider(): ImageProviderService {
     },
     async generateImage() {
       return { url: posterMockResults[0].url };
+    },
+    async removeBackground() {
+      return { url: editMockResults[0].url };
     }
   };
 }

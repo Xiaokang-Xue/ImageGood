@@ -34,7 +34,7 @@ export function HeroSection() {
           <span className="block">快速生成高质量图片</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-200">
-          上传图片，描述需求，即可获得 AI 处理结果，适合商品图、封面图、社媒配图和日常修图场景。
+          支持 AI 修图、文生图和智能抠图，一站完成商品图、封面图、社媒配图和日常图片处理。
         </p>
 
         <div className="mx-auto mt-10 max-w-3xl rounded-lg border border-white/18 bg-white/14 p-3 shadow-2xl backdrop-blur-xl">
@@ -53,19 +53,24 @@ export function HeroSection() {
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/editor">
             <Button size="lg">
-              进入修图工作台
+              开始修图
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/templates">
+          <Link href="/text-to-image">
             <Button size="lg" variant="secondary" className="border border-white/25 bg-white/10 text-white ring-white/20 hover:bg-white/18">
-              浏览热门模板
+              生成图片
+            </Button>
+          </Link>
+          <Link href="/remove-background">
+            <Button size="lg" variant="secondary" className="border border-white/25 bg-white/10 text-white ring-white/20 hover:bg-white/18">
+              一键抠图
             </Button>
           </Link>
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-slate-200">
-          {["换背景", "智能去物", "商品图生成", "封面海报", "生成记录保存"].map((item) => (
+          {["AI 修图", "文生图", "智能抠图", "商品图生成", "封面海报", "生成记录保存"].map((item) => (
             <span key={item} className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-cyan-200" />
               {item}

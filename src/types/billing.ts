@@ -10,6 +10,10 @@ export interface CreditPackage {
   priceCents: number;
   credits: number;
   subtitle: string;
+  description?: string;
+  buttonLabel?: string;
+  recommended?: boolean;
+  unitPriceLabel?: string;
 }
 
 export interface BillingPackagesResponse {

@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ImagePlus, Layers3, Paintbrush, ScanLine, ShoppingBag } from "lucide-react";
+import { ImagePlus, Layers3, Paintbrush, ScanLine, Scissors, ShoppingBag, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { taskCards, toolPrompts } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
 import type { EditTool } from "@/types/image";
 
-const icons = [Paintbrush, ImagePlus, ScanLine, ShoppingBag, Layers3];
+const icons = [Paintbrush, Sparkles, Scissors, ImagePlus, ScanLine, ShoppingBag, Layers3];
 
 export function TaskCards() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export function TaskCards() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {taskCards.map((task, index) => {
           const Icon = icons[index] ?? Paintbrush;
           return (

@@ -6,8 +6,12 @@ import type {
   ImageApiErrorBody,
   PosterImageRequest,
   PosterImageResponse,
+  RemoveBackgroundRequest,
+  RemoveBackgroundResponse,
   ProductImageRequest,
-  ProductImageResponse
+  ProductImageResponse,
+  TextToImageRequest,
+  TextToImageResponse
 } from "@/types/image";
 import type {
   AdminOrderRecord,
@@ -472,6 +476,24 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+
+  createTextToImage(payload: TextToImageRequest) {
+    return requestJson<TextToImageResponse>("/api/images/text-to-image", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async removeBackground(payload: RemoveBackgroundRequest) {
+    const image = await resolveImageFile(payload.image, payload.imageUrl, "remove-bg-input");
+    const formData = new FormData();
+
+    if (image) formData.append("image", image);
+    formData.append("size", typeof payload.size === "string" ? payload.size : "1024x1024");
+    formData.append("quality", payload.quality ?? "auto");
+
+    return postForm<RemoveBackgroundResponse>("/api/images/remove-background", formData);
   },
 
   listTemplates() {

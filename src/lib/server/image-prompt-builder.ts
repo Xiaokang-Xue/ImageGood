@@ -6,7 +6,8 @@ import type {
   ProductRatio,
   ProductScene,
   ProductStyle,
-  ProductTemplate
+  ProductTemplate,
+  TextToImageStyle
 } from "@/types/image";
 
 const DEFAULT_USER_PROMPT = "请根据图片内容进行自然、专业的优化。";
@@ -64,6 +65,22 @@ const posterStyleGuides: Record<PosterStyle, string> = {
   cute: "明亮轻快、亲和但不幼稚、圆润细节、柔和色块",
   tech: "现代科技感、秩序网格、清晰几何结构、冷静色彩",
   handdrawn: "轻设计手作感、细腻线条、自然纸感、干净构图"
+};
+
+const textToImageStyleLabels: Record<TextToImageStyle, string> = {
+  realistic: "写实摄影",
+  product: "电商商品图",
+  poster: "海报设计",
+  illustration: "精致插画",
+  minimal: "极简风"
+};
+
+const textToImageStyleGuides: Record<TextToImageStyle, string> = {
+  realistic: "真实摄影质感、自然光影、干净构图、细节可信",
+  product: "商业摄影光线、主体突出、背景整洁、适合电商和社媒展示",
+  poster: "现代海报视觉、清晰视觉中心、预留标题区域、适合封面和运营图",
+  illustration: "细腻插画质感、稳定造型、完整构图、避免廉价卡通感",
+  minimal: "留白充足、元素克制、低噪点、清爽高级"
 };
 
 function withFallback(value?: string) {
@@ -166,6 +183,34 @@ export function buildPosterPrompt(input: {
     "画面元素建议：使用抽象形状、柔和光影、空间层次、少量生活方式或主题相关元素，保持高级克制。",
     "禁止生成复杂文字、乱码文字、价格、二维码、水印、Logo 或不可编辑文本。",
     "不要使用廉价卡通、杂乱拼贴、过度饱和渐变或密集装饰。"
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function buildTextToImagePrompt(input: {
+  prompt: string;
+  style?: TextToImageStyle;
+}) {
+  const style = input.style || "realistic";
+
+  return [
+    "请根据用户描述生成一张高质量图片。",
+    `用户描述：${withFallback(input.prompt)}。`,
+    `视觉风格：${textToImageStyleLabels[style]}，${textToImageStyleGuides[style]}。`,
+    "画面要求：主体清晰、构图完整、光影自然、细节干净，适合直接用于内容创作或商业展示。",
+    "不要生成水印、Logo、二维码、乱码文字、扭曲文字或不必要的边框。",
+    "如果用户没有明确要求文字，请不要在画面中生成文字。"
+  ].join("\n");
+}
+
+export function buildRemoveBackgroundPrompt(userPrompt?: string) {
+  return [
+    "请对上传图片进行智能抠图，去除背景并保留主体。",
+    "输出透明背景 PNG，主体边缘自然干净，尽量保留毛发、半透明材质、细小孔洞和边缘细节。",
+    "不要改变主体形状、颜色、材质、文字标识、比例和姿态。",
+    "不要添加新背景、投影、描边、发光、装饰物或水印。",
+    userPrompt?.trim() ? `用户补充要求：${userPrompt.trim()}。` : ""
   ]
     .filter(Boolean)
     .join("\n");

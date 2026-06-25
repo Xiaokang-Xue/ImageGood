@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock3, CreditCard, RefreshCcw, XCircle } from "lucide-react";
 import { QrCode } from "@/components/payment/QrCode";
+import { PaymentSourceSurvey } from "@/components/payment/PaymentSourceSurvey";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ImageApiClientError, apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
@@ -29,6 +30,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [mockPaying, setMockPaying] = useState(false);
   const [error, setError] = useState("");
+  const [sourceSurveySubmitted, setSourceSurveySubmitted] = useState(false);
   const paidEventSent = useRef(false);
 
   const loadOrder = useCallback(
@@ -71,6 +73,10 @@ export default function CheckoutPage() {
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  useEffect(() => {
+    setSourceSurveySubmitted(false);
+  }, [order?.orderId]);
 
   useEffect(() => {
     if (!order || order.status !== "pending") return undefined;
@@ -179,10 +185,15 @@ export default function CheckoutPage() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            {isPaid ? (
+            {isPaid && sourceSurveySubmitted ? (
               <Link href="/editor">
                 <Button>继续生成图片</Button>
               </Link>
+            ) : null}
+            {isPaid && !sourceSurveySubmitted ? (
+              <Button type="button" disabled>
+                请选择来源渠道后继续生成图片
+              </Button>
             ) : null}
             {isClosed ? (
               <Link href="/pricing">
@@ -237,6 +248,18 @@ export default function CheckoutPage() {
           ) : null}
         </Card>
       </div>
+
+      {isPaid ? (
+        <div className="mt-6">
+          <PaymentSourceSurvey
+            orderId={order.orderId}
+            packageName={order.packageName}
+            amountCents={order.amountCents}
+            paymentProvider={order.paymentProvider}
+            onSubmittedChange={setSourceSurveySubmitted}
+          />
+        </div>
+      ) : null}
     </main>
   );
 }

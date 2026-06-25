@@ -1,4 +1,4 @@
-export type AnalyticsEventType = "page_view" | "purchase_click";
+export type AnalyticsEventType = "page_view" | "purchase_click" | "acquisition_channel";
 
 export interface AnalyticsEventRecord {
   id: string;
@@ -32,8 +32,14 @@ export interface AnalyticsDailyPoint {
 
 export interface AnalyticsTopPage {
   path: string;
+  label: string;
   views: number;
   uniqueVisitors: number;
+}
+
+export interface AnalyticsChannelPoint {
+  channel: string;
+  count: number;
 }
 
 export interface AdminAnalyticsResponse {
@@ -65,6 +71,7 @@ export interface AdminAnalyticsResponse {
   };
   daily: AnalyticsDailyPoint[];
   topPages: AnalyticsTopPage[];
+  acquisitionChannels: AnalyticsChannelPoint[];
   recentPaidOrders: Array<{
     id: string;
     packageName: string;

@@ -22,6 +22,7 @@ function cleanText(value: unknown, maxLength: number) {
 }
 
 function cleanEventType(value: unknown): AnalyticsEventType {
+  if (value === "acquisition_channel") return "acquisition_channel";
   return value === "purchase_click" ? "purchase_click" : "page_view";
 }
 

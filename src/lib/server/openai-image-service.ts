@@ -16,6 +16,13 @@ interface GenerateImageInput {
   outputFormat: ImageOutputFormat;
 }
 
+interface RemoveBackgroundInput {
+  image: File;
+  prompt: string;
+  size: ImageSize;
+  quality: ImageQuality;
+}
+
 type OpenAIImageClient = {
   images: {
     edit: (input: Record<string, unknown>) => Promise<{ data?: Array<{ b64_json?: string | null }> | null }>;
@@ -128,4 +135,14 @@ export async function generateImage(input: GenerateImageInput) {
     base64,
     url: base64ToDataUrl(base64, input.outputFormat)
   };
+}
+
+export async function removeBackground(input: RemoveBackgroundInput) {
+  return editImage({
+    image: input.image,
+    prompt: input.prompt,
+    size: input.size,
+    quality: input.quality,
+    outputFormat: "png"
+  });
 }

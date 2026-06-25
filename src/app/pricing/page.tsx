@@ -81,7 +81,7 @@ export default function PricingPage() {
         <p className="text-sm font-semibold text-studio-600">购买积分</p>
         <h1 className="mt-2 text-3xl font-bold text-ink">选择适合你的积分包</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-muted">
-          新用户注册赠送 1 次免费生成，积分用完后可按需购买。每次生成消耗 1 积分。
+          新用户注册赠送 1 次免费生成，积分用完后可按需购买。购买更多积分，单次生成成本更低。
         </p>
       </div>
 
@@ -149,15 +149,26 @@ export default function PricingPage() {
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {packages.map((item) => (
-          <Card key={item.id} className="flex flex-col p-6 hover:-translate-y-1 hover:border-studio-200 hover:shadow-soft">
+          <Card
+            key={item.id}
+            className={`relative flex flex-col p-6 hover:-translate-y-1 hover:border-studio-200 hover:shadow-soft ${
+              item.recommended ? "border-studio-300 shadow-soft ring-2 ring-studio-100" : ""
+            }`}
+          >
+            {item.recommended ? (
+              <div className="absolute right-4 top-4 rounded-full bg-studio-600 px-3 py-1 text-xs font-bold text-white">
+                推荐套餐
+              </div>
+            ) : null}
             <h2 className="text-xl font-bold text-ink">{item.name}</h2>
             <p className="mt-2 text-sm text-muted">{item.subtitle}</p>
+            {item.description ? <p className="mt-3 min-h-[44px] text-sm leading-6 text-slate-600">{item.description}</p> : null}
             <div className="mt-6">
               <span className="text-4xl font-bold text-ink">¥{formatPackagePrice(item.priceCents)}</span>
               <span className="ml-2 text-sm font-semibold text-muted">/ {item.credits} 次</span>
             </div>
             <p className="mt-2 text-sm font-semibold text-studio-600">
-              约 ¥{(item.priceCents / 100 / item.credits).toFixed(2)} / 次
+              单次约 {item.unitPriceLabel ?? `¥${(item.priceCents / 100 / item.credits).toFixed(2)} / 次`}
             </p>
             <div className="mt-6 grid gap-3 text-sm text-slate-600">
               <p className="flex items-center gap-2">
@@ -170,11 +181,28 @@ export default function PricingPage() {
               </p>
             </div>
             <Button className="mt-6 w-full" loading={loadingPackage === item.id} onClick={() => handleBuy(item.id)}>
-              购买积分
+              {item.buttonLabel ?? "购买积分"}
             </Button>
           </Card>
         ))}
       </div>
+
+      <Card className="mt-8 p-5">
+        <div className="grid gap-3 text-sm leading-6 text-slate-600 md:grid-cols-3">
+          <p className="flex gap-2">
+            <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-500" />
+            每次生成消耗 1 个积分，生成失败不扣积分。
+          </p>
+          <p className="flex gap-2">
+            <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-500" />
+            积分支付成功后自动到账，可用于 AI 修图、商品图生成、封面海报生成等功能。
+          </p>
+          <p className="flex gap-2">
+            <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-500" />
+            购买更多积分，单次生成成本更低。
+          </p>
+        </div>
+      </Card>
     </PageShell>
   );
 }

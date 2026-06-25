@@ -37,6 +37,32 @@ function pathStartsWith(path: string, prefixes: string[]) {
   return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`));
 }
 
+function displayUser(user?: { email?: string | null; phone?: string | null; name?: string | null }) {
+  if (!user) return "未知用户";
+  if (user.email) return user.email;
+  if (user.phone) return user.phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
+  return user.name || "未知用户";
+}
+
+function pageFeatureLabel(path: string) {
+  const pathname = path.split("?")[0] || "/";
+  if (pathname === "/") return "首页";
+  if (pathname.startsWith("/editor")) return "智能修图";
+  if (pathname.startsWith("/text-to-image")) return "文生图";
+  if (pathname.startsWith("/remove-background")) return "智能抠图";
+  if (pathname.startsWith("/product")) return "商品图生成";
+  if (pathname.startsWith("/poster")) return "封面海报生成";
+  if (pathname.startsWith("/pricing")) return "积分购买页";
+  if (pathname.startsWith("/checkout")) return "支付结账页";
+  if (pathname.startsWith("/login")) return "登录页";
+  if (pathname.startsWith("/register")) return "注册页";
+  if (pathname.startsWith("/history")) return "历史记录";
+  if (pathname.startsWith("/account")) return "账户中心";
+  if (pathname.startsWith("/templates")) return "模板中心";
+  if (pathname.startsWith("/admin")) return "管理员后台";
+  return "其他页面";
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
@@ -56,12 +82,15 @@ export async function GET() {
   const failedTasks = db.imageTasks.filter((task) => task.status === "failed");
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view");
   const purchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
+  const acquisitionEvents = db.analyticsEvents.filter((event) => event.type === "acquisition_channel");
   const todayPageViews = pageViews.filter((event) => new Date(event.createdAt).getTime() >= today.getTime());
   const uniqueVisitors = new Set(pageViews.map((event) => event.visitorId)).size;
   const purchaseClickUsers = new Set(purchaseClicks.map(eventIdentity)).size;
   const pricingPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const checkoutPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
-  const generationPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/editor", "/product", "/poster"]));
+  const generationPageViews = pageViews.filter((event) =>
+    pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/product", "/poster"])
+  );
   const activeCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const activeUserEvents7d = pageViews.filter((event) => {
     if (!event.userId) return false;
@@ -72,7 +101,7 @@ export async function GET() {
     .filter((transaction) => transaction.type === "consume")
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
 
-  const dayKeys = lastDays(14);
+  const dayKeys = lastDays(60);
   const daily = dayKeys.map((key) => ({
     date: key,
     pageViews: pageViews.filter((event) => dateKey(event.createdAt) === key).length,
@@ -85,22 +114,34 @@ export async function GET() {
     succeededTasks: succeededTasks.filter((task) => dateKey(task.updatedAt) === key).length
   }));
 
-  const pageMap = new Map<string, { views: number; visitors: Set<string> }>();
+  const pageMap = new Map<string, { label: string; paths: Set<string>; views: number; visitors: Set<string> }>();
   for (const event of pageViews) {
-    const current = pageMap.get(event.path) ?? { views: 0, visitors: new Set<string>() };
+    const label = pageFeatureLabel(event.path);
+    const current = pageMap.get(label) ?? { label, paths: new Set<string>(), views: 0, visitors: new Set<string>() };
     current.views += 1;
+    current.paths.add(event.path.split("?")[0] || "/");
     current.visitors.add(event.visitorId);
-    pageMap.set(event.path, current);
+    pageMap.set(label, current);
   }
 
   const topPages = [...pageMap.entries()]
-    .map(([path, item]) => ({
-      path,
+    .map(([, item]) => ({
+      path: [...item.paths][0] || "",
+      label: item.label,
       views: item.views,
       uniqueVisitors: item.visitors.size
     }))
     .sort((left, right) => right.views - left.views)
     .slice(0, 8);
+
+  const channelMap = new Map<string, number>();
+  for (const event of acquisitionEvents) {
+    const channel = String(event.target || event.metadata?.channel || "其他").trim() || "其他";
+    channelMap.set(channel, (channelMap.get(channel) ?? 0) + 1);
+  }
+  const acquisitionChannels = [...channelMap.entries()]
+    .map(([channel, count]) => ({ channel, count }))
+    .sort((left, right) => right.count - left.count);
 
   const recentPaidOrders = paidOrders
     .filter((order) => order.paidAt)
@@ -113,7 +154,7 @@ export async function GET() {
         packageName: order.packageName,
         amountCents: order.amountCents,
         credits: order.credits,
-        userEmail: owner?.email ?? "未知用户",
+        userEmail: displayUser(owner),
         paidAt: order.paidAt || order.updatedAt
       };
     });
@@ -149,6 +190,7 @@ export async function GET() {
     },
     daily,
     topPages,
+    acquisitionChannels,
     recentPaidOrders
   };
 

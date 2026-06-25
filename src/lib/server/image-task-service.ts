@@ -2,7 +2,13 @@ import { randomUUID } from "crypto";
 import { BillingError } from "@/lib/billing";
 import { getDbSnapshot, withDb } from "@/lib/db";
 import { queryCodexTaskResult, recoverCodexTaskResult } from "@/lib/server/codex-image-provider";
-import { buildEditPrompt, buildPosterPrompt, buildProductPrompt } from "@/lib/server/image-prompt-builder";
+import {
+  buildEditPrompt,
+  buildPosterPrompt,
+  buildProductPrompt,
+  buildRemoveBackgroundPrompt,
+  buildTextToImagePrompt
+} from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
 import { cleanupLocalTaskDirectoryAfterUpload, normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
 import type {
@@ -17,7 +23,8 @@ import type {
   ProductRatio,
   ProductScene,
   ProductStyle,
-  ProductTemplate
+  ProductTemplate,
+  TextToImageStyle
 } from "@/types/image";
 import type { ImageTaskRecord, ImageTaskType } from "@/types/task";
 
@@ -161,7 +168,7 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
         type: "consume",
         amount: -1,
         balanceAfter: user.credits,
-        reason: "图片生成",
+        reason: creditReasonForTask(task.type),
         createdAt: now
       });
     } else {
@@ -170,6 +177,18 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
 
     return { task, latestCredits: user.credits };
   });
+}
+
+function creditReasonForTask(type: ImageTaskType) {
+  const labels: Record<ImageTaskType, string> = {
+    edit: "AI 修图",
+    product: "商品图生成",
+    poster: "封面海报生成",
+    text_to_image: "文生图",
+    remove_background: "智能抠图"
+  };
+
+  return labels[type] || "图片生成";
 }
 
 async function recoverTaskResultIfPresent(taskId: string) {
@@ -367,6 +386,101 @@ export async function runPosterTask(input: {
       size: input.size,
       quality: "auto",
       outputFormat: "png"
+    });
+    const saved = await saveResults(input.userId, task.id, [generated.url]);
+    const result = await markTaskSucceeded(task.id, saved);
+    await cleanupLocalTaskDirectoryAfterUpload(task.id);
+
+    taskLog("succeeded", {
+      taskId: task.id,
+      userId: input.userId,
+      type: task.type,
+      resultImageUrl: saved.resultImageUrl,
+      latestCredits: result.latestCredits,
+      creditCharged: true
+    });
+  });
+
+  return startResponse(task);
+}
+
+export async function runTextToImageTask(input: {
+  userId: string;
+  prompt: string;
+  style?: TextToImageStyle;
+  size: ImageSize;
+  quality: ImageQuality;
+  outputFormat: ImageOutputFormat;
+}) {
+  const provider = getImageProviderService();
+  const prompt = buildTextToImagePrompt({
+    prompt: input.prompt,
+    style: input.style
+  });
+  const task = createTask({
+    userId: input.userId,
+    type: "text_to_image",
+    prompt,
+    tool: "text_to_image",
+    provider: provider.name
+  });
+
+  await insertTaskWithCreditCheck(task);
+
+  startBackgroundTask(task, async () => {
+    const generated = await provider.generateImage({
+      taskId: task.id,
+      prompt,
+      size: input.size,
+      quality: input.quality,
+      outputFormat: input.outputFormat
+    });
+    const saved = await saveResults(input.userId, task.id, [generated.url]);
+    const result = await markTaskSucceeded(task.id, saved);
+    await cleanupLocalTaskDirectoryAfterUpload(task.id);
+
+    taskLog("succeeded", {
+      taskId: task.id,
+      userId: input.userId,
+      type: task.type,
+      resultImageUrl: saved.resultImageUrl,
+      latestCredits: result.latestCredits,
+      creditCharged: true
+    });
+  });
+
+  return startResponse(task);
+}
+
+export async function runRemoveBackgroundTask(input: {
+  userId: string;
+  image: File;
+  size: ImageSize;
+  quality: ImageQuality;
+  prompt?: string;
+}) {
+  const provider = getImageProviderService();
+  const prompt = buildRemoveBackgroundPrompt(input.prompt);
+  const task = createTask({
+    userId: input.userId,
+    type: "remove_background",
+    prompt,
+    tool: "remove_background",
+    provider: provider.name
+  });
+
+  await insertTaskWithCreditCheck(task);
+
+  startBackgroundTask(task, async () => {
+    const inputImageUrl = await saveUploadFile(input.image, input.userId, task.id);
+    await updateTask(task.id, { inputImageUrl });
+
+    const generated = await provider.removeBackground({
+      taskId: task.id,
+      image: input.image,
+      prompt,
+      size: input.size,
+      quality: input.quality
     });
     const saved = await saveResults(input.userId, task.id, [generated.url]);
     const result = await markTaskSucceeded(task.id, saved);
