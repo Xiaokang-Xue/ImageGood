@@ -13,6 +13,8 @@ import {
   apiClient,
   downloadImage,
   getImageErrorMessage,
+  imageUrlToUploadFile,
+  ImageApiClientError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
   isUnauthorizedError
@@ -24,6 +26,42 @@ const transparentPreviewStyle = {
   backgroundSize: "24px 24px",
   backgroundPosition: "0 0, 0 12px, 12px -12px, -12px 0"
 };
+
+async function createRemoveBackgroundTask(input: {
+  image?: File | null;
+  imageUrl?: string;
+  size: string;
+  quality: string;
+}) {
+  const image = input.image ?? (input.imageUrl ? await imageUrlToUploadFile(input.imageUrl, "remove-bg-input") : null);
+  const formData = new FormData();
+
+  if (image) {
+    formData.append("image", image);
+  }
+  formData.append("size", input.size);
+  formData.append("quality", input.quality);
+
+  const response = await fetch("/api/images/remove-background", {
+    method: "POST",
+    body: formData
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { taskId?: string }
+    | { error?: { code?: string; message?: string } }
+    | null;
+
+  if (!response.ok) {
+    const error = payload && "error" in payload ? payload.error : null;
+    throw new ImageApiClientError(error?.code || "REQUEST_FAILED", error?.message || `请求失败：${response.status}`);
+  }
+
+  if (!payload || !("taskId" in payload) || !payload.taskId) {
+    throw new ImageApiClientError("TASK_CREATE_FAILED", "创建抠图任务失败，请稍后重试");
+  }
+
+  return { taskId: payload.taskId };
+}
 
 export function RemoveBackgroundStudio() {
   const router = useRouter();
@@ -57,7 +95,7 @@ export function RemoveBackgroundStudio() {
     setResultUrl("");
 
     try {
-      const response = await apiClient.removeBackground({
+      const response = await createRemoveBackgroundTask({
         image: imageFile ?? undefined,
         imageUrl: imageFile ? undefined : imageUrl,
         size: "1024x1024",

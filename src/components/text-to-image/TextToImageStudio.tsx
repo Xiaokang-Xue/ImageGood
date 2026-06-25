@@ -12,6 +12,7 @@ import {
   apiClient,
   downloadImage,
   getImageErrorMessage,
+  ImageApiClientError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
   isUnauthorizedError
@@ -33,6 +34,37 @@ const promptExamples = [
   "夏季课程活动海报背景，清爽蓝白配色，预留标题区域",
   "一间极简风书房，阳光从窗边照进来，安静温暖"
 ];
+
+async function createTextToImageTask(input: {
+  prompt: string;
+  style: TextToImageStyle;
+  size: string;
+  quality: string;
+  outputFormat: string;
+}) {
+  const response = await fetch("/api/images/text-to-image", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { taskId?: string }
+    | { error?: { code?: string; message?: string } }
+    | null;
+
+  if (!response.ok) {
+    const error = payload && "error" in payload ? payload.error : null;
+    throw new ImageApiClientError(error?.code || "REQUEST_FAILED", error?.message || `请求失败：${response.status}`);
+  }
+
+  if (!payload || !("taskId" in payload) || !payload.taskId) {
+    throw new ImageApiClientError("TASK_CREATE_FAILED", "创建文生图任务失败，请稍后重试");
+  }
+
+  return { taskId: payload.taskId };
+}
 
 export function TextToImageStudio() {
   const router = useRouter();
@@ -59,7 +91,7 @@ export function TextToImageStudio() {
     setTaskId("");
 
     try {
-      const response = await apiClient.createTextToImage({
+      const response = await createTextToImageTask({
         prompt: finalPrompt,
         style,
         size: "1024x1024",
