@@ -5,6 +5,7 @@ import { CREDIT_PACKAGES, findCreditPackage } from "@/config/billing-plans";
 import { getDbSnapshot, withDb } from "@/lib/db";
 import { AlipayProvider, alipayAmountToCents, parseAlipayNotify } from "@/lib/server/payment/alipay-provider";
 import { MockPaymentProvider } from "@/lib/server/payment/mock-payment-provider";
+import { hasPaymentSourceSurvey } from "@/lib/server/payment-source-survey";
 import { WechatPayProvider, parseWechatPaymentNotify } from "@/lib/server/payment/wechat-pay-provider";
 import type { CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
 import type {
@@ -273,7 +274,7 @@ async function expireOrderIfNeeded(orderId: string) {
 
 export async function getPaymentOrderResponse(orderId: string, user: PublicUser): Promise<PaymentOrderResponse | null> {
   await expireOrderIfNeeded(orderId);
-  const db = await getDbSnapshot();
+  const db = await getDbSnapshot({ includeAnalytics: true });
   const order = db.orders.find((item) => item.id === orderId);
   if (!order || (user.role !== "admin" && order.userId !== user.id)) {
     return null;
@@ -295,7 +296,8 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     outTradeNo: order.outTradeNo,
     transactionId: order.transactionId ?? null,
     expiredAt: order.expiredAt ?? null,
-    paymentMode: getPaymentMode()
+    paymentMode: getPaymentMode(),
+    sourceSurveySubmitted: hasPaymentSourceSurvey(db.analyticsEvents, order.userId, order.id)
   };
 }
 

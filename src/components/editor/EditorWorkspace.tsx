@@ -11,7 +11,14 @@ import { ResultGallery } from "@/components/editor/ResultGallery";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
-import { apiClient, getImageErrorMessage, imageUrlToUploadFile, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import {
+  apiClient,
+  getImageErrorMessage,
+  imageUrlToUploadFile,
+  isEmailNotVerifiedError,
+  isPaymentSourceSurveyRequiredError,
+  isUnauthorizedError
+} from "@/lib/api-client";
 import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { toolPrompts } from "@/lib/studio-content";
 import { sleep } from "@/lib/utils";
@@ -168,6 +175,10 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     } catch (requestError) {
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/editor");
+        return;
+      }
+      if (isPaymentSourceSurveyRequiredError(requestError)) {
+        router.push(requestError.actionUrl || "/pricing");
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {

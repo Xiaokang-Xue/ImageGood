@@ -11,7 +11,14 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
-import { apiClient, getImageErrorMessage, imageUrlToUploadFile, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import {
+  apiClient,
+  getImageErrorMessage,
+  imageUrlToUploadFile,
+  isEmailNotVerifiedError,
+  isPaymentSourceSurveyRequiredError,
+  isUnauthorizedError
+} from "@/lib/api-client";
 import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
@@ -201,6 +208,10 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
     } catch (requestError) {
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/product");
+        return;
+      }
+      if (isPaymentSourceSurveyRequiredError(requestError)) {
+        router.push(requestError.actionUrl || "/pricing");
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { BillingError } from "@/lib/billing";
-import { ContactNotVerifiedError, EmailNotVerifiedError } from "@/lib/server/auth-guards";
+import { ContactNotVerifiedError, EmailNotVerifiedError, PaymentSourceSurveyRequiredError } from "@/lib/server/auth-guards";
 import { ImageRequestError } from "@/lib/server/image-validation";
 
 export function createId(prefix: string) {
@@ -41,6 +41,21 @@ export function imageErrorResponse(error: unknown) {
         error: {
           code: error.code || "CONTACT_NOT_VERIFIED",
           message: error.message
+        }
+      },
+      { status: error.status }
+    );
+  }
+
+  if (error instanceof PaymentSourceSurveyRequiredError) {
+    return NextResponse.json(
+      {
+        status: "failed",
+        error: {
+          code: error.code,
+          message: error.message,
+          orderId: error.orderId,
+          actionUrl: error.actionUrl
         }
       },
       { status: error.status }

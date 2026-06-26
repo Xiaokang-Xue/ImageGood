@@ -19,6 +19,20 @@ export class EmailNotVerifiedError extends ContactNotVerifiedError {
   }
 }
 
+export class PaymentSourceSurveyRequiredError extends Error {
+  code = "SOURCE_SURVEY_REQUIRED";
+  status = 403;
+  orderId: string;
+  actionUrl: string;
+
+  constructor(orderId: string, message = "请先补充支付来源渠道后再继续生成图片") {
+    super(message);
+    this.name = "PaymentSourceSurveyRequiredError";
+    this.orderId = orderId;
+    this.actionUrl = `/checkout/${orderId}`;
+  }
+}
+
 export function hasVerifiedContact(user: PublicUser) {
   return Boolean(user.phoneVerified || user.emailVerified || user.hasVerifiedContact);
 }

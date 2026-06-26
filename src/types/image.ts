@@ -158,6 +158,8 @@ export interface ImageApiErrorBody {
   error: {
     code: string;
     message: string;
+    orderId?: string;
+    actionUrl?: string;
   };
 }
 

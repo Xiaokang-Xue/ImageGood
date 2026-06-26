@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
 import { cleanupLocalTaskDirectoryAfterUpload, normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
+import { assertPaymentSourceSurveyCompleted } from "@/lib/server/payment-source-survey";
 import type {
   EditTool,
   ImageOutputFormat,
@@ -78,6 +79,8 @@ function createTask(input: {
 }
 
 async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
+  await assertPaymentSourceSurveyCompleted(task.userId);
+
   await withDb((db) => {
     const user = db.users.find((item) => item.id === task.userId);
     if (!user || user.credits <= 0) {

@@ -54,6 +54,7 @@ function AlipayReturnContent() {
           ? await apiClient.getPaymentOrder(orderId)
           : await apiClient.getPaymentOrderByOutTradeNo(outTradeNo);
         setOrder(response);
+        setSourceSurveySubmitted(Boolean(response.sourceSurveySubmitted));
 
         if (response.status === "paid" && !paidEventSent.current) {
           paidEventSent.current = true;
@@ -73,8 +74,8 @@ function AlipayReturnContent() {
   }, [loadOrder]);
 
   useEffect(() => {
-    setSourceSurveySubmitted(false);
-  }, [order?.orderId]);
+    setSourceSurveySubmitted(Boolean(order?.sourceSurveySubmitted));
+  }, [order?.orderId, order?.sourceSurveySubmitted]);
 
   useEffect(() => {
     if (!order || order.status !== "pending") return undefined;
@@ -169,6 +170,7 @@ function AlipayReturnContent() {
               packageName={order.packageName}
               amountCents={order.amountCents}
               paymentProvider={order.paymentProvider}
+              initialSubmitted={Boolean(order.sourceSurveySubmitted)}
               onSubmittedChange={setSourceSurveySubmitted}
             />
           </div>

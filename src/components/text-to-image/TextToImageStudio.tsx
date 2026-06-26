@@ -15,6 +15,7 @@ import {
   ImageApiClientError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
+  isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -56,7 +57,10 @@ async function createTextToImageTask(input: {
 
   if (!response.ok) {
     const error = payload && "error" in payload ? payload.error : null;
-    throw new ImageApiClientError(error?.code || "REQUEST_FAILED", error?.message || `请求失败：${response.status}`);
+    throw new ImageApiClientError(error?.code || "REQUEST_FAILED", error?.message || `请求失败：${response.status}`, {
+      actionUrl: error && "actionUrl" in error ? String(error.actionUrl || "") : undefined,
+      orderId: error && "orderId" in error ? String(error.orderId || "") : undefined
+    });
   }
 
   if (!payload || !("taskId" in payload) || !payload.taskId) {
@@ -115,6 +119,10 @@ export function TextToImageStudio() {
     } catch (requestError) {
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/text-to-image");
+        return;
+      }
+      if (isPaymentSourceSurveyRequiredError(requestError)) {
+        router.push(requestError.actionUrl || "/pricing");
         return;
       }
       setErrorActionHref(

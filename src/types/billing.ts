@@ -93,4 +93,5 @@ export interface PaymentOrderResponse {
   transactionId: string | null;
   expiredAt: string | null;
   paymentMode: "mock" | "real";
+  sourceSurveySubmitted?: boolean;
 }

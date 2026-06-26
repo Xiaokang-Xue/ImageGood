@@ -9,7 +9,13 @@ import { PosterCanvas } from "@/components/poster/PosterCanvas";
 import { palettes, PosterSettings } from "@/components/poster/PosterSettings";
 import { PosterVariants } from "@/components/poster/PosterVariants";
 import { Card } from "@/components/ui/Card";
-import { apiClient, getImageErrorMessage, isEmailNotVerifiedError, isUnauthorizedError } from "@/lib/api-client";
+import {
+  apiClient,
+  getImageErrorMessage,
+  isEmailNotVerifiedError,
+  isPaymentSourceSurveyRequiredError,
+  isUnauthorizedError
+} from "@/lib/api-client";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { cn, sleep } from "@/lib/utils";
 import type { PosterImageResult, PosterLayerKey, PosterLayerVisibility, PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
@@ -184,6 +190,10 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
     } catch (requestError) {
       if (isUnauthorizedError(requestError)) {
         window.location.href = "/login?redirect=/poster";
+        return;
+      }
+      if (isPaymentSourceSurveyRequiredError(requestError)) {
+        window.location.href = requestError.actionUrl || "/pricing";
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {

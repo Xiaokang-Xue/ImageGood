@@ -41,6 +41,7 @@ export default function CheckoutPage() {
       try {
         const response = await apiClient.getPaymentOrder(params.orderId);
         setOrder(response);
+        setSourceSurveySubmitted(Boolean(response.sourceSurveySubmitted));
 
         if (response.status === "paid" && !paidEventSent.current) {
           paidEventSent.current = true;
@@ -75,8 +76,8 @@ export default function CheckoutPage() {
   }, [loadOrder]);
 
   useEffect(() => {
-    setSourceSurveySubmitted(false);
-  }, [order?.orderId]);
+    setSourceSurveySubmitted(Boolean(order?.sourceSurveySubmitted));
+  }, [order?.orderId, order?.sourceSurveySubmitted]);
 
   useEffect(() => {
     if (!order || order.status !== "pending") return undefined;
@@ -256,6 +257,7 @@ export default function CheckoutPage() {
             packageName={order.packageName}
             amountCents={order.amountCents}
             paymentProvider={order.paymentProvider}
+            initialSubmitted={Boolean(order.sourceSurveySubmitted)}
             onSubmittedChange={setSourceSurveySubmitted}
           />
         </div>

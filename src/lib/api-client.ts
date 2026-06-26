@@ -40,11 +40,15 @@ export interface ForgotPasswordResponse {
 
 export class ImageApiClientError extends Error {
   code: string;
+  actionUrl?: string;
+  orderId?: string;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, options?: { actionUrl?: string; orderId?: string }) {
     super(message);
     this.name = "ImageApiClientError";
     this.code = code;
+    this.actionUrl = options?.actionUrl;
+    this.orderId = options?.orderId;
   }
 }
 
@@ -166,7 +170,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const errorBody = payload as ImageApiErrorBody | null;
     throw new ImageApiClientError(
       errorBody?.error?.code || "REQUEST_FAILED",
-      errorBody?.error?.message || `请求失败：${response.status}`
+      errorBody?.error?.message || `请求失败：${response.status}`,
+      {
+        actionUrl: errorBody?.error?.actionUrl,
+        orderId: errorBody?.error?.orderId
+      }
     );
   }
 
@@ -212,6 +220,10 @@ export function isUnauthorizedError(error: unknown) {
 
 export function isInsufficientCreditsError(error: unknown) {
   return error instanceof ImageApiClientError && error.code === "INSUFFICIENT_CREDITS";
+}
+
+export function isPaymentSourceSurveyRequiredError(error: unknown) {
+  return error instanceof ImageApiClientError && error.code === "SOURCE_SURVEY_REQUIRED";
 }
 
 export function isEmailNotVerifiedError(error: unknown) {

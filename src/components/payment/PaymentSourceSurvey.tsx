@@ -35,6 +35,7 @@ interface PaymentSourceSurveyProps {
   packageName: string;
   amountCents: number;
   paymentProvider: PaymentProvider;
+  initialSubmitted?: boolean;
   onSubmittedChange?: (submitted: boolean) => void;
 }
 
@@ -43,6 +44,7 @@ export function PaymentSourceSurvey({
   packageName,
   amountCents,
   paymentProvider,
+  initialSubmitted = false,
   onSubmittedChange
 }: PaymentSourceSurveyProps) {
   const storageKey = `imagegood:payment-source-survey:${orderId}`;
@@ -52,10 +54,10 @@ export function PaymentSourceSurvey({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const saved = safeStorageGet(storageKey) === "submitted";
+    const saved = initialSubmitted || safeStorageGet(storageKey) === "submitted";
     setSubmitted(saved);
     onSubmittedChange?.(saved);
-  }, [onSubmittedChange, storageKey]);
+  }, [initialSubmitted, onSubmittedChange, storageKey]);
 
   const submit = async () => {
     if (!selected) return;
