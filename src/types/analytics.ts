@@ -42,6 +42,13 @@ export interface AnalyticsChannelPoint {
   count: number;
 }
 
+export interface AnalyticsTaskTypePoint {
+  type: string;
+  label: string;
+  total: number;
+  succeeded: number;
+}
+
 export interface AdminAnalyticsResponse {
   overview: {
     totalPageViews: number;
@@ -72,6 +79,7 @@ export interface AdminAnalyticsResponse {
   daily: AnalyticsDailyPoint[];
   topPages: AnalyticsTopPage[];
   acquisitionChannels: AnalyticsChannelPoint[];
+  taskTypes: AnalyticsTaskTypePoint[];
   recentPaidOrders: Array<{
     id: string;
     packageName: string;

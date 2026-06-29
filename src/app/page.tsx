@@ -1,14 +1,17 @@
-import { HeroSection } from "@/components/home/HeroSection";
-import { TaskCards } from "@/components/home/TaskCards";
-import { TemplatePreview } from "@/components/home/TemplatePreview";
-import { PageShell } from "@/components/layout/PageShell";
+import { CleanHeroSection } from "@/components/home/CleanHeroSection";
+import { PricingCallout } from "@/components/home/PricingCallout";
+import { ResultShowcase } from "@/components/home/ResultShowcase";
+import { ToolDirectory } from "@/components/home/ToolDirectory";
+
+export const dynamic = "force-static";
 
 export default function HomePage() {
   return (
-    <PageShell>
-      <HeroSection />
-      <TaskCards />
-      <TemplatePreview />
-    </PageShell>
+    <main className="min-h-screen bg-white">
+      <CleanHeroSection />
+      <ToolDirectory />
+      <ResultShowcase />
+      <PricingCallout />
+    </main>
   );
 }

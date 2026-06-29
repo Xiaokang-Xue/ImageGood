@@ -215,3 +215,26 @@ export function buildRemoveBackgroundPrompt(userPrompt?: string) {
     .filter(Boolean)
     .join("\n");
 }
+
+export function buildImageEnhancePrompt(userPrompt?: string) {
+  return [
+    "请对上传图片进行高清增强和质感优化。",
+    "提升整体清晰度、细节层次、自然锐度、色彩平衡和光影表现，让画面更干净、更适合发布。",
+    "保持原图主体、构图、场景、比例和真实质感不变。",
+    "不要添加新物体、文字、边框、水印、装饰、强烈滤镜或不自然阴影。",
+    userPrompt?.trim() ? `用户补充要求：${userPrompt.trim()}。` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function buildObjectRemovePrompt(userPrompt?: string) {
+  return [
+    "请根据用户描述移除图片中的多余元素，并自然补全背景。",
+    `需要移除的内容：${withFallback(userPrompt)}。`,
+    "常见对象包括路人、杂物、污点、水印、桌面杂乱物、多余文字或干扰元素。",
+    "保持主要主体、构图、颜色、材质、透视和光线不变。",
+    "补全区域应与周围纹理、景深、阴影和光照自然一致，避免涂抹感和重复纹理。",
+    "不要添加新物体、边框、发光、贴纸或无关装饰。"
+  ].join("\n");
+}

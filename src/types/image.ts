@@ -1,5 +1,12 @@
 export type EditTool = "background" | "remove" | "enhance" | "style" | "expand" | "custom";
-export type ImagePromptTool = EditTool | "product" | "poster" | "text_to_image" | "remove_background";
+export type ImagePromptTool =
+  | EditTool
+  | "product"
+  | "poster"
+  | "text_to_image"
+  | "remove_background"
+  | "image_enhance"
+  | "object_remove";
 export type ImageApiMode = "real" | "mock";
 export type ImageProvider = "mock" | "codex" | "openai";
 export type ImageQuality = "low" | "medium" | "high" | "auto";

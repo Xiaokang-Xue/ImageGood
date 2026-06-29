@@ -44,48 +44,60 @@ export const posterStyleLabels: Record<PosterStyle, string> = {
 
 export const taskCards = [
   {
+    id: "edit",
+    group: "processing",
     title: "AI 修图",
-    description: "上传图片，说出想法，快速完成图片修改。",
-    route: "/editor",
-    accent: "from-blue-500 to-indigo-500"
+    description: "上传图片，说出想法，完成风格调整、换背景和视觉修饰。",
+    route: "/editor"
   },
   {
+    id: "remove-background",
+    group: "processing",
+    title: "智能抠图",
+    description: "一键去除图片背景，获得透明 PNG，也可下载白底或纯色背景。",
+    route: "/remove-background"
+  },
+  {
+    id: "image-enhancer",
+    group: "processing",
+    title: "图片增强",
+    description: "提升低清图片的清晰度、细节质感和自然光影。",
+    route: "/image-enhancer"
+  },
+  {
+    id: "object-remover",
+    group: "processing",
+    title: "去杂物",
+    description: "用文字说明要移除的对象，清理路人、杂物和多余元素。",
+    route: "/object-remover"
+  },
+  {
+    id: "background",
+    group: "processing",
+    title: "换背景",
+    description: "保留主体细节，替换为商业摄影、纯色或自定义场景背景。",
+    route: "/editor?tool=background"
+  },
+  {
+    id: "text-to-image",
+    group: "generation",
     title: "文生图",
     description: "输入一句描述，生成头像、海报和创意场景图。",
-    route: "/text-to-image",
-    accent: "from-indigo-500 to-violet-500"
+    route: "/text-to-image"
   },
   {
-    title: "智能抠图",
-    description: "一键去除图片背景，获得透明 PNG 素材。",
-    route: "/remove-background",
-    accent: "from-teal-400 to-cyan-500"
+    id: "product",
+    group: "generation",
+    title: "商品图",
+    description: "围绕商品主体生成适合电商与社交媒体的场景图。",
+    route: "/product"
   },
   {
-    title: "换背景",
-    description: "一键生成白底、棚拍、场景化背景。",
-    route: "/editor",
-    tool: "background",
-    accent: "from-cyan-500 to-blue-500"
-  },
-  {
-    title: "去杂物",
-    description: "移除路人、杂乱物体并自然补全。",
-    route: "/editor",
-    tool: "remove",
-    accent: "from-violet-500 to-fuchsia-500"
-  },
-  {
-    title: "做商品图",
-    description: "为电商主图、详情页和种草封面出图。",
-    route: "/product",
-    accent: "from-amber-400 to-rose-500"
-  },
-  {
-    title: "做封面海报",
-    description: "快速生成封面、活动海报和课程视觉。",
-    route: "/poster",
-    accent: "from-emerald-400 to-teal-500"
+    id: "poster",
+    group: "generation",
+    title: "封面海报",
+    description: "生成干净的视觉背景，并保留可编辑标题与副标题。",
+    route: "/poster"
   }
 ] as const;
 

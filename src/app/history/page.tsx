@@ -15,7 +15,9 @@ const typeLabels: Record<ImageTaskRecord["type"], string> = {
   product: "商品图生成",
   poster: "封面海报生成",
   text_to_image: "文生图",
-  remove_background: "智能抠图"
+  remove_background: "智能抠图",
+  image_enhance: "图片增强",
+  object_remove: "去杂物"
 };
 
 const statusLabels: Record<ImageTaskRecord["status"], string> = {
@@ -33,6 +35,7 @@ export default function HistoryPage() {
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [visibleCount, setVisibleCount] = useState(12);
 
   useEffect(() => {
     apiClient
@@ -48,6 +51,7 @@ export default function HistoryPage() {
   const deletableTasks = useMemo(() => tasks.filter((task) => task.status === "succeeded" || task.status === "failed"), [tasks]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allDeletableSelected = deletableTasks.length > 0 && deletableTasks.every((task) => selectedSet.has(task.id));
+  const visibleTasks = useMemo(() => tasks.slice(0, visibleCount), [tasks, visibleCount]);
 
   const toggleSelected = (taskId: string) => {
     setMessage("");
@@ -162,8 +166,9 @@ export default function HistoryPage() {
           </Link>
         </Card>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {tasks.map((task) => {
+        <>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {visibleTasks.map((task) => {
             const resultImage = task.resultImages?.[0] || task.resultImageUrl || "";
             const image = resultImage || task.inputImageUrl || "";
             return (
@@ -230,7 +235,15 @@ export default function HistoryPage() {
               </Card>
             );
           })}
-        </div>
+          </div>
+          {visibleCount < tasks.length ? (
+            <div className="mt-8 flex justify-center">
+              <Button variant="outline" onClick={() => setVisibleCount((value) => value + 12)}>
+                加载更多记录
+              </Button>
+            </div>
+          ) : null}
+        </>
       )}
     </main>
   );

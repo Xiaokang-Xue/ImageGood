@@ -8,6 +8,7 @@ type DbRecordCollection = "users" | "orders" | "imageTasks" | "creditTransaction
 interface StoredUser {
   id: string;
   emailVerified?: boolean;
+  phoneVerified?: boolean;
   createdAt?: string;
 }
 
@@ -269,7 +270,7 @@ export async function getDailyAnalyticsReport(input: {
   const allPurchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
   const allPricingPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const allCheckoutPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
-  const generationPaths = ["/editor", "/text-to-image", "/remove-background", "/product", "/poster"];
+  const generationPaths = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"];
   const allGenerationPageViews = allPageViews.filter((event) => pathStartsWith(event.path, generationPaths));
   const allSucceededTasks = db.imageTasks.filter((task) => task.status === "succeeded");
   const allFailedTasks = db.imageTasks.filter((task) => task.status === "failed");

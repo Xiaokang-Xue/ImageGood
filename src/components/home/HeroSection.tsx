@@ -14,7 +14,7 @@ export function HeroSection() {
   const setUploadedImage = useStudioStore((state) => state.setUploadedImage);
 
   return (
-    <section className="relative overflow-hidden rounded-lg border border-white/70 bg-slate-950 px-5 py-14 shadow-soft lg:px-12 lg:py-20">
+    <section className="relative overflow-hidden rounded-lg border border-white/70 bg-slate-950 px-5 py-10 shadow-soft lg:px-12 lg:py-16">
       <SmartImage
         src={imageAssets.heroBackground}
         alt="现代图片工作台背景"
@@ -29,12 +29,12 @@ export function HeroSection() {
           <WandSparkles className="h-4 w-4 text-cyan-200" />
           ImageGood 图片工具
         </div>
-        <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold leading-[1.38] tracking-normal md:text-5xl md:leading-[1.32] lg:text-6xl lg:leading-[1.24]">
+        <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold leading-[1.36] tracking-normal md:text-5xl md:leading-[1.3] lg:text-6xl lg:leading-[1.22]">
           <span className="block">用 ImageGood</span>
-          <span className="block">快速生成高质量图片</span>
+          <span className="block">快速完成 AI 图片创作</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-200">
-          支持 AI 修图、文生图和智能抠图，一站完成商品图、封面图、社媒配图和日常图片处理。
+          上传图片或输入文字，即可完成 AI 修图、文生图、抠图、图片增强、商品图和封面海报生成。
         </p>
 
         <div className="mx-auto mt-10 max-w-3xl rounded-lg border border-white/18 bg-white/14 p-3 shadow-2xl backdrop-blur-xl">
@@ -42,7 +42,7 @@ export function HeroSection() {
             compact
             title="上传图片，开始使用 ImageGood"
             subtitle="上传后进入编辑工作台，登录即可生成并保存结果"
-            className="min-h-[260px] border-white/25 bg-white/90 text-ink"
+            className="min-h-[230px] border-white/25 bg-white/90 text-ink"
             onImageSelected={(imageUrl, file) => {
               setUploadedImage(imageUrl, file);
               router.push("/editor");
@@ -70,7 +70,7 @@ export function HeroSection() {
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-slate-200">
-          {["AI 修图", "文生图", "智能抠图", "商品图生成", "封面海报", "生成记录保存"].map((item) => (
+          {["AI 修图", "文生图", "智能抠图", "图片增强", "去杂物", "生成记录保存"].map((item) => (
             <span key={item} className="inline-flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-cyan-200" />
               {item}
@@ -79,7 +79,7 @@ export function HeroSection() {
         </div>
       </div>
 
-      <div className="pointer-events-none relative z-10 mx-auto mt-14 grid max-w-5xl gap-4 md:grid-cols-3">
+      <div className="pointer-events-none relative z-10 mx-auto mt-10 hidden max-w-5xl gap-4 md:grid md:grid-cols-3">
         {[imageAssets.edit1, imageAssets.product2, imageAssets.poster1].map((image, index) => (
           <div
             key={image}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Download, Eraser, History, Loader2, UploadCloud } from "lucide-react";
+import { Download, Eraser, History, Loader2, Palette, UploadCloud } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -27,6 +27,15 @@ const transparentPreviewStyle = {
   backgroundSize: "24px 24px",
   backgroundPosition: "0 0, 0 12px, 12px -12px, -12px 0"
 };
+
+const backgroundOptions = [
+  { value: "transparent", label: "透明" },
+  { value: "white", label: "白底" },
+  { value: "black", label: "黑底" },
+  { value: "custom", label: "自定义" }
+] as const;
+
+type BackgroundMode = (typeof backgroundOptions)[number]["value"];
 
 async function createRemoveBackgroundTask(input: {
   image?: File | null;
@@ -76,6 +85,9 @@ export function RemoveBackgroundStudio() {
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("transparent");
+  const [customBackground, setCustomBackground] = useState("#f8fafc");
+  const [downloadingBackground, setDownloadingBackground] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -134,6 +146,57 @@ export function RemoveBackgroundStudio() {
       setError(getImageErrorMessage(requestError));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const previewStyle =
+    backgroundMode === "transparent"
+      ? transparentPreviewStyle
+      : {
+          backgroundColor:
+            backgroundMode === "white" ? "#ffffff" : backgroundMode === "black" ? "#111827" : customBackground
+        };
+
+  const selectedBackgroundColor =
+    backgroundMode === "black" ? "#111827" : backgroundMode === "custom" ? customBackground : "#ffffff";
+
+  const downloadWithBackground = async () => {
+    if (!resultUrl) return;
+
+    setDownloadingBackground(true);
+    setError("");
+    try {
+      const response = await fetch(resultUrl);
+      if (!response.ok) {
+        throw new Error("无法读取抠图结果，请稍后重试");
+      }
+
+      const blob = await response.blob();
+      const image = await createImageBitmap(blob);
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) {
+        throw new Error("当前浏览器无法合成背景图片");
+      }
+
+      context.fillStyle = selectedBackgroundColor;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+      image.close();
+
+      const outputBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("背景图片导出失败"))), "image/png");
+      });
+      const objectUrl = URL.createObjectURL(outputBlob);
+      await downloadImage(objectUrl, "imagegood-remove-bg-with-background.png");
+      URL.revokeObjectURL(objectUrl);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "背景图片下载失败，请稍后重试");
+    } finally {
+      setDownloadingBackground(false);
     }
   };
 
@@ -229,17 +292,44 @@ export function RemoveBackgroundStudio() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-studio-600">抠图结果</p>
-                <h2 className="mt-1 text-xl font-bold text-ink">透明背景 PNG</h2>
+                <h2 className="mt-1 text-xl font-bold text-ink">透明 PNG 与背景预览</h2>
               </div>
               {loading && taskId ? (
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">任务处理中</span>
               ) : null}
             </div>
 
-            <div
-              className="flex min-h-[520px] items-center justify-center rounded-lg border border-line bg-white p-4"
-              style={transparentPreviewStyle}
-            >
+            {resultUrl ? (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {backgroundOptions.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                      backgroundMode === item.value
+                        ? "border-studio-300 bg-studio-50 text-studio-700"
+                        : "border-line bg-white text-slate-600 hover:border-studio-200 hover:bg-studio-50"
+                    }`}
+                    onClick={() => setBackgroundMode(item.value)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+                {backgroundMode === "custom" ? (
+                  <label className="flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold text-slate-600">
+                    <Palette className="h-4 w-4" />
+                    <input
+                      type="color"
+                      value={customBackground}
+                      className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0"
+                      onChange={(event) => setCustomBackground(event.target.value)}
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex min-h-[520px] items-center justify-center rounded-lg border border-line bg-white p-4" style={previewStyle}>
               {loading ? (
                 <div className="text-center">
                   <Loader2 className="mx-auto h-10 w-10 animate-spin text-studio-600" />
@@ -265,10 +355,14 @@ export function RemoveBackgroundStudio() {
             </div>
 
             {resultUrl ? (
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Button className="flex-1" variant="dark" onClick={() => downloadImage(resultUrl, "imagegood-remove-bg.png")}>
                   <Download className="h-4 w-4" />
-                  下载 PNG
+                  透明 PNG
+                </Button>
+                <Button className="flex-1" variant="outline" loading={downloadingBackground} onClick={downloadWithBackground}>
+                  <Download className="h-4 w-4" />
+                  带背景图片
                 </Button>
                 <Link href="/history" className="flex-1">
                   <Button className="w-full" variant="secondary">

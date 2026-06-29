@@ -1,8 +1,22 @@
 import type { EditTool, ImageProvider } from "@/types/image";
 
-export type ImageTaskType = "edit" | "product" | "poster" | "text_to_image" | "remove_background";
+export type ImageTaskType =
+  | "edit"
+  | "product"
+  | "poster"
+  | "text_to_image"
+  | "remove_background"
+  | "image_enhance"
+  | "object_remove";
 export type ImageTaskStatus = "pending" | "processing" | "succeeded" | "failed";
-export type ImageTaskTool = EditTool | "product" | "poster" | "text_to_image" | "remove_background";
+export type ImageTaskTool =
+  | EditTool
+  | "product"
+  | "poster"
+  | "text_to_image"
+  | "remove_background"
+  | "image_enhance"
+  | "object_remove";
 
 export interface ImageTaskRecord {
   id: string;

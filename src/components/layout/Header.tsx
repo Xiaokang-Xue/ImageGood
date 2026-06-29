@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRight, ChevronDown, LogOut, Sparkles, UserRound } from "lucide-react";
+import { ArrowRight, ChevronDown, LogOut, Menu, Sparkles, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -14,9 +14,14 @@ const navItems = [
   { label: "AI 修图", href: "/editor" },
   { label: "文生图", href: "/text-to-image" },
   { label: "智能抠图", href: "/remove-background" },
+  { label: "图片增强", href: "/image-enhancer" },
+  { label: "去杂物", href: "/object-remover" },
+  { label: "价格", href: "/pricing" }
+];
+
+const secondaryNavItems = [
   { label: "商品图", href: "/product" },
-  { label: "封面海报", href: "/poster" },
-  { label: "模板中心", href: "/templates" }
+  { label: "封面海报", href: "/poster" }
 ];
 
 export function Header() {
@@ -24,6 +29,7 @@ export function Header() {
   const router = useRouter();
   const [user, setUser] = useState<PublicUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -41,6 +47,7 @@ export function Header() {
 
   useEffect(() => {
     setMenuOpen(false);
+    setMobileOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -194,14 +201,49 @@ export function Header() {
               </Link>
             </>
           )}
-          <Link href={trialHref}>
+          <Link href={trialHref} className="hidden sm:block">
             <Button size="md">
               立即体验
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
+          <button
+            type="button"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-white text-slate-700 lg:hidden"
+            aria-label={mobileOpen ? "关闭菜单" : "打开菜单"}
+            onClick={() => setMobileOpen((value) => !value)}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </div>
+      {mobileOpen ? (
+        <div className="border-t border-line bg-white px-5 py-4 shadow-lg lg:hidden">
+          <div className="grid gap-2">
+            {[...navItems, ...secondaryNavItems].map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "rounded-lg px-3 py-3 text-sm font-semibold transition",
+                    active ? "bg-studio-50 text-studio-700" : "text-slate-700 hover:bg-slate-50"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <Link href={trialHref} className="mt-2">
+              <Button className="w-full">
+                立即体验
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }

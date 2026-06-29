@@ -39,8 +39,8 @@ export function SmartImage({
   return (
     <div
       className={cn(
-        "relative overflow-hidden border border-white/70 bg-gradient-to-br from-slate-100 via-white to-studio-100",
-        rounded && "rounded-2xl",
+        "relative overflow-hidden border border-neutral-300 bg-neutral-100",
+        rounded && "rounded-lg",
         shadow && "shadow-card",
         ratioClasses[ratio],
         className

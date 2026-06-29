@@ -61,8 +61,8 @@ export function UploadDropzone({
     <div
       className={cn(
         "group relative overflow-hidden rounded-lg border border-dashed transition duration-200",
-        "bg-white/80 hover:border-studio-300 hover:bg-studio-50/60",
-        isDragging ? "border-studio-500 bg-studio-50" : "border-slate-300",
+        "bg-white hover:border-neutral-950 hover:bg-neutral-50",
+        isDragging ? "border-neutral-950 bg-neutral-50" : "border-neutral-400",
         compact ? "min-h-[220px]" : "min-h-[320px]",
         className
       )}
@@ -94,7 +94,7 @@ export function UploadDropzone({
 
       {isProcessing ? (
         <div className="flex h-full min-h-[inherit] flex-col items-center justify-center px-6 text-center">
-          <div className="mb-5 h-12 w-12 animate-spin rounded-full border-4 border-studio-100 border-t-studio-500" />
+          <div className="mb-5 h-12 w-12 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-950" />
           <p className="text-lg font-semibold text-ink">正在优化图片格式</p>
           <p className="mt-2 max-w-sm text-sm leading-6 text-muted">仅在图片格式不兼容或超过 10MB 时自动转换</p>
         </div>
@@ -102,19 +102,19 @@ export function UploadDropzone({
         <SmartImage src={value} alt="上传预览" className="h-full min-h-[inherit] w-full rounded-none border-0" />
       ) : (
         <div className="flex h-full min-h-[inherit] flex-col items-center justify-center px-6 text-center">
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-indigo-500/20">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-md border border-neutral-800 bg-neutral-950 text-white shadow-sm">
             {compact ? <ImagePlus className="h-7 w-7" /> : <UploadCloud className="h-8 w-8" />}
           </div>
           <p className="text-lg font-semibold text-ink">{title}</p>
           <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{subtitle}</p>
-          <div className="mt-5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
+          <div className="mt-5 hidden rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-500 sm:block">
             拖到这里即可开始
           </div>
         </div>
       )}
 
       {value ? (
-        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 rounded-lg bg-white/88 px-4 py-3 text-sm text-slate-700 opacity-0 shadow-lg backdrop-blur transition group-hover:opacity-100">
+        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 rounded-lg border border-neutral-200 bg-white/92 px-4 py-3 text-sm text-neutral-700 opacity-0 shadow-lg backdrop-blur transition group-hover:opacity-100">
           点击重新上传或拖拽替换图片
         </div>
       ) : null}

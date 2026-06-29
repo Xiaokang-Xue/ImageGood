@@ -9,25 +9,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#111827",
-        muted: "#667085",
-        line: "#E6EAF2",
+        ink: "#0A0A0A",
+        muted: "#666666",
+        line: "#EAEAEA",
         studio: {
-          50: "#F5F7FF",
-          100: "#EAF0FF",
-          500: "#4F6BFF",
-          600: "#3C54E8",
-          700: "#2739B7"
+          50: "#EFF6FF",
+          100: "#DBEAFE",
+          500: "#2563EB",
+          600: "#1D4ED8",
+          700: "#1E40AF"
         }
       },
       boxShadow: {
-        soft: "0 18px 60px rgba(15, 23, 42, 0.10)",
-        card: "0 14px 40px rgba(30, 41, 59, 0.08)"
+        soft: "0 12px 36px rgba(0, 0, 0, 0.08)",
+        card: "0 1px 2px rgba(0, 0, 0, 0.04)"
       },
       backgroundImage: {
-        "studio-glow":
-          "radial-gradient(circle at 18% 8%, rgba(79,107,255,0.16), transparent 28%), radial-gradient(circle at 86% 0%, rgba(153,86,255,0.14), transparent 26%), linear-gradient(180deg, #F8FAFF 0%, #FFFFFF 42%, #F6F8FC 100%)",
-        "button-gradient": "linear-gradient(135deg, #4F6BFF 0%, #8B5CF6 100%)"
+        "studio-glow": "linear-gradient(180deg, #FAFAFA 0%, #FFFFFF 100%)",
+        "button-gradient": "linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%)"
       }
     }
   },

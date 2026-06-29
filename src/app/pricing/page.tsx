@@ -77,9 +77,9 @@ export default function PricingPage() {
 
   return (
     <PageShell>
-      <div className="mb-8 text-center">
-        <p className="text-sm font-semibold text-studio-600">购买积分</p>
-        <h1 className="mt-2 text-3xl font-bold text-ink">选择适合你的积分包</h1>
+      <div className="mb-10 pt-4 text-center">
+        <p className="text-sm font-semibold text-blue-600">购买积分</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">选择适合你的积分包</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-muted">
           新用户注册赠送 1 次免费生成，积分用完后可按需购买。购买更多积分，单次生成成本更低。
         </p>
@@ -96,37 +96,37 @@ export default function PricingPage() {
         </div>
       ) : null}
 
-      <Card className="mx-auto mb-8 max-w-2xl p-4">
+      <Card className="mx-auto mb-10 max-w-2xl p-4">
         <p className="mb-3 text-sm font-semibold text-ink">选择支付方式</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <button
             type="button"
-            className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+            className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
               paymentProvider === "wechat"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : "border-line bg-white text-slate-700 hover:border-studio-200"
+                ? "border-neutral-950 bg-neutral-950 text-white"
+                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"
             }`}
             onClick={() => setPaymentProvider("wechat")}
           >
             <QrCode className="h-5 w-5" />
             <span>
               <span className="block text-sm font-bold">微信支付</span>
-              <span className="block text-xs text-muted">扫码完成支付</span>
+              <span className={`block text-xs ${paymentProvider === "wechat" ? "text-neutral-300" : "text-muted"}`}>扫码完成支付</span>
             </span>
           </button>
           <button
             type="button"
-            className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+            className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
               paymentProvider === "alipay"
-                ? "border-sky-300 bg-sky-50 text-sky-800"
-                : "border-line bg-white text-slate-700 hover:border-studio-200"
+                ? "border-neutral-950 bg-neutral-950 text-white"
+                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"
             }`}
             onClick={() => setPaymentProvider("alipay")}
           >
             <CreditCard className="h-5 w-5" />
             <span>
               <span className="block text-sm font-bold">支付宝支付</span>
-              <span className="block text-xs text-muted">跳转支付宝收银台</span>
+              <span className={`block text-xs ${paymentProvider === "alipay" ? "text-neutral-300" : "text-muted"}`}>跳转支付宝收银台</span>
             </span>
           </button>
         </div>
@@ -151,12 +151,12 @@ export default function PricingPage() {
         {packages.map((item) => (
           <Card
             key={item.id}
-            className={`relative flex flex-col p-6 hover:-translate-y-1 hover:border-studio-200 hover:shadow-soft ${
-              item.recommended ? "border-studio-300 shadow-soft ring-2 ring-studio-100" : ""
+            className={`relative flex flex-col p-6 hover:border-neutral-400 ${
+              item.recommended ? "border-neutral-950 shadow-[0_10px_30px_rgba(0,0,0,0.08)] ring-1 ring-neutral-950" : ""
             }`}
           >
             {item.recommended ? (
-              <div className="absolute right-4 top-4 rounded-full bg-studio-600 px-3 py-1 text-xs font-bold text-white">
+              <div className="absolute right-4 top-4 rounded-full bg-neutral-950 px-3 py-1 text-xs font-bold text-white">
                 推荐套餐
               </div>
             ) : null}
@@ -167,7 +167,7 @@ export default function PricingPage() {
               <span className="text-4xl font-bold text-ink">¥{formatPackagePrice(item.priceCents)}</span>
               <span className="ml-2 text-sm font-semibold text-muted">/ {item.credits} 次</span>
             </div>
-            <p className="mt-2 text-sm font-semibold text-studio-600">
+            <p className="mt-2 text-sm font-semibold text-blue-600">
               单次约 {item.unitPriceLabel ?? `¥${(item.priceCents / 100 / item.credits).toFixed(2)} / 次`}
             </p>
             <div className="mt-6 grid gap-3 text-sm text-slate-600">

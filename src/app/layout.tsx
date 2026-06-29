@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
-import { Header } from "@/components/layout/Header";
+import { SiteHeader } from "@/components/layout/SiteHeader";
 
 export const metadata: Metadata = {
   title: "ImageGood - AI 图片创作平台",
@@ -17,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <Header />
+        <SiteHeader />
         <PageViewTracker />
         {children}
       </body>

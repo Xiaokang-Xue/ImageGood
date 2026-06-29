@@ -15,7 +15,9 @@ const typeLabels: Record<ImageTaskRecord["type"], string> = {
   product: "商品图生成",
   poster: "封面海报生成",
   text_to_image: "文生图",
-  remove_background: "智能抠图"
+  remove_background: "智能抠图",
+  image_enhance: "图片增强",
+  object_remove: "去杂物"
 };
 
 export default function HistoryDetailPage() {

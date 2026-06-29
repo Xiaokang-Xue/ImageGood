@@ -4,6 +4,8 @@ import { getDbSnapshot, withDb } from "@/lib/db";
 import { queryCodexTaskResult, recoverCodexTaskResult } from "@/lib/server/codex-image-provider";
 import {
   buildEditPrompt,
+  buildImageEnhancePrompt,
+  buildObjectRemovePrompt,
   buildPosterPrompt,
   buildProductPrompt,
   buildRemoveBackgroundPrompt,
@@ -188,7 +190,9 @@ function creditReasonForTask(type: ImageTaskType) {
     product: "商品图生成",
     poster: "封面海报生成",
     text_to_image: "文生图",
-    remove_background: "智能抠图"
+    remove_background: "智能抠图",
+    image_enhance: "图片增强",
+    object_remove: "去杂物"
   };
 
   return labels[type] || "图片生成";
@@ -500,6 +504,94 @@ export async function runRemoveBackgroundTask(input: {
   });
 
   return startResponse(task);
+}
+
+async function runPromptedImageEditTask(input: {
+  userId: string;
+  image: File;
+  prompt: string;
+  type: Extract<ImageTaskType, "image_enhance" | "object_remove">;
+  tool: "image_enhance" | "object_remove";
+  size: ImageSize;
+  quality: ImageQuality;
+  outputFormat?: ImageOutputFormat;
+}) {
+  const provider = getImageProviderService();
+  const task = createTask({
+    userId: input.userId,
+    type: input.type,
+    prompt: input.prompt,
+    tool: input.tool,
+    provider: provider.name
+  });
+
+  await insertTaskWithCreditCheck(task);
+
+  startBackgroundTask(task, async () => {
+    const inputImageUrl = await saveUploadFile(input.image, input.userId, task.id);
+    await updateTask(task.id, { inputImageUrl });
+
+    const generated = await provider.editImage({
+      taskId: task.id,
+      image: input.image,
+      prompt: input.prompt,
+      size: input.size,
+      quality: input.quality,
+      outputFormat: input.outputFormat || "png"
+    });
+    const saved = await saveResults(input.userId, task.id, [generated.url]);
+    const result = await markTaskSucceeded(task.id, saved);
+    await cleanupLocalTaskDirectoryAfterUpload(task.id);
+
+    taskLog("succeeded", {
+      taskId: task.id,
+      userId: input.userId,
+      type: task.type,
+      resultImageUrl: saved.resultImageUrl,
+      latestCredits: result.latestCredits,
+      creditCharged: true
+    });
+  });
+
+  return startResponse(task);
+}
+
+export async function runImageEnhanceTask(input: {
+  userId: string;
+  image: File;
+  prompt?: string;
+  size: ImageSize;
+  quality: ImageQuality;
+}) {
+  return runPromptedImageEditTask({
+    userId: input.userId,
+    image: input.image,
+    prompt: buildImageEnhancePrompt(input.prompt),
+    type: "image_enhance",
+    tool: "image_enhance",
+    size: input.size,
+    quality: input.quality,
+    outputFormat: "png"
+  });
+}
+
+export async function runObjectRemoveTask(input: {
+  userId: string;
+  image: File;
+  prompt?: string;
+  size: ImageSize;
+  quality: ImageQuality;
+}) {
+  return runPromptedImageEditTask({
+    userId: input.userId,
+    image: input.image,
+    prompt: buildObjectRemovePrompt(input.prompt),
+    type: "object_remove",
+    tool: "object_remove",
+    size: input.size,
+    quality: input.quality,
+    outputFormat: "png"
+  });
 }
 
 export async function listUserTasks(userId: string) {

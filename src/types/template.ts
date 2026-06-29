@@ -7,5 +7,11 @@ export interface TemplateItem {
   description: string;
   thumbnail: string;
   usageCount: number;
-  route: "/editor" | "/product" | "/poster";
+  route:
+    | "/editor"
+    | "/product"
+    | "/poster"
+    | `/editor?${string}`
+    | `/product?${string}`
+    | `/poster?${string}`;
 }

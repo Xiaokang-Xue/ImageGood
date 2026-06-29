@@ -50,6 +50,8 @@ function pageFeatureLabel(path: string) {
   if (pathname.startsWith("/editor")) return "智能修图";
   if (pathname.startsWith("/text-to-image")) return "文生图";
   if (pathname.startsWith("/remove-background")) return "智能抠图";
+  if (pathname.startsWith("/image-enhancer")) return "图片增强";
+  if (pathname.startsWith("/object-remover")) return "去杂物";
   if (pathname.startsWith("/product")) return "商品图生成";
   if (pathname.startsWith("/poster")) return "封面海报生成";
   if (pathname.startsWith("/pricing")) return "积分购买页";
@@ -61,6 +63,19 @@ function pageFeatureLabel(path: string) {
   if (pathname.startsWith("/templates")) return "模板中心";
   if (pathname.startsWith("/admin")) return "管理员后台";
   return "其他页面";
+}
+
+function taskTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    edit: "AI 修图",
+    text_to_image: "文生图",
+    remove_background: "智能抠图",
+    image_enhance: "图片增强",
+    object_remove: "去杂物",
+    product: "商品图",
+    poster: "封面海报"
+  };
+  return labels[type] || "其他任务";
 }
 
 export async function GET() {
@@ -89,7 +104,7 @@ export async function GET() {
   const pricingPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const checkoutPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
   const generationPageViews = pageViews.filter((event) =>
-    pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/product", "/poster"])
+    pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"])
   );
   const activeCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const activeUserEvents7d = pageViews.filter((event) => {
@@ -143,6 +158,22 @@ export async function GET() {
     .map(([channel, count]) => ({ channel, count }))
     .sort((left, right) => right.count - left.count);
 
+  const taskTypeMap = new Map<string, { type: string; label: string; total: number; succeeded: number }>();
+  for (const task of db.imageTasks) {
+    const current = taskTypeMap.get(task.type) ?? {
+      type: task.type,
+      label: taskTypeLabel(task.type),
+      total: 0,
+      succeeded: 0
+    };
+    current.total += 1;
+    if (task.status === "succeeded") {
+      current.succeeded += 1;
+    }
+    taskTypeMap.set(task.type, current);
+  }
+  const taskTypes = [...taskTypeMap.values()].sort((left, right) => right.total - left.total);
+
   const recentPaidOrders = paidOrders
     .filter((order) => order.paidAt)
     .sort((left, right) => new Date(right.paidAt || 0).getTime() - new Date(left.paidAt || 0).getTime())
@@ -191,6 +222,7 @@ export async function GET() {
     daily,
     topPages,
     acquisitionChannels,
+    taskTypes,
     recentPaidOrders
   };
 

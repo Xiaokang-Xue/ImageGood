@@ -230,6 +230,32 @@ export default function AdminAnalyticsPage() {
             <div className="grid gap-6">
               <Card className="p-6">
                 <div className="mb-5">
+                  <p className="text-sm font-semibold text-studio-600">工具使用</p>
+                  <h2 className="mt-1 text-xl font-bold text-ink">图片任务类型分布</h2>
+                </div>
+                {data.taskTypes.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-muted">
+                    暂无图片任务数据。
+                  </p>
+                ) : (
+                  <div className="grid gap-3">
+                    {data.taskTypes.map((item) => (
+                      <div key={item.type} className="rounded-lg border border-line bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-bold text-ink">{item.label}</p>
+                          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-studio-700 ring-1 ring-line">
+                            {item.total} 次
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-muted">成功 {item.succeeded} 次 · 成功率 {percent(item.succeeded, item.total)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <div className="mb-5">
                   <p className="text-sm font-semibold text-studio-600">用户来源</p>
                   <h2 className="mt-1 text-xl font-bold text-ink">了解到 ImageGood 的渠道</h2>
                 </div>

@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ImagePlus, Layers3, Paintbrush, ScanLine, Scissors, ShoppingBag, Sparkles } from "lucide-react";
+import { Eraser, ImagePlus, Paintbrush, ScanLine, Scissors, ShoppingBag, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { taskCards, toolPrompts } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
 import type { EditTool } from "@/types/image";
 
-const icons = [Paintbrush, Sparkles, Scissors, ImagePlus, ScanLine, ShoppingBag, Layers3];
+const icons = [Paintbrush, Sparkles, Scissors, ImagePlus, Eraser, ShoppingBag];
 
 export function TaskCards() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export function TaskCards() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {taskCards.map((task, index) => {
           const Icon = icons[index] ?? Paintbrush;
           return (
@@ -44,9 +44,7 @@ export function TaskCards() {
                 router.push(task.route);
               }}
             >
-              <div
-                className={`mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${task.accent} text-white shadow-lg shadow-slate-900/10`}
-              >
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-neutral-950 text-white">
                 <Icon className="h-5 w-5" />
               </div>
               <h3 className="text-lg font-semibold text-ink">{task.title}</h3>
