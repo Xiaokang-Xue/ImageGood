@@ -28,15 +28,13 @@ const icons: Record<(typeof taskCards)[number]["id"], LucideIcon> = {
 const groups = [
   {
     id: "processing",
-    eyebrow: "AI 图片处理",
-    title: "让已有图片更接近你的想法",
-    description: "上传一张图片，完成修饰、抠图、增强、去物和背景替换。"
+    title: "AI 图片处理",
+    description: "让已有图片更接近你的想法"
   },
   {
     id: "generation",
-    eyebrow: "AI 图片生成",
-    title: "从文字和素材开始创作",
-    description: "生成创意图片、商品场景和封面海报视觉。"
+    title: "AI 图片生成",
+    description: "从文字和素材开始创作"
   }
 ] as const;
 
@@ -45,8 +43,7 @@ export function ToolDirectory() {
     <section className="border-b border-neutral-200 bg-white py-16 sm:py-20">
       <div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold text-blue-600">全部工具</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
             两类任务，一套清晰流程
           </h2>
           <p className="mt-4 text-base leading-7 text-neutral-600">
@@ -62,8 +59,7 @@ export function ToolDirectory() {
               <div key={group.id}>
                 <div className="mb-6 flex flex-col justify-between gap-3 border-b border-neutral-300 pb-5 md:flex-row md:items-end">
                   <div>
-                    <p className="text-xs font-semibold text-neutral-500">{group.eyebrow}</p>
-                    <h3 className="mt-2 text-xl font-semibold text-neutral-950 sm:text-2xl">{group.title}</h3>
+                    <h3 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:text-3xl">{group.title}</h3>
                   </div>
                   <p className="max-w-xl text-sm leading-6 text-neutral-500">{group.description}</p>
                 </div>

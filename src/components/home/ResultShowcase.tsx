@@ -17,8 +17,7 @@ export function ResultShowcase() {
     <section className="border-b border-neutral-200 bg-neutral-50 py-16 sm:py-20">
       <div className="mx-auto grid max-w-[1280px] gap-12 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:px-8">
         <div>
-          <p className="text-sm font-semibold text-blue-600">从输入到结果</p>
-          <h2 className="mt-3 max-w-lg text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
+          <h2 className="max-w-lg text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
             更少步骤，更清楚的创作过程
           </h2>
           <p className="mt-4 max-w-lg text-base leading-7 text-neutral-600">

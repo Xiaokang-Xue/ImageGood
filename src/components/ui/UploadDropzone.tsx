@@ -106,7 +106,7 @@ export function UploadDropzone({
             {compact ? <ImagePlus className="h-7 w-7" /> : <UploadCloud className="h-8 w-8" />}
           </div>
           <p className="text-lg font-semibold text-ink">{title}</p>
-          <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{subtitle}</p>
+          {subtitle ? <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{subtitle}</p> : null}
           <div className="mt-5 hidden rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-500 sm:block">
             拖到这里即可开始
           </div>
