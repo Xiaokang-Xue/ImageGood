@@ -2,19 +2,26 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
+import {
+  clearCurrentUserCache,
+  getCurrentUserCached,
+  setCurrentUserCache
+} from "@/lib/client-current-user";
 import type { CreditTransactionRecord } from "@/types/billing";
-import type { ImageTaskRecord } from "@/types/task";
 import type { PublicUser } from "@/types/user";
 
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<PublicUser | null>(null);
-  const [tasks, setTasks] = useState<ImageTaskRecord[]>([]);
+  const [taskSummary, setTaskSummary] = useState({
+    succeeded: 0,
+    latestCreatedAt: null as string | null
+  });
   const [transactions, setTransactions] = useState<CreditTransactionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [oldPassword, setOldPassword] = useState("");
@@ -34,13 +41,17 @@ export default function AccountPage() {
   const [phoneError, setPhoneError] = useState("");
 
   const refreshAccount = async () => {
-    const [me, taskResponse, transactionResponse] = await Promise.all([
-      apiClient.me(),
-      apiClient.listTasks(),
+    const [currentUser, taskResponse, transactionResponse] = await Promise.all([
+      getCurrentUserCached(),
+      apiClient.listTasks({ page: 1, limit: 1 }),
       apiClient.listCreditTransactions()
     ]);
-    setUser(me.user);
-    setTasks(taskResponse.tasks);
+    if (!currentUser) throw new Error("UNAUTHORIZED");
+    setUser(currentUser);
+    setTaskSummary({
+      succeeded: taskResponse.summary.succeeded,
+      latestCreatedAt: taskResponse.summary.latestCreatedAt
+    });
     setTransactions(transactionResponse.transactions);
   };
 
@@ -58,6 +69,7 @@ export default function AccountPage() {
 
   const handleLogout = async () => {
     await apiClient.logout().catch(() => null);
+    clearCurrentUserCache();
     router.push("/");
     router.refresh();
   };
@@ -121,6 +133,7 @@ export default function AccountPage() {
       setPhoneInput("");
       setPhoneCode("");
       setPhoneCountdown(0);
+      setCurrentUserCache(response.user);
       setUser(response.user);
       await refreshAccount();
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
@@ -130,13 +143,6 @@ export default function AccountPage() {
       setPhoneLoading(false);
     }
   };
-
-  const succeededTasks = useMemo(() => tasks.filter((task) => task.status === "succeeded"), [tasks]);
-  const latestTask = useMemo(() => {
-    return tasks
-      .slice()
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-  }, [tasks]);
 
   const handleChangePassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -276,13 +282,13 @@ export default function AccountPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <InfoBlock label="当前积分余额" value={`${user.credits} 积分`} />
             <InfoBlock label="注册时间" value={new Date(user.createdAt).toLocaleDateString("zh-CN")} />
-            <InfoBlock label="累计生成次数" value={`${succeededTasks.length} 次`} />
+            <InfoBlock label="累计生成次数" value={`${taskSummary.succeeded} 次`} />
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <InfoBlock
               label="最近一次生成"
-              value={latestTask ? new Date(latestTask.createdAt).toLocaleString("zh-CN") : "暂无记录"}
+              value={taskSummary.latestCreatedAt ? new Date(taskSummary.latestCreatedAt).toLocaleString("zh-CN") : "暂无记录"}
             />
             <InfoBlock
               label="最近登录时间"

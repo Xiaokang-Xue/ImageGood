@@ -1,7 +1,7 @@
 import { readFile, stat } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { getDbSnapshot } from "@/lib/db";
+import { getImageTaskById } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -56,8 +56,7 @@ export async function GET(
     return NextResponse.json({ error: { code: "IMAGE_NOT_FOUND", message: "图片不存在" } }, { status: 404 });
   }
 
-  const db = await getDbSnapshot();
-  const task = db.imageTasks.find((item) => item.id === taskId);
+  const task = await getImageTaskById(taskId);
   if (!task || (task.userId !== user.id && user.role !== "admin")) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "无权访问该图片" } }, { status: 403 });
   }
@@ -81,7 +80,7 @@ export async function GET(
       return NextResponse.json({ error: { code: "INVALID_IMAGE", message: "图片文件不可用" } }, { status: 404 });
     }
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": IMAGE_MIME_TYPES[extension],
         "Content-Length": String(buffer.length),

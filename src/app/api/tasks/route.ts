@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -14,8 +14,23 @@ export async function GET() {
     );
   }
 
-  const tasks = await listUserTasks(user.id);
-  return NextResponse.json({ ok: true, tasks });
+  const url = new URL(request.url);
+  const page = Number(url.searchParams.get("page") || "1");
+  const limit = Number(url.searchParams.get("limit") || "12");
+  const result = await listUserTasks(user.id, { page, limit });
+  return NextResponse.json(
+    {
+      ok: true,
+      ...result,
+      tasks: result.tasks.map((task) => ({
+        ...task,
+        prompt: task.prompt.slice(0, 500)
+      }))
+    },
+    {
+      headers: { "Cache-Control": "private, no-store" }
+    }
+  );
 }
 
 export async function DELETE(request: Request) {

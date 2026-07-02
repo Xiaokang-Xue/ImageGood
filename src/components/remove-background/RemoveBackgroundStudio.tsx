@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Eraser, History, Loader2, Palette, UploadCloud } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +15,7 @@ import {
   getImageErrorMessage,
   imageUrlToUploadFile,
   ImageApiClientError,
+  isAbortError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
@@ -88,6 +89,11 @@ export function RemoveBackgroundStudio() {
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("transparent");
   const [customBackground, setCustomBackground] = useState("#f8fafc");
   const [downloadingBackground, setDownloadingBackground] = useState(false);
+  const pollingController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => pollingController.current?.abort();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -109,6 +115,9 @@ export function RemoveBackgroundStudio() {
     setErrorActionHref("");
     setTaskId("");
     setResultUrl("");
+    pollingController.current?.abort();
+    const controller = new AbortController();
+    pollingController.current = controller;
 
     try {
       const response = await createRemoveBackgroundTask({
@@ -119,7 +128,7 @@ export function RemoveBackgroundStudio() {
       });
       setTaskId(response.taskId);
 
-      const task = await apiClient.waitForTaskDone(response.taskId);
+      const task = await apiClient.waitForTaskDone(response.taskId, { signal: controller.signal });
       if (task.status === "failed") {
         throw new Error(task.errorMessage || "抠图失败，请稍后重试");
       }
@@ -132,6 +141,7 @@ export function RemoveBackgroundStudio() {
       setResultUrl(url);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/remove-background");
         return;
@@ -145,7 +155,10 @@ export function RemoveBackgroundStudio() {
       );
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (pollingController.current === controller) {
+        pollingController.current = null;
+      }
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 

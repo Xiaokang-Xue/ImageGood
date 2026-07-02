@@ -9,9 +9,15 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
       <CleanHeroSection />
-      <ToolDirectory />
-      <ResultShowcase />
-      <PricingCallout />
+      <div className="[content-visibility:auto] [contain-intrinsic-size:900px]">
+        <ToolDirectory />
+      </div>
+      <div className="[content-visibility:auto] [contain-intrinsic-size:760px]">
+        <ResultShowcase />
+      </div>
+      <div className="[content-visibility:auto] [contain-intrinsic-size:360px]">
+        <PricingCallout />
+      </div>
     </main>
   );
 }

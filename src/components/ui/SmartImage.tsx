@@ -23,6 +23,10 @@ interface SmartImageProps {
   ratio?: SmartImageRatio;
   rounded?: boolean;
   shadow?: boolean;
+  priority?: boolean;
+  sizes?: string;
+  width?: number;
+  height?: number;
 }
 
 export function SmartImage({
@@ -32,7 +36,11 @@ export function SmartImage({
   imageClassName,
   ratio = "auto",
   rounded = true,
-  shadow = false
+  shadow = false,
+  priority = false,
+  sizes,
+  width = 1200,
+  height = 900
 }: SmartImageProps) {
   const [failed, setFailed] = useState(false);
 
@@ -56,8 +64,13 @@ export function SmartImage({
         <img
           src={src}
           alt={alt}
+          width={width}
+          height={height}
           className={cn("h-full w-full object-cover", imageClassName)}
-          loading="lazy"
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
+          sizes={sizes}
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
         />

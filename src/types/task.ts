@@ -38,6 +38,15 @@ export interface ImageTaskRecord {
 export interface ImageTaskListResponse {
   ok?: boolean;
   tasks: ImageTaskRecord[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  summary: {
+    total: number;
+    succeeded: number;
+    latestCreatedAt: string | null;
+  };
 }
 
 export interface ImageTaskDetailResponse {

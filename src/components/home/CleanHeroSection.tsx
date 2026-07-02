@@ -1,13 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowRight, Check, ImagePlus, Scissors, WandSparkles } from "lucide-react";
+import { HomeUploadAction } from "@/components/home/HomeUploadAction";
 import { Button } from "@/components/ui/Button";
 import { SmartImage } from "@/components/ui/SmartImage";
-import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import { imageAssets } from "@/lib/image-assets";
-import { useStudioStore } from "@/lib/studio-store";
 
 const primaryActions = [
   { label: "开始修图", href: "/editor", icon: WandSparkles, primary: true },
@@ -16,9 +12,6 @@ const primaryActions = [
 ] as const;
 
 export function CleanHeroSection() {
-  const router = useRouter();
-  const setUploadedImage = useStudioStore((state) => state.setUploadedImage);
-
   return (
     <section className="relative isolate overflow-hidden border-b border-neutral-200 bg-white">
       <SmartImage
@@ -27,6 +20,8 @@ export function CleanHeroSection() {
         className="absolute inset-0 -z-20 border-0 opacity-[0.12]"
         imageClassName="grayscale"
         rounded={false}
+        priority
+        sizes="100vw"
       />
       <div className="absolute inset-0 -z-10 bg-white/90" />
 
@@ -65,16 +60,7 @@ export function CleanHeroSection() {
           </div>
 
           <div className="mx-auto mt-10 max-w-2xl border-t border-neutral-300 pt-6">
-            <UploadDropzone
-              compact
-              title="点击上传图片"
-              subtitle=""
-              className="min-h-[190px] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.05)]"
-              onImageSelected={(imageUrl, file) => {
-                setUploadedImage(imageUrl, file);
-                router.push("/editor");
-              }}
-            />
+            <HomeUploadAction />
           </div>
 
           <div className="mt-5 hidden flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-neutral-500 sm:flex">

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CalendarDays, MessageCircle, Newspaper, PenTool, Trophy } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { LayerPanel } from "@/components/poster/LayerPanel";
@@ -12,12 +13,13 @@ import { Card } from "@/components/ui/Card";
 import {
   apiClient,
   getImageErrorMessage,
+  isAbortError,
   isEmailNotVerifiedError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
-import { cn, sleep } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { PosterImageResult, PosterLayerKey, PosterLayerVisibility, PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
 
 const usageOptions: Array<{
@@ -84,6 +86,7 @@ function persistablePosterResults(results: PosterImageResult[]) {
 }
 
 export function PosterStudio({ initialUsage, initialStyle, initialRatio }: PosterStudioProps) {
+  const router = useRouter();
   const [usage, setUsage] = useState<PosterUsage>(() => normalizeUsage(initialUsage));
   const [title, setTitle] = useState("7 天练出自然英语口语");
   const [subtitle, setSubtitle] = useState("每天 30 分钟 · 轻松开口说英语");
@@ -97,6 +100,11 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const pollingController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => pollingController.current?.abort();
+  }, []);
 
   useEffect(() => {
     try {
@@ -150,21 +158,21 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const handleGenerate = async () => {
     setLoading(true);
     setError("");
+    pollingController.current?.abort();
+    const controller = new AbortController();
+    pollingController.current = controller;
     try {
-      const [response] = await Promise.all([
-        apiClient.createPosterImages({
-          title,
-          subtitle,
-          usage,
-          style,
-          ratio
-        }),
-        sleep(1000)
-      ]);
+      const response = await apiClient.createPosterImages({
+        title,
+        subtitle,
+        usage,
+        style,
+        ratio
+      });
 
       let nextResults = response.results ?? [];
       if (nextResults.length === 0) {
-        const task = await apiClient.waitForTaskDone(response.taskId);
+        const task = await apiClient.waitForTaskDone(response.taskId, { signal: controller.signal });
         if (task.status === "failed") {
           throw new Error(task.errorMessage || "生成失败，请稍后重试");
         }
@@ -188,12 +196,13 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
       setVariantIndex(0);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
-        window.location.href = "/login?redirect=/poster";
+        router.push("/login?redirect=/poster");
         return;
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
-        window.location.href = requestError.actionUrl || "/pricing";
+        router.push(requestError.actionUrl || "/pricing");
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {
@@ -202,7 +211,10 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
       }
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (pollingController.current === controller) {
+        pollingController.current = null;
+      }
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 

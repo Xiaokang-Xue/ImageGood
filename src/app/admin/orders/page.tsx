@@ -40,6 +40,7 @@ export default function AdminOrdersPage() {
   const [providerFilter, setProviderFilter] = useState<"all" | AdminOrderRecord["paymentProvider"]>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | AdminOrderRecord["status"]>("all");
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
 
   const loadOrders = useCallback(() => {
@@ -47,8 +48,16 @@ export default function AdminOrdersPage() {
     setError("");
 
     apiClient
-      .listAdminOrders()
-      .then((response) => setOrders(response.orders))
+      .listAdminOrders({
+        page,
+        limit: PAGE_SIZE,
+        status: statusFilter,
+        provider: providerFilter
+      })
+      .then((response) => {
+        setOrders(response.orders);
+        setTotal(response.total);
+      })
       .catch((requestError) => {
         if (isUnauthorizedError(requestError)) {
           setError("请先登录管理员账号");
@@ -61,7 +70,7 @@ export default function AdminOrdersPage() {
         setError(getImageErrorMessage(requestError) || "服务暂时不可用，请稍后重试");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, providerFilter, statusFilter]);
 
   useEffect(() => {
     loadOrders();
@@ -76,9 +85,7 @@ export default function AdminOrdersPage() {
 
     try {
       await apiClient.confirmAdminOrder(orderId);
-      await apiClient
-        .listAdminOrders()
-        .then((response) => setOrders(response.orders));
+      await loadOrders();
     } catch (requestError) {
       setError(getImageErrorMessage(requestError));
     } finally {
@@ -86,19 +93,9 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
-    const matchesProvider = providerFilter === "all" || order.paymentProvider === providerFilter;
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-    return matchesProvider && matchesStatus;
-  });
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
-  const pagedOrders = filteredOrders.slice(pageStart, pageStart + PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(1);
-  }, [providerFilter, statusFilter]);
 
   return (
     <main className="mx-auto max-w-[1200px] px-5 py-10">
@@ -138,7 +135,10 @@ export default function AdminOrdersPage() {
                 className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                   providerFilter === value ? "border-studio-300 bg-studio-50 text-studio-700" : "border-line bg-white text-muted"
                 }`}
-                onClick={() => setProviderFilter(value as typeof providerFilter)}
+                onClick={() => {
+                  setPage(1);
+                  setProviderFilter(value as typeof providerFilter);
+                }}
               >
                 {label}
               </button>
@@ -160,7 +160,10 @@ export default function AdminOrdersPage() {
                 className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                   statusFilter === value ? "border-studio-300 bg-studio-50 text-studio-700" : "border-line bg-white text-muted"
                 }`}
-                onClick={() => setStatusFilter(value as typeof statusFilter)}
+                onClick={() => {
+                  setPage(1);
+                  setStatusFilter(value as typeof statusFilter);
+                }}
               >
                 {label}
               </button>
@@ -168,8 +171,8 @@ export default function AdminOrdersPage() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-4 py-3 text-sm text-muted">
             <span>
-              共 {filteredOrders.length} 条订单
-              {filteredOrders.length > 0 ? `，当前显示第 ${pageStart + 1}-${Math.min(pageStart + PAGE_SIZE, filteredOrders.length)} 条` : ""}
+              共 {total} 条订单
+              {total > 0 ? `，当前显示第 ${pageStart + 1}-${Math.min(pageStart + orders.length, total)} 条` : ""}
             </span>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
@@ -191,11 +194,11 @@ export default function AdminOrdersPage() {
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-studio-100 border-t-studio-500" />
           <p className="mt-4 text-sm font-semibold text-muted">订单信息加载中…</p>
         </Card>
-      ) : !error && filteredOrders.length === 0 ? (
+      ) : !error && orders.length === 0 ? (
         <Card className="p-8 text-center text-sm font-semibold text-muted">当前没有符合条件的订单。</Card>
       ) : !error ? (
         <div className="grid gap-4">
-          {pagedOrders.map((order) => (
+          {orders.map((order) => (
             <Card key={order.id} className="p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">

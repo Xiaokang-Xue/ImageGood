@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
-import { getDbSnapshot, withDb } from "@/lib/db";
+import { createHmac, randomBytes, randomUUID } from "crypto";
+import { findSessionUserByTokenHash, withDb } from "@/lib/db";
 import type { PublicUser } from "@/types/user";
 
 export const SESSION_COOKIE = "ai_image_session";
@@ -103,18 +103,14 @@ export async function getCurrentUser() {
   if (!token) return null;
 
   const hash = tokenHash(token);
-  const db = await getDbSnapshot();
-  const session = db.sessions.find((item) => {
-    const left = Buffer.from(item.tokenHash);
-    const right = Buffer.from(hash);
-    return left.length === right.length && timingSafeEqual(left, right);
-  });
+  const sessionUser = await findSessionUserByTokenHash(hash);
+  const session = sessionUser?.session;
 
   if (!session || new Date(session.expiresAt).getTime() <= Date.now()) {
     return null;
   }
 
-  const user = db.users.find((item) => item.id === session.userId);
+  const user = sessionUser?.user;
   return user ? publicUser(user) : null;
 }
 

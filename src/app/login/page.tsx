@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
+import { setCurrentUserCache } from "@/lib/client-current-user";
 
 type LoginMode = "phone" | "email";
 type PhoneLoginMethod = "code" | "password";
@@ -89,7 +90,7 @@ function LoginForm() {
         return;
       }
       const response = await apiClient.loginPhone({ phone, password: phonePassword });
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+      setCurrentUserCache(response.user);
       router.push(redirect);
       router.refresh();
       return response;
@@ -101,7 +102,7 @@ function LoginForm() {
     }
 
     const response = await apiClient.loginPhone({ phone, code: smsCode });
-    window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+    setCurrentUserCache(response.user);
     router.push(redirect);
     router.refresh();
     return response;
@@ -109,9 +110,9 @@ function LoginForm() {
 
   const handleEmailLogin = async () => {
     const response = await apiClient.login({ email, password, captchaAnswer });
+    setCurrentUserCache(response.user);
     if (!response.user.hasVerifiedContact) {
       setMessage("你的邮箱尚未验证，也未绑定已验证手机号。完成任一验证后可使用图片生成和购买功能。");
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
       setTimeout(() => router.push("/account"), 700);
       return response;
     }

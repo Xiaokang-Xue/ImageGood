@@ -2,10 +2,16 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { access } from "fs/promises";
 import { CREDIT_PACKAGES, findCreditPackage } from "@/config/billing-plans";
-import { getDbSnapshot, withDb } from "@/lib/db";
+import {
+  getDbSnapshot,
+  getDbUserById,
+  getOrderById,
+  getOrderByOutTradeNo,
+  hasPaymentSourceSurveyRecord,
+  withDb
+} from "@/lib/db";
 import { AlipayProvider, alipayAmountToCents, parseAlipayNotify } from "@/lib/server/payment/alipay-provider";
 import { MockPaymentProvider } from "@/lib/server/payment/mock-payment-provider";
-import { hasPaymentSourceSurvey } from "@/lib/server/payment-source-survey";
 import { WechatPayProvider, parseWechatPaymentNotify } from "@/lib/server/payment/wechat-pay-provider";
 import type { CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
 import type {
@@ -254,8 +260,7 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
 }
 
 export async function getOrderForViewer(orderId: string, user: PublicUser) {
-  const db = await getDbSnapshot();
-  const order = db.orders.find((item) => item.id === orderId);
+  const order = await getOrderById(orderId);
   if (!order || (user.role !== "admin" && order.userId !== user.id)) {
     return null;
   }
@@ -263,6 +268,16 @@ export async function getOrderForViewer(orderId: string, user: PublicUser) {
 }
 
 async function expireOrderIfNeeded(orderId: string) {
+  const existing = await getOrderById(orderId);
+  if (
+    !existing ||
+    existing.status !== "pending" ||
+    !existing.expiredAt ||
+    new Date(existing.expiredAt).getTime() > Date.now()
+  ) {
+    return;
+  }
+
   await withDb((db) => {
     const order = db.orders.find((item) => item.id === orderId);
     if (!order || order.status !== "pending" || !order.expiredAt) return;
@@ -274,13 +289,15 @@ async function expireOrderIfNeeded(orderId: string) {
 
 export async function getPaymentOrderResponse(orderId: string, user: PublicUser): Promise<PaymentOrderResponse | null> {
   await expireOrderIfNeeded(orderId);
-  const db = await getDbSnapshot({ includeAnalytics: true });
-  const order = db.orders.find((item) => item.id === orderId);
+  const order = await getOrderById(orderId);
   if (!order || (user.role !== "admin" && order.userId !== user.id)) {
     return null;
   }
 
-  const owner = db.users.find((item) => item.id === order.userId);
+  const [owner, sourceSurveySubmitted] = await Promise.all([
+    getDbUserById(order.userId),
+    hasPaymentSourceSurveyRecord(order.userId, order.id)
+  ]);
   return {
     orderId: order.id,
     status: order.status,
@@ -297,7 +314,7 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     transactionId: order.transactionId ?? null,
     expiredAt: order.expiredAt ?? null,
     paymentMode: getPaymentMode(),
-    sourceSurveySubmitted: hasPaymentSourceSurvey(db.analyticsEvents, order.userId, order.id)
+    sourceSurveySubmitted
   };
 }
 
@@ -305,8 +322,7 @@ export async function getPaymentOrderResponseByOutTradeNo(
   outTradeNo: string,
   user: PublicUser
 ): Promise<PaymentOrderResponse | null> {
-  const db = await getDbSnapshot();
-  const order = db.orders.find((item) => item.outTradeNo === outTradeNo);
+  const order = await getOrderByOutTradeNo(outTradeNo);
   if (!order) return null;
   return getPaymentOrderResponse(order.id, user);
 }

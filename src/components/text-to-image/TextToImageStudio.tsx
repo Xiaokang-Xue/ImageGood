@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, History, ImagePlus, Loader2, Sparkles } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,7 @@ import {
   downloadImage,
   getImageErrorMessage,
   ImageApiClientError,
+  isAbortError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
@@ -79,6 +80,11 @@ export function TextToImageStudio() {
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const pollingController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => pollingController.current?.abort();
+  }, []);
 
   const handleGenerate = async () => {
     const finalPrompt = prompt.trim();
@@ -93,6 +99,9 @@ export function TextToImageStudio() {
     setErrorActionHref("");
     setResultUrl("");
     setTaskId("");
+    pollingController.current?.abort();
+    const controller = new AbortController();
+    pollingController.current = controller;
 
     try {
       const response = await createTextToImageTask({
@@ -104,7 +113,7 @@ export function TextToImageStudio() {
       });
       setTaskId(response.taskId);
 
-      const task = await apiClient.waitForTaskDone(response.taskId);
+      const task = await apiClient.waitForTaskDone(response.taskId, { signal: controller.signal });
       if (task.status === "failed") {
         throw new Error(task.errorMessage || "图片生成失败，请稍后重试");
       }
@@ -117,6 +126,7 @@ export function TextToImageStudio() {
       setResultUrl(url);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/text-to-image");
         return;
@@ -130,7 +140,10 @@ export function TextToImageStudio() {
       );
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (pollingController.current === controller) {
+        pollingController.current = null;
+      }
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 

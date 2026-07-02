@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImagePlus, SlidersHorizontal } from "lucide-react";
@@ -15,6 +15,7 @@ import {
   apiClient,
   getImageErrorMessage,
   imageUrlToUploadFile,
+  isAbortError,
   isEmailNotVerifiedError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
@@ -22,7 +23,6 @@ import {
 import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
-import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
 import type {
   ProductImageResult,
@@ -97,6 +97,11 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const pollingController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => pollingController.current?.abort();
+  }, []);
 
   useEffect(() => {
     try {
@@ -146,24 +151,24 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
 
     setLoading(true);
     setError("");
+    pollingController.current?.abort();
+    const controller = new AbortController();
+    pollingController.current = controller;
     try {
       const submitProduct = async (imageOverride?: File) => {
-        const [response] = await Promise.all([
-          apiClient.createProductImages({
-            image: imageOverride ?? imageFile ?? undefined,
-            imageUrl: imageOverride ? undefined : imageUrl ?? undefined,
-            template,
-            scene,
-            style,
-            sellingPoints: selectedIndustry ? `${sellingPoints}。行业方向：${selectedIndustry}` : sellingPoints,
-            ratio
-          }),
-          sleep(1000)
-        ]);
+        const response = await apiClient.createProductImages({
+          image: imageOverride ?? imageFile ?? undefined,
+          imageUrl: imageOverride ? undefined : imageUrl ?? undefined,
+          template,
+          scene,
+          style,
+          sellingPoints: selectedIndustry ? `${sellingPoints}。行业方向：${selectedIndustry}` : sellingPoints,
+          ratio
+        });
 
         let nextResults = response.results ?? [];
         if (nextResults.length === 0) {
-          const task = await apiClient.waitForTaskDone(response.taskId);
+          const task = await apiClient.waitForTaskDone(response.taskId, { signal: controller.signal });
           if (task.status === "failed") {
             throw new Error(task.errorMessage || "生成失败，请稍后重试");
           }
@@ -206,6 +211,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       setResults(nextResults);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/product");
         return;
@@ -224,7 +230,10 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       }
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (pollingController.current === controller) {
+        pollingController.current = null;
+      }
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 

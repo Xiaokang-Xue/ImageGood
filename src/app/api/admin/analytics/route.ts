@@ -5,6 +5,9 @@ import type { AdminAnalyticsResponse } from "@/types/analytics";
 
 export const runtime = "nodejs";
 
+const ANALYTICS_CACHE_MS = 30_000;
+let analyticsCache: { expiresAt: number; response: AdminAnalyticsResponse } | null = null;
+
 function startOfToday() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -78,6 +81,22 @@ function taskTypeLabel(type: string) {
   return labels[type] || "其他任务";
 }
 
+function repeatPurchaseMetrics(orders: Array<{ userId: string }>) {
+  const orderCountByUser = new Map<string, number>();
+  for (const order of orders) {
+    orderCountByUser.set(order.userId, (orderCountByUser.get(order.userId) ?? 0) + 1);
+  }
+
+  const payingUsers = orderCountByUser.size;
+  const repeatPurchaseUsers = [...orderCountByUser.values()].filter((count) => count >= 2).length;
+
+  return {
+    payingUsers,
+    repeatPurchaseUsers,
+    repeatPurchaseRate: payingUsers > 0 ? repeatPurchaseUsers / payingUsers : 0
+  };
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
@@ -87,10 +106,17 @@ export async function GET() {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "没有管理员权限" } }, { status: 403 });
   }
 
+  if (analyticsCache && analyticsCache.expiresAt > Date.now()) {
+    return NextResponse.json(analyticsCache.response, {
+      headers: { "Cache-Control": "private, max-age=30" }
+    });
+  }
+
   const db = await getDbSnapshot({ includeAnalytics: true });
   const today = startOfToday();
   const todayKey = today.toISOString().slice(0, 10);
   const paidOrders = db.orders.filter((order) => order.status === "paid");
+  const repeatPurchases = repeatPurchaseMetrics(paidOrders);
   const pendingOrders = db.orders.filter((order) => order.status === "pending");
   const pendingOrderUsers = new Set(pendingOrders.map((order) => order.userId)).size;
   const succeededTasks = db.imageTasks.filter((task) => task.status === "succeeded");
@@ -202,6 +228,9 @@ export async function GET() {
       succeededTasks: succeededTasks.length,
       failedTasks: failedTasks.length,
       paidOrders: paidOrders.length,
+      payingUsers: repeatPurchases.payingUsers,
+      repeatPurchaseUsers: repeatPurchases.repeatPurchaseUsers,
+      repeatPurchaseRate: repeatPurchases.repeatPurchaseRate,
       pendingOrders: pendingOrders.length,
       pendingOrderUsers,
       purchaseClicks: purchaseClicks.length,
@@ -226,5 +255,12 @@ export async function GET() {
     recentPaidOrders
   };
 
-  return NextResponse.json(response);
+  analyticsCache = {
+    expiresAt: Date.now() + ANALYTICS_CACHE_MS,
+    response
+  };
+
+  return NextResponse.json(response, {
+    headers: { "Cache-Control": "private, max-age=30" }
+  });
 }

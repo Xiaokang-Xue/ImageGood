@@ -1,6 +1,6 @@
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { getDbSnapshot } from "@/lib/db";
+import { getImageTaskById } from "@/lib/db";
 import { getCosObjectBuffer, isCosStorageEnabled, parseTaskInfoFromCosKey } from "@/lib/server/cos-storage";
 import { getCurrentUser } from "@/lib/session";
 
@@ -55,8 +55,7 @@ export async function GET(
     return NextResponse.json({ error: { code: "IMAGE_NOT_FOUND", message: "图片不存在" } }, { status: 404 });
   }
 
-  const db = await getDbSnapshot();
-  const task = db.imageTasks.find((item) => item.id === taskInfo.taskId);
+  const task = await getImageTaskById(taskInfo.taskId);
   if (!task || task.userId !== taskInfo.userId || (task.userId !== user.id && user.role !== "admin")) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "无权访问该图片" } }, { status: 403 });
   }
@@ -67,7 +66,7 @@ export async function GET(
       return NextResponse.json({ error: { code: "INVALID_IMAGE", message: "图片文件不可用" } }, { status: 404 });
     }
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": mimeType,
         "Content-Length": String(buffer.length),

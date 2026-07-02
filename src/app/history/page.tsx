@@ -35,13 +35,17 @@ export default function HistoryPage() {
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     apiClient
-      .listTasks()
+      .listTasks({ page: 1, limit: 12 })
       .then((response) => {
         setTasks(response.tasks);
+        setPage(response.page);
+        setHasMore(response.hasMore);
         setSelectedIds((ids) => ids.filter((id) => response.tasks.some((task) => task.id === id)));
       })
       .catch(() => router.push("/login?redirect=/history"))
@@ -51,7 +55,25 @@ export default function HistoryPage() {
   const deletableTasks = useMemo(() => tasks.filter((task) => task.status === "succeeded" || task.status === "failed"), [tasks]);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allDeletableSelected = deletableTasks.length > 0 && deletableTasks.every((task) => selectedSet.has(task.id));
-  const visibleTasks = useMemo(() => tasks.slice(0, visibleCount), [tasks, visibleCount]);
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const response = await apiClient.listTasks({ page: page + 1, limit: 12 });
+      setTasks((items) => {
+        const existingIds = new Set(items.map((task) => task.id));
+        return [...items, ...response.tasks.filter((task) => !existingIds.has(task.id))];
+      });
+      setPage(response.page);
+      setHasMore(response.hasMore);
+    } catch (requestError) {
+      setError(getImageErrorMessage(requestError));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const toggleSelected = (taskId: string) => {
     setMessage("");
@@ -168,7 +190,7 @@ export default function HistoryPage() {
       ) : (
         <>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {visibleTasks.map((task) => {
+            {tasks.map((task) => {
             const resultImage = task.resultImages?.[0] || task.resultImageUrl || "";
             const image = resultImage || task.inputImageUrl || "";
             return (
@@ -236,9 +258,9 @@ export default function HistoryPage() {
             );
           })}
           </div>
-          {visibleCount < tasks.length ? (
+          {hasMore ? (
             <div className="mt-8 flex justify-center">
-              <Button variant="outline" onClick={() => setVisibleCount((value) => value + 12)}>
+              <Button variant="outline" loading={loadingMore} onClick={loadMore}>
                 加载更多记录
               </Button>
             </div>

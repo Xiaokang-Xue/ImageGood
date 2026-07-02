@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { BillingError } from "@/lib/billing";
-import { getDbSnapshot, withDb } from "@/lib/db";
+import { getDbSnapshot, getImageTaskById, getUserImageTaskPage, withDb } from "@/lib/db";
 import { queryCodexTaskResult, recoverCodexTaskResult } from "@/lib/server/codex-image-provider";
 import {
   buildEditPrompt,
@@ -199,8 +199,7 @@ function creditReasonForTask(type: ImageTaskType) {
 }
 
 async function recoverTaskResultIfPresent(taskId: string) {
-  const snapshot = await getDbSnapshot();
-  const task = snapshot.imageTasks.find((item) => item.id === taskId);
+  const task = await getImageTaskById(taskId);
   if (!task || task.provider !== "codex") return null;
 
   const recovered = (await queryCodexTaskResult(task.id)) || (await recoverCodexTaskResult(task.id));
@@ -594,17 +593,13 @@ export async function runObjectRemoveTask(input: {
   });
 }
 
-export async function listUserTasks(userId: string) {
-  const db = await getDbSnapshot();
-  return db.imageTasks
-    .filter((task) => task.userId === userId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+export async function listUserTasks(userId: string, options?: { page?: number; limit?: number }) {
+  return getUserImageTaskPage(userId, options?.page, options?.limit);
 }
 
 export async function getUserTask(userId: string, taskId: string) {
-  const initial = await getDbSnapshot();
-  const ownedTask = initial.imageTasks.find((task) => task.userId === userId && task.id === taskId);
-  if (!ownedTask) return null;
+  const ownedTask = await getImageTaskById(taskId);
+  if (!ownedTask || ownedTask.userId !== userId) return null;
 
   if (ownedTask.status !== "succeeded" || !ownedTask.resultImages?.length) {
     try {
@@ -618,8 +613,8 @@ export async function getUserTask(userId: string, taskId: string) {
     }
   }
 
-  const db = await getDbSnapshot();
-  return db.imageTasks.find((task) => task.userId === userId && task.id === taskId) || null;
+  const latestTask = await getImageTaskById(taskId);
+  return latestTask?.userId === userId ? latestTask : null;
 }
 
 function isDeletableTask(task: ImageTaskRecord) {

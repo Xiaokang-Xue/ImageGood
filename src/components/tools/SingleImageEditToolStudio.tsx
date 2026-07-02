@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, History, Loader2, Sparkles, UploadCloud } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +14,7 @@ import {
   downloadImage,
   getImageErrorMessage,
   ImageApiClientError,
+  isAbortError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
@@ -101,6 +102,11 @@ export function SingleImageEditToolStudio({
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const pollingController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => pollingController.current?.abort();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -127,6 +133,9 @@ export function SingleImageEditToolStudio({
     setErrorActionHref("");
     setTaskId("");
     setResultUrl("");
+    pollingController.current?.abort();
+    const controller = new AbortController();
+    pollingController.current = controller;
 
     try {
       const response = await createToolTask(endpoint, {
@@ -135,7 +144,7 @@ export function SingleImageEditToolStudio({
       });
       setTaskId(response.taskId);
 
-      const task = await apiClient.waitForTaskDone(response.taskId);
+      const task = await apiClient.waitForTaskDone(response.taskId, { signal: controller.signal });
       if (task.status === "failed") {
         throw new Error(task.errorMessage || "处理失败，请稍后重试");
       }
@@ -148,6 +157,7 @@ export function SingleImageEditToolStudio({
       setResultUrl(url);
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
         router.push(`/login?redirect=${encodeURIComponent(loginRedirect)}`);
         return;
@@ -161,7 +171,10 @@ export function SingleImageEditToolStudio({
       );
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (pollingController.current === controller) {
+        pollingController.current = null;
+      }
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 

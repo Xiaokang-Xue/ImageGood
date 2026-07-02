@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   MousePointerClick,
   RefreshCcw,
+  Repeat2,
   ShoppingCart,
   UserPlus,
   Users,
@@ -162,6 +163,12 @@ export default function AdminAnalyticsPage() {
               label="尝试付款人数"
               value={formatNumber(data.overview.pendingOrderUsers)}
               helper={`待付款订单 ${formatNumber(data.overview.pendingOrders)} 单，用于观察支付转化流失`}
+            />
+            <MetricCard
+              icon={Repeat2}
+              label="复购率"
+              value={`${(data.overview.repeatPurchaseRate * 100).toFixed(1)}%`}
+              helper={`复购用户 ${formatNumber(data.overview.repeatPurchaseUsers)} 人 · 付费用户 ${formatNumber(data.overview.payingUsers)} 人`}
             />
             <MetricCard
               icon={ImageIcon}

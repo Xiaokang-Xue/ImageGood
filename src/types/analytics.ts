@@ -61,6 +61,9 @@ export interface AdminAnalyticsResponse {
     succeededTasks: number;
     failedTasks: number;
     paidOrders: number;
+    payingUsers: number;
+    repeatPurchaseUsers: number;
+    repeatPurchaseRate: number;
     pendingOrders: number;
     pendingOrderUsers: number;
     purchaseClicks: number;

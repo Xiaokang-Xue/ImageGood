@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
@@ -15,13 +15,13 @@ import {
   apiClient,
   getImageErrorMessage,
   imageUrlToUploadFile,
+  isAbortError,
   isEmailNotVerifiedError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
 import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { toolPrompts } from "@/lib/studio-content";
-import { sleep } from "@/lib/utils";
 import { useStudioStore } from "@/lib/studio-store";
 import type { EditImageResult, EditTool, HistoryItem } from "@/types/image";
 
@@ -37,6 +37,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const pollingController = useRef<AbortController | null>(null);
   const {
     uploadedImage,
     uploadedImageFile,
@@ -55,6 +56,10 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     setSelectedResult,
     addHistoryItem
   } = useStudioStore();
+
+  useEffect(() => {
+    return () => pollingController.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (!initialTool || !editableTools.includes(initialTool as EditTool)) return;
@@ -87,30 +92,30 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     setLoading(true);
     setError("");
     setNotice("");
+    pollingController.current?.abort();
+    const controller = new AbortController();
+    pollingController.current = controller;
     try {
       const shouldUseCurrentImageUrl = Boolean(currentImage && currentImage !== uploadedImage && !currentImageFile);
       const selectedInputFile = shouldUseCurrentImageUrl ? null : currentImageFile ?? uploadedImageFile ?? null;
       const selectedInputUrl = currentImage ?? originalImage ?? undefined;
 
       const submitEdit = async (imageOverride?: File) => {
-        const [response] = await Promise.all([
-          apiClient.editImage({
-            image: imageOverride ?? selectedInputFile ?? undefined,
-            imageUrl: imageOverride ? undefined : currentImage ?? originalImage ?? undefined,
-            prompt: finalPrompt,
-            tool: finalTool,
-            size: "1024x1024",
-            quality: "auto",
-            outputFormat: "png"
-          }),
-          sleep(1000)
-        ]);
+        const response = await apiClient.editImage({
+          image: imageOverride ?? selectedInputFile ?? undefined,
+          imageUrl: imageOverride ? undefined : currentImage ?? originalImage ?? undefined,
+          prompt: finalPrompt,
+          tool: finalTool,
+          size: "1024x1024",
+          quality: "auto",
+          outputFormat: "png"
+        });
 
         let result = response.results?.[0] as EditImageResult | undefined;
         let historyItem = response.historyItem as HistoryItem | undefined;
 
         if (!result) {
-          const task = await apiClient.waitForTaskDone(response.taskId);
+          const task = await apiClient.waitForTaskDone(response.taskId, { signal: controller.signal });
           if (task.status === "failed") {
             throw new Error(task.errorMessage || "生成失败，请稍后重试");
           }
@@ -173,6 +178,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
       addHistoryItem(historyItem);
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
         router.push("/login?redirect=/editor");
         return;
@@ -191,7 +197,10 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
       }
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (pollingController.current === controller) {
+        pollingController.current = null;
+      }
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 

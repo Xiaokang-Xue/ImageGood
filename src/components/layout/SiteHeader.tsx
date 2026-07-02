@@ -21,7 +21,12 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { apiClient } from "@/lib/api-client";
+import { logoutCurrentUser } from "@/lib/client-auth-api";
+import {
+  clearCurrentUserCache,
+  getCurrentUserCached,
+  subscribeCurrentUser
+} from "@/lib/client-current-user";
 import { cn } from "@/lib/utils";
 import type { PublicUser } from "@/types/user";
 
@@ -102,17 +107,20 @@ export function SiteHeader() {
   const headerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    const unsubscribe = subscribeCurrentUser(setUser);
     const refreshUser = () => {
-      apiClient
-        .me()
-        .then((response) => setUser(response.user))
-        .catch(() => setUser(null));
+      void getCurrentUserCached({ force: true });
     };
 
-    refreshUser();
+    void getCurrentUserCached();
     window.addEventListener("ai-image-credits-updated", refreshUser);
-    return () => window.removeEventListener("ai-image-credits-updated", refreshUser);
-  }, [pathname]);
+    window.addEventListener("imagegood-auth-changed", refreshUser);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("ai-image-credits-updated", refreshUser);
+      window.removeEventListener("imagegood-auth-changed", refreshUser);
+    };
+  }, []);
 
   useEffect(() => {
     setUserMenuOpen(false);
@@ -158,7 +166,8 @@ export function SiteHeader() {
   }, [mobileOpen]);
 
   const handleLogout = async () => {
-    await apiClient.logout().catch(() => null);
+    await logoutCurrentUser().catch(() => null);
+    clearCurrentUserCache();
     setUser(null);
     setUserMenuOpen(false);
     setMobileOpen(false);

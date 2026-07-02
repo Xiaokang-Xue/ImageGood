@@ -1,7 +1,14 @@
 import "server-only";
 import { randomUUID } from "crypto";
 import { CREDIT_PACKAGES, findCreditPackage, getCreditPackageUnitPrice } from "@/config/billing-plans";
-import { getDbSnapshot, withDb } from "@/lib/db";
+import {
+  getAdminOrderPage,
+  getDbSnapshot,
+  getDbUserById,
+  getOrderById,
+  getUserCreditTransactions,
+  withDb
+} from "@/lib/db";
 import type {
   AdminOrderRecord,
   CreditPackage,
@@ -33,8 +40,7 @@ function nowIso() {
 }
 
 export async function getCreditBalance(userId: string) {
-  const db = await getDbSnapshot();
-  return db.users.find((user) => user.id === userId)?.credits ?? 0;
+  return (await getDbUserById(userId))?.credits ?? 0;
 }
 
 export async function assertHasCredits(userId: string) {
@@ -69,11 +75,7 @@ export async function consumeCredit(userId: string, reason = "图片生成") {
 }
 
 export async function listCreditTransactions(userId: string, limit = 50) {
-  const db = await getDbSnapshot();
-  return db.creditTransactions
-    .filter((item) => item.userId === userId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, limit);
+  return getUserCreditTransactions(userId, limit);
 }
 
 export async function createOrder(userId: string, packageId: CreditPackageId) {
@@ -112,8 +114,7 @@ export async function createOrder(userId: string, packageId: CreditPackageId) {
 }
 
 export async function getOrderForUser(orderId: string, userId: string, isAdmin = false) {
-  const db = await getDbSnapshot();
-  const order = db.orders.find((item) => item.id === orderId);
+  const order = await getOrderById(orderId);
   if (!order || (!isAdmin && order.userId !== userId)) {
     return null;
   }
@@ -152,12 +153,8 @@ export async function listPendingOrders() {
     .map((order) => attachOrderUser(db, order));
 }
 
-export async function listAdminOrders() {
-  const db = await getDbSnapshot();
-  return db.orders
-    .slice()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map((order) => attachOrderUser(db, order));
+export async function listAdminOrders(options?: Parameters<typeof getAdminOrderPage>[0]) {
+  return getAdminOrderPage(options);
 }
 
 export async function confirmOrderPaid(orderId: string) {

@@ -39,9 +39,9 @@ export async function sendSmsCode(input: { phone: string; code: string }) {
     import("@alicloud/openapi-client"),
     import("@alicloud/tea-util")
   ]);
-  const dysmsapiExports = DysmsapiModule as Record<string, unknown> & { default?: Record<string, unknown> };
-  const openApiExports = OpenApiModule as Record<string, unknown> & { default?: Record<string, unknown> };
-  const utilExports = UtilModule as Record<string, unknown> & { default?: Record<string, unknown> };
+  const dysmsapiExports = DysmsapiModule as unknown as Record<string, unknown> & { default?: Record<string, unknown> };
+  const openApiExports = OpenApiModule as unknown as Record<string, unknown> & { default?: Record<string, unknown> };
+  const utilExports = UtilModule as unknown as Record<string, unknown> & { default?: Record<string, unknown> };
   const Dysmsapi = (dysmsapiExports.default || dysmsapiExports) as unknown as new (config: unknown) => {
     sendSmsWithOptions: (request: unknown, runtime: unknown) => Promise<{ body?: { code?: string; message?: string; requestId?: string } }>;
   };

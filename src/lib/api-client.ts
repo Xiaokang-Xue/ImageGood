@@ -214,26 +214,50 @@ export function getImageErrorMessage(error: unknown) {
   return "网络请求失败，请稍后重试";
 }
 
-export function isUnauthorizedError(error: unknown) {
+export function isUnauthorizedError(error: unknown): error is ImageApiClientError {
   return error instanceof ImageApiClientError && error.code === "UNAUTHORIZED";
 }
 
-export function isInsufficientCreditsError(error: unknown) {
+export function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+export function isInsufficientCreditsError(error: unknown): error is ImageApiClientError {
   return error instanceof ImageApiClientError && error.code === "INSUFFICIENT_CREDITS";
 }
 
-export function isPaymentSourceSurveyRequiredError(error: unknown) {
+export function isPaymentSourceSurveyRequiredError(error: unknown): error is ImageApiClientError {
   return error instanceof ImageApiClientError && error.code === "SOURCE_SURVEY_REQUIRED";
 }
 
-export function isEmailNotVerifiedError(error: unknown) {
+export function isEmailNotVerifiedError(error: unknown): error is ImageApiClientError {
   return error instanceof ImageApiClientError && (error.code === "EMAIL_NOT_VERIFIED" || error.code === "CONTACT_NOT_VERIFIED");
 }
 
 export const isContactNotVerifiedError = isEmailNotVerifiedError;
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      const error = new Error("Request aborted");
+      error.name = "AbortError";
+      reject(error);
+      return;
+    }
+
+    const handleAbort = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", handleAbort);
+      const error = new Error("Request aborted");
+      error.name = "AbortError";
+      reject(error);
+    };
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", handleAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", handleAbort, { once: true });
+  });
 }
 
 export async function downloadImage(url: string, filename = `ai-image-result-${Date.now()}.png`) {
@@ -402,8 +426,25 @@ export const apiClient = {
     return requestJson<CreditTransactionsResponse>("/api/credits/transactions");
   },
 
-  listAdminOrders() {
-    return requestJson<{ orders: AdminOrderRecord[] }>("/api/admin/orders");
+  listAdminOrders(options?: {
+    page?: number;
+    limit?: number;
+    status?: AdminOrderRecord["status"] | "all";
+    provider?: AdminOrderRecord["paymentProvider"] | "all";
+  }) {
+    const params = new URLSearchParams();
+    if (options?.page) params.set("page", String(options.page));
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.status && options.status !== "all") params.set("status", options.status);
+    if (options?.provider && options.provider !== "all") params.set("provider", options.provider);
+    const query = params.toString();
+    return requestJson<{
+      orders: AdminOrderRecord[];
+      page: number;
+      limit: number;
+      total: number;
+      hasMore: boolean;
+    }>(`/api/admin/orders${query ? `?${query}` : ""}`);
   },
 
   getAdminAnalytics() {
@@ -417,8 +458,12 @@ export const apiClient = {
     });
   },
 
-  listTasks() {
-    return requestJson<ImageTaskListResponse>("/api/tasks");
+  listTasks(options?: { page?: number; limit?: number }) {
+    const params = new URLSearchParams();
+    if (options?.page) params.set("page", String(options.page));
+    if (options?.limit) params.set("limit", String(options.limit));
+    const query = params.toString();
+    return requestJson<ImageTaskListResponse>(`/api/tasks${query ? `?${query}` : ""}`);
   },
 
   getTask(id: string) {
@@ -439,17 +484,22 @@ export const apiClient = {
     });
   },
 
-  async waitForTaskDone(id: string, options?: { intervalMs?: number; timeoutMs?: number }) {
+  async waitForTaskDone(id: string, options?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal }) {
     const intervalMs = options?.intervalMs ?? 2000;
     const timeoutMs = options?.timeoutMs ?? 60 * 60 * 1000;
     const startedAt = Date.now();
 
     while (Date.now() - startedAt <= timeoutMs) {
+      if (options?.signal?.aborted) {
+        const error = new Error("Request aborted");
+        error.name = "AbortError";
+        throw error;
+      }
       const response = await apiClient.getTask(id);
       if (response.task.status === "succeeded" || response.task.status === "failed") {
         return response.task;
       }
-      await wait(intervalMs);
+      await wait(intervalMs, options?.signal);
     }
 
     throw new ImageApiClientError("TASK_POLL_TIMEOUT", "图片生成时间较长，请稍后在历史记录中查看结果");

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
+import { setCurrentUserCache } from "@/lib/client-current-user";
 
 type RegisterMode = "phone" | "email";
 
@@ -125,7 +126,7 @@ function RegisterForm() {
       confirmPassword
     });
     setMessage(response.message || "注册成功");
-    window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+    setCurrentUserCache(response.user);
     setTimeout(() => {
       router.push(redirect);
       router.refresh();

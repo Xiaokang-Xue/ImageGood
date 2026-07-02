@@ -77,6 +77,9 @@ export interface DailyAnalyticsReport {
   };
   payments: {
     paidOrders: number;
+    payingUsers: number;
+    repeatPurchaseUsers: number;
+    repeatPurchaseRate: number;
     revenueCents: number;
     purchasedCredits: number;
     wechatPaidOrders: number;
@@ -108,6 +111,9 @@ export interface DailyAnalyticsReport {
     };
     payments: {
       paidOrders: number;
+      payingUsers: number;
+      repeatPurchaseUsers: number;
+      repeatPurchaseRate: number;
       revenueCents: number;
       purchasedCredits: number;
       wechatPaidOrders: number;
@@ -158,7 +164,7 @@ function startOfLocalDay(date: Date) {
 }
 
 function resolveReportWindow(input: { date?: string; range?: DailyReportRange }) {
-  const range = input.range === "today" ? "today" : "yesterday";
+  const range: DailyReportRange = input.range === "today" ? "today" : "yesterday";
   let start: Date;
 
   if (input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
@@ -190,6 +196,28 @@ function inRange(value: string | null | undefined, start: Date, end: Date) {
 
 function pathStartsWith(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(`${prefix}?`));
+}
+
+function paidOrderTime(order: StoredOrder) {
+  const value = order.paidAt || order.updatedAt || order.createdAt;
+  if (!value) return Number.NaN;
+  return new Date(value).getTime();
+}
+
+function repeatPurchaseMetrics(orders: StoredOrder[]) {
+  const orderCountByUser = new Map<string, number>();
+  for (const order of orders) {
+    orderCountByUser.set(order.userId, (orderCountByUser.get(order.userId) ?? 0) + 1);
+  }
+
+  const payingUsers = orderCountByUser.size;
+  const repeatPurchaseUsers = [...orderCountByUser.values()].filter((count) => count >= 2).length;
+
+  return {
+    payingUsers,
+    repeatPurchaseUsers,
+    repeatPurchaseRate: payingUsers > 0 ? repeatPurchaseUsers / payingUsers : 0
+  };
 }
 
 function emptyAnalyticsDatabase(): AnalyticsDatabase {
@@ -279,6 +307,7 @@ export async function getDailyAnalyticsReport(input: {
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
   const allPaidOrders = db.orders.filter((order) => order.status === "paid");
   const allPendingOrders = db.orders.filter((order) => order.status === "pending");
+  const cumulativeRepeatPurchases = repeatPurchaseMetrics(allPaidOrders);
 
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view" && inRange(event.createdAt, start, end));
   const purchaseClicks = db.analyticsEvents.filter(
@@ -297,6 +326,18 @@ export async function getDailyAnalyticsReport(input: {
 
   const paidOrders = db.orders.filter((order) => order.status === "paid" && inRange(order.paidAt || order.updatedAt, start, end));
   const pendingOrders = db.orders.filter((order) => order.status === "pending" && inRange(order.createdAt, start, end));
+  const paidUserIdsInRange = new Set(paidOrders.map((order) => order.userId));
+  const paidOrdersThroughPeriodEnd = allPaidOrders.filter((order) => {
+    const time = paidOrderTime(order);
+    return Number.isFinite(time) && time < end.getTime();
+  });
+  const orderCountThroughPeriodEnd = new Map<string, number>();
+  for (const order of paidOrdersThroughPeriodEnd) {
+    orderCountThroughPeriodEnd.set(order.userId, (orderCountThroughPeriodEnd.get(order.userId) ?? 0) + 1);
+  }
+  const repeatPurchaseUsersInRange = [...paidUserIdsInRange].filter(
+    (userId) => (orderCountThroughPeriodEnd.get(userId) ?? 0) >= 2
+  ).length;
 
   return {
     date,
@@ -319,6 +360,9 @@ export async function getDailyAnalyticsReport(input: {
     },
     payments: {
       paidOrders: paidOrders.length,
+      payingUsers: paidUserIdsInRange.size,
+      repeatPurchaseUsers: repeatPurchaseUsersInRange,
+      repeatPurchaseRate: paidUserIdsInRange.size > 0 ? repeatPurchaseUsersInRange / paidUserIdsInRange.size : 0,
       revenueCents: paidOrders.reduce((sum, order) => sum + (order.amountCents || 0), 0),
       purchasedCredits: paidOrders.reduce((sum, order) => sum + (order.credits || 0), 0),
       wechatPaidOrders: paidOrders.filter((order) => order.paymentProvider === "wechat").length,
@@ -350,6 +394,9 @@ export async function getDailyAnalyticsReport(input: {
       },
       payments: {
         paidOrders: allPaidOrders.length,
+        payingUsers: cumulativeRepeatPurchases.payingUsers,
+        repeatPurchaseUsers: cumulativeRepeatPurchases.repeatPurchaseUsers,
+        repeatPurchaseRate: cumulativeRepeatPurchases.repeatPurchaseRate,
         revenueCents: allPaidOrders.reduce((sum, order) => sum + (order.amountCents || 0), 0),
         purchasedCredits: allPaidOrders.reduce((sum, order) => sum + (order.credits || 0), 0),
         wechatPaidOrders: allPaidOrders.filter((order) => order.paymentProvider === "wechat").length,
