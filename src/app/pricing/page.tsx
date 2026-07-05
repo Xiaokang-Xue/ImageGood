@@ -81,7 +81,7 @@ export default function PricingPage() {
         <p className="text-sm font-semibold text-blue-600">购买积分</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">选择适合你的积分包</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-muted">
-          新用户注册赠送 1 次免费生成，积分用完后可按需购买。购买更多积分，单次生成成本更低。
+          新用户注册赠送 1 次免费生成，积分用完后可按需购买。
         </p>
       </div>
 
@@ -165,11 +165,8 @@ export default function PricingPage() {
             {item.description ? <p className="mt-3 min-h-[44px] text-sm leading-6 text-slate-600">{item.description}</p> : null}
             <div className="mt-6">
               <span className="text-4xl font-bold text-ink">¥{formatPackagePrice(item.priceCents)}</span>
-              <span className="ml-2 text-sm font-semibold text-muted">/ {item.credits} 次</span>
+              <span className="ml-2 text-sm font-semibold text-muted">{item.credits} 积分</span>
             </div>
-            <p className="mt-2 text-sm font-semibold text-blue-600">
-              单次约 {item.unitPriceLabel ?? `¥${(item.priceCents / 100 / item.credits).toFixed(2)} / 次`}
-            </p>
             <div className="mt-6 grid gap-3 text-sm text-slate-600">
               <p className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -195,11 +192,11 @@ export default function PricingPage() {
           </p>
           <p className="flex gap-2">
             <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-500" />
-            积分支付成功后自动到账，可用于 AI 修图、商品图生成、封面海报生成等功能。
+            积分可用于 AI 修图、文生图、智能抠图、图片增强、去杂物、商品图和封面海报等功能。
           </p>
           <p className="flex gap-2">
             <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-500" />
-            购买更多积分，单次生成成本更低。
+            微信、支付宝均支持，支付成功后自动到账。
           </p>
         </div>
       </Card>

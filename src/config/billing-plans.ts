@@ -1,46 +1,42 @@
 import type { CreditPackage } from "@/types/billing";
 
-const STANDARD_CREDIT_PACKAGES: CreditPackage[] = [
+export const CREDIT_PACKAGES: CreditPackage[] = [
   {
     id: "starter",
-    name: "体验包",
-    priceCents: 990,
-    credits: 10,
-    subtitle: "轻量尝鲜",
-    description: "低门槛体验 ImageGood 的 AI 修图能力",
-    buttonLabel: "立即体验",
-    unitPriceLabel: "¥0.99 / 次"
+    name: "入门包",
+    priceCents: 1990,
+    credits: 15,
+    subtitle: "轻量体验",
+    description: "适合首次体验 AI 修图、抠图和文生图",
+    buttonLabel: "立即体验"
   },
   {
     id: "standard",
     name: "标准包",
-    priceCents: 2990,
-    credits: 40,
-    subtitle: "日常修图",
-    description: "适合日常图片处理",
-    buttonLabel: "立即购买",
-    unitPriceLabel: "¥0.75 / 次"
+    priceCents: 4990,
+    credits: 45,
+    subtitle: "日常使用",
+    description: "适合日常修图、商品图处理和封面生成",
+    buttonLabel: "立即购买"
   },
   {
     id: "pro",
-    name: "高级包",
-    priceCents: 6990,
-    credits: 120,
-    subtitle: "创作者推荐",
-    description: "持续创作更划算",
+    name: "创作者包",
+    priceCents: 9900,
+    credits: 100,
+    subtitle: "推荐选择",
+    description: "适合持续创作，图片处理更自由",
     buttonLabel: "推荐购买",
-    recommended: true,
-    unitPriceLabel: "¥0.58 / 次"
+    recommended: true
   },
   {
     id: "business",
     name: "专业包",
-    priceCents: 14900,
-    credits: 300,
+    priceCents: 19900,
+    credits: 220,
     subtitle: "高频使用",
-    description: "适合长期高频使用",
-    buttonLabel: "开通专业包",
-    unitPriceLabel: "¥0.50 / 次"
+    description: "适合高频生成、商品图和内容创作",
+    buttonLabel: "开通专业包"
   }
 ];
 
@@ -52,15 +48,9 @@ const PAYMENT_TEST_PACKAGE: CreditPackage = {
   subtitle: "仅用于支付链路测试，完成后可关闭"
 };
 
-export const CREDIT_PACKAGES: CreditPackage[] = [
-  ...STANDARD_CREDIT_PACKAGES,
-  ...(process.env.ENABLE_PAYMENT_TEST_PACKAGE === "true" ? [PAYMENT_TEST_PACKAGE] : [])
-];
-
-export function getCreditPackageUnitPrice(packageItem: CreditPackage) {
-  return packageItem.priceCents / 100 / packageItem.credits;
-}
-
 export function findCreditPackage(packageId: string) {
+  if (packageId === PAYMENT_TEST_PACKAGE.id && process.env.ENABLE_PAYMENT_TEST_PACKAGE === "true") {
+    return PAYMENT_TEST_PACKAGE;
+  }
   return CREDIT_PACKAGES.find((item) => item.id === packageId);
 }

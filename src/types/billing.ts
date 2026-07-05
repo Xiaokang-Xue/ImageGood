@@ -13,7 +13,6 @@ export interface CreditPackage {
   description?: string;
   buttonLabel?: string;
   recommended?: boolean;
-  unitPriceLabel?: string;
 }
 
 export interface BillingPackagesResponse {

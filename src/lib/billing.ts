@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "crypto";
-import { CREDIT_PACKAGES, findCreditPackage, getCreditPackageUnitPrice } from "@/config/billing-plans";
+import { CREDIT_PACKAGES, findCreditPackage } from "@/config/billing-plans";
 import {
   getAdminOrderPage,
   getDbSnapshot,
@@ -11,7 +11,6 @@ import {
 } from "@/lib/db";
 import type {
   AdminOrderRecord,
-  CreditPackage,
   CreditPackageId,
   CreditTransactionRecord,
   OrderRecord
@@ -29,10 +28,6 @@ export class BillingError extends Error {
     this.code = code;
     this.status = status;
   }
-}
-
-export function unitPrice(packageItem: CreditPackage) {
-  return getCreditPackageUnitPrice(packageItem);
 }
 
 function nowIso() {
