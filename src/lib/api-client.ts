@@ -24,7 +24,7 @@ import type {
   PaymentProvider,
   PaymentOrderResponse
 } from "@/types/billing";
-import type { AdminAnalyticsResponse } from "@/types/analytics";
+import type { AdminAnalyticsResponse, AnalyticsFunnelRange } from "@/types/analytics";
 import type { DeleteImageTaskResponse, DeleteImageTasksResponse, ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
@@ -447,8 +447,12 @@ export const apiClient = {
     }>(`/api/admin/orders${query ? `?${query}` : ""}`);
   },
 
-  getAdminAnalytics() {
-    return requestJson<AdminAnalyticsResponse>("/api/admin/analytics");
+  getAdminAnalytics(options?: { range?: AnalyticsFunnelRange; refresh?: boolean }) {
+    const params = new URLSearchParams();
+    if (options?.range) params.set("range", options.range);
+    if (options?.refresh) params.set("refresh", "1");
+    const query = params.toString();
+    return requestJson<AdminAnalyticsResponse>(`/api/admin/analytics${query ? `?${query}` : ""}`);
   },
 
   confirmAdminOrder(id: string) {

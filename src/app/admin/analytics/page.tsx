@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
+  ArrowRight,
   BarChart3,
-  CheckCircle2,
+  Clock3,
   CreditCard,
   Eye,
   Image as ImageIcon,
-  MousePointerClick,
   RefreshCcw,
   Repeat2,
   ShoppingCart,
@@ -20,7 +19,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ImageApiClientError, apiClient, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
-import type { AdminAnalyticsResponse } from "@/types/analytics";
+import type { AdminAnalyticsResponse, AnalyticsFunnelRange, AnalyticsFunnelStep } from "@/types/analytics";
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
@@ -31,10 +30,22 @@ function formatCny(amountCents: number) {
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString("zh-CN", {
+  return new Date(`${date}T00:00:00+08:00`).toLocaleDateString("zh-CN", {
     month: "2-digit",
-    day: "2-digit"
+    day: "2-digit",
+    timeZone: "Asia/Shanghai"
   });
+}
+
+function formatBeijingDateTime(date: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Shanghai"
+  }).format(new Date(date));
 }
 
 function percent(part: number, total: number) {
@@ -46,13 +57,14 @@ export default function AdminAnalyticsPage() {
   const [data, setData] = useState<AdminAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [funnelRange, setFunnelRange] = useState<AnalyticsFunnelRange>("all");
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((refresh = false) => {
     setLoading(true);
     setError("");
 
     apiClient
-      .getAdminAnalytics()
+      .getAdminAnalytics({ range: funnelRange, refresh })
       .then(setData)
       .catch((requestError) => {
         if (isUnauthorizedError(requestError)) {
@@ -66,7 +78,7 @@ export default function AdminAnalyticsPage() {
         setError(getImageErrorMessage(requestError) || "服务暂时不可用，请稍后重试");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [funnelRange]);
 
   useEffect(() => {
     loadData();
@@ -90,15 +102,13 @@ export default function AdminAnalyticsPage() {
         <div>
           <p className="text-sm font-semibold text-studio-600">管理员</p>
           <h1 className="mt-2 text-3xl font-bold text-ink">运营数据看板</h1>
-          <p className="mt-3 text-sm text-muted">
-            查看网站访问、注册、生成任务和付费订单的核心指标。
-          </p>
+          <p className="mt-3 text-sm text-muted">按北京时间查看今日表现、累计规模和用户转化流失。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/orders">
             <Button variant="outline">查看订单后台</Button>
           </Link>
-          <Button variant="dark" loading={loading} onClick={loadData}>
+          <Button variant="dark" loading={loading} onClick={() => loadData(true)}>
             <RefreshCcw className="h-4 w-4" />
             刷新数据
           </Button>
@@ -121,85 +131,134 @@ export default function AdminAnalyticsPage() {
         </Card>
       ) : data && !error ? (
         <>
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-6 flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600 sm:flex-row sm:items-center sm:justify-between">
+            <span className="inline-flex items-center gap-2 font-semibold text-neutral-800">
+              <Clock3 className="h-4 w-4" />
+              统计日期 {data.meta.today}，时区为北京时间（UTC+8）
+            </span>
+            <span>数据更新于 {formatBeijingDateTime(data.meta.generatedAt)}</span>
+          </div>
+
+          <SectionHeading eyebrow="今日数据" title="今天的实际运营表现" description="所有今日指标均按北京时间 00:00 至当前时刻统计。" />
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard
               icon={Eye}
-              label="总访问量"
-              value={formatNumber(data.overview.totalPageViews)}
-              helper={`今日 ${formatNumber(data.overview.todayPageViews)} 次 · 访客 ${formatNumber(data.overview.uniqueVisitors)} 人`}
+              label="今日访问人数"
+              value={`${formatNumber(data.overview.todayVisitors)} 人`}
+              helper={`按设备或浏览器去重 · 页面访问 ${formatNumber(data.overview.todayPageViews)} 次`}
+            />
+            <MetricCard
+              icon={UserPlus}
+              label="今日新注册"
+              value={`${formatNumber(data.overview.todayRegistrations)} 人`}
+              helper={`今日访问过网站的登录用户 ${formatNumber(data.overview.todayActiveUsers)} 人`}
+            />
+            <MetricCard
+              icon={ImageIcon}
+              label="今日图片任务"
+              value={`${formatNumber(data.overview.todayTasks)} 次`}
+              helper={`成功 ${formatNumber(data.overview.todaySucceededTasks)} 次 · 使用用户 ${formatNumber(data.overview.todayTaskUsers)} 人`}
+            />
+            <MetricCard
+              icon={CreditCard}
+              label="今日支付收入"
+              value={formatCny(data.overview.todayRevenueCents)}
+              helper={`支付成功 ${formatNumber(data.overview.todayPaidOrders)} 单`}
+            />
+            <MetricCard
+              icon={ShoppingCart}
+              label="今日创建订单"
+              value={`${formatNumber(data.overview.todayCreatedOrders)} 单`}
+              helper={`其中当前待付款 ${formatNumber(data.overview.todayPendingOrders)} 单`}
+            />
+          </section>
+
+          <SectionHeading
+            eyebrow="累计数据"
+            title="业务规模与长期质量"
+            description="累计指标使用数据库中的全部历史记录，不与今日口径混合。"
+            className="mt-8"
+          />
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard
+              icon={Eye}
+              label="累计访问量"
+              value={`${formatNumber(data.overview.totalPageViews)} 次`}
+              helper={`累计访问人数 ${formatNumber(data.overview.uniqueVisitors)} 人（按设备或浏览器去重）`}
             />
             <MetricCard
               icon={Users}
               label="累计已注册用户"
-              value={formatNumber(data.overview.totalUsers)}
-              helper={`今日新注册 ${formatNumber(data.overview.todayRegistrations)} 人 · 联系方式验证率 ${percent(
-                data.overview.verifiedUsers,
-                data.overview.totalUsers
-              )}`}
-            />
-            <MetricCard
-              icon={ShoppingCart}
-              label="付费订单"
-              value={formatNumber(data.overview.paidOrders)}
-              helper={`今日收入 ${formatCny(data.overview.todayRevenueCents)} · 待付款 ${formatNumber(data.overview.pendingOrders)} 单`}
-            />
-            <MetricCard
-              icon={CreditCard}
-              label="累计收入"
-              value={formatCny(data.overview.revenueCents)}
-              helper={`已消耗积分 ${formatNumber(data.overview.creditsConsumed)} 次`}
-            />
-          </section>
-
-          <section className="mt-4 grid gap-4 md:grid-cols-3">
-            <MetricCard
-              icon={MousePointerClick}
-              label="购买按钮点击"
-              value={formatNumber(data.overview.purchaseClicks)}
-              helper={`点击用户 ${formatNumber(data.overview.purchaseClickUsers)} 人 · 购买页访客 ${formatNumber(data.overview.pricingVisitors)} 人`}
-            />
-            <MetricCard
-              icon={ShoppingCart}
-              label="尝试付款人数"
-              value={formatNumber(data.overview.pendingOrderUsers)}
-              helper={`待付款订单 ${formatNumber(data.overview.pendingOrders)} 单，用于观察支付转化流失`}
-            />
-            <MetricCard
-              icon={Repeat2}
-              label="复购率"
-              value={`${(data.overview.repeatPurchaseRate * 100).toFixed(1)}%`}
-              helper={`复购用户 ${formatNumber(data.overview.repeatPurchaseUsers)} 人 · 付费用户 ${formatNumber(data.overview.payingUsers)} 人`}
+              value={`${formatNumber(data.overview.totalUsers)} 人`}
+              helper={`已验证联系方式 ${formatNumber(data.overview.verifiedUsers)} 人 · 验证率 ${percent(data.overview.verifiedUsers, data.overview.totalUsers)}`}
             />
             <MetricCard
               icon={ImageIcon}
-              label="生成任务"
-              value={formatNumber(data.overview.totalTasks)}
-              helper={`成功 ${formatNumber(data.overview.succeededTasks)} · 失败 ${formatNumber(data.overview.failedTasks)}`}
-            />
-            <MetricCard
-              icon={CheckCircle2}
-              label="生成成功率"
-              value={percent(data.overview.succeededTasks, data.overview.totalTasks)}
-              helper="按全部图片任务计算"
-            />
-            <MetricCard
-              icon={UserPlus}
-              label="已验证联系方式用户"
-              value={formatNumber(data.overview.verifiedUsers)}
-              helper="用于评估可生成用户规模"
-            />
-            <MetricCard
-              icon={Activity}
-              label="近7日访问过网站的登录用户"
-              value={formatNumber(data.overview.activeUsers7d)}
-              helper={`今日访问过网站的登录用户 ${formatNumber(data.overview.todayActiveUsers)} 人 · 生成页访问设备 ${formatNumber(data.overview.generationPageVisitors)} 个`}
+              label="累计图片任务"
+              value={`${formatNumber(data.overview.totalTasks)} 次`}
+              helper={`成功 ${formatNumber(data.overview.succeededTasks)} 次 · 成功率 ${percent(data.overview.succeededTasks, data.overview.totalTasks)}`}
             />
             <MetricCard
               icon={CreditCard}
-              label="结账页访客"
-              value={formatNumber(data.overview.checkoutVisitors)}
-              helper={`结账页访问 ${formatNumber(data.overview.checkoutPageViews)} 次，用于分析支付页到达率`}
+              label="累计支付收入"
+              value={formatCny(data.overview.revenueCents)}
+              helper={`付费用户 ${formatNumber(data.overview.payingUsers)} 人 · 已完成订单 ${formatNumber(data.overview.paidOrders)} 单`}
             />
+            <MetricCard
+              icon={Repeat2}
+              label="累计复购率"
+              value={`${(data.overview.repeatPurchaseRate * 100).toFixed(1)}%`}
+              helper={`复购用户 ${formatNumber(data.overview.repeatPurchaseUsers)} 人 · 当前待付款 ${formatNumber(data.overview.pendingOrders)} 单`}
+            />
+          </section>
+
+          <section className="mt-8">
+            <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-studio-600">完整转化漏斗</p>
+                <h2 className="mt-1 text-2xl font-bold text-ink">从访问到复购的用户流失</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+                  每一步按用户或访问者去重，并要求后一步发生在前一步之后。默认展示全部历史数据，也可切换观察近期转化。
+                </p>
+              </div>
+              <div className="inline-flex w-fit rounded-lg border border-neutral-200 bg-neutral-50 p-1">
+                {([
+                  ["today", "今日"],
+                  ["7d", "近 7 天"],
+                  ["30d", "近 30 天"],
+                  ["all", "全部"]
+                ] as Array<[AnalyticsFunnelRange, string]>).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                      funnelRange === value ? "bg-neutral-950 text-white shadow-sm" : "text-neutral-600 hover:bg-white hover:text-neutral-950"
+                    }`}
+                    onClick={() => setFunnelRange(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[1.35fr_0.8fr_0.65fr]">
+              <FunnelGroup
+                title="访问激活"
+                description="从首页继续进入任一图片工具"
+                steps={data.funnel.steps.filter((step) => step.group === "activation")}
+              />
+              <FunnelGroup
+                title="购买转化"
+                description="从了解价格到支付成功"
+                steps={data.funnel.steps.filter((step) => step.group === "payment")}
+              />
+              <FunnelGroup
+                title="付费留存"
+                description="首次购买后的复购表现"
+                steps={data.funnel.steps.filter((step) => step.group === "retention")}
+              />
+            </div>
           </section>
 
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -214,7 +273,7 @@ export default function AdminAnalyticsPage() {
 
               <div className="max-h-[620px] overflow-y-auto pr-1">
                 <div className="grid gap-4">
-                {data.daily.map((item) => (
+                {[...data.daily].reverse().map((item) => (
                   <div key={item.date} className="grid gap-3 rounded-lg border border-line bg-slate-50 p-4 md:grid-cols-[80px_minmax(0,1fr)_160px] md:items-center">
                     <p className="text-sm font-semibold text-slate-600">{formatDate(item.date)}</p>
                     <div className="grid gap-2">
@@ -290,34 +349,6 @@ export default function AdminAnalyticsPage() {
 
               <Card className="p-6">
                 <div className="mb-5">
-                  <p className="text-sm font-semibold text-studio-600">热门页面</p>
-                  <h2 className="mt-1 text-xl font-bold text-ink">功能访问排行</h2>
-                </div>
-                {data.topPages.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-muted">
-                    暂无访问数据。页面打开后会自动开始记录。
-                  </p>
-                ) : (
-                  <div className="grid gap-3">
-                    {data.topPages.map((page, index) => (
-                      <div key={page.path} className="rounded-lg border border-line bg-slate-50 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="min-w-0 truncate text-sm font-bold text-ink">
-                            {index + 1}. {page.label}
-                          </p>
-                          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-studio-700 ring-1 ring-line">
-                            {page.views} 次
-                          </span>
-                        </div>
-                        <p className="mt-2 text-xs text-muted">访问设备/浏览器 {page.uniqueVisitors} 个</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-
-              <Card className="p-6">
-                <div className="mb-5">
                   <p className="text-sm font-semibold text-studio-600">最近付费</p>
                   <h2 className="mt-1 text-xl font-bold text-ink">已完成订单</h2>
                 </div>
@@ -347,6 +378,87 @@ export default function AdminAnalyticsPage() {
         </>
       ) : null}
     </main>
+  );
+}
+
+function SectionHeading({
+  eyebrow,
+  title,
+  description,
+  className = ""
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  className?: string;
+}) {
+  return (
+    <div className={`mb-4 ${className}`}>
+      <p className="text-sm font-semibold text-studio-600">{eyebrow}</p>
+      <h2 className="mt-1 text-xl font-bold text-ink">{title}</h2>
+      <p className="mt-1 text-sm text-muted">{description}</p>
+    </div>
+  );
+}
+
+function FunnelGroup({
+  title,
+  description,
+  steps
+}: {
+  title: string;
+  description: string;
+  steps: AnalyticsFunnelStep[];
+}) {
+  return (
+    <Card className="p-5">
+      <div className="mb-4 border-b border-line pb-4">
+        <h3 className="text-lg font-bold text-ink">{title}</h3>
+        <p className="mt-1 text-sm text-muted">{description}</p>
+      </div>
+      <div className="grid gap-3">
+        {steps.map((step) => (
+          <div key={step.id} className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+            <div className="grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-2">
+              <div>
+                <p className="text-xs font-semibold text-neutral-500">{step.fromLabel}</p>
+                <p className="mt-1 text-xl font-bold text-neutral-950">{formatNumber(step.fromUsers)} 人</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-neutral-400" />
+              <div className="text-right">
+                <p className="text-xs font-semibold text-neutral-500">{step.toLabel}</p>
+                <p className="mt-1 text-xl font-bold text-neutral-950">{formatNumber(step.toUsers)} 人</p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                  step.fromUsers === 0
+                    ? "bg-neutral-200 text-neutral-600"
+                    : step.conversionRate >= 0.6
+                      ? "bg-emerald-100 text-emerald-700"
+                      : step.conversionRate >= 0.3
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-rose-100 text-rose-700"
+                }`}
+              >
+                转化率 {step.fromUsers === 0 ? "暂无数据" : `${(step.conversionRate * 100).toFixed(1)}%`}
+              </span>
+              <span className="text-xs font-semibold text-neutral-500">
+                流失 {formatNumber(step.dropOffUsers)} 人
+              </span>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-neutral-200">
+              <div
+                className="h-full rounded-full bg-neutral-900"
+                style={{ width: `${step.fromUsers > 0 ? Math.max(2, step.conversionRate * 100) : 0}%` }}
+              />
+            </div>
+            <p className="mt-3 text-xs leading-5 text-neutral-500">{step.description}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

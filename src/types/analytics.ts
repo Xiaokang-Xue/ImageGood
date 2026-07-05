@@ -30,13 +30,6 @@ export interface AnalyticsDailyPoint {
   succeededTasks: number;
 }
 
-export interface AnalyticsTopPage {
-  path: string;
-  label: string;
-  views: number;
-  uniqueVisitors: number;
-}
-
 export interface AnalyticsChannelPoint {
   channel: string;
   count: number;
@@ -49,10 +42,32 @@ export interface AnalyticsTaskTypePoint {
   succeeded: number;
 }
 
+export type AnalyticsFunnelRange = "today" | "7d" | "30d" | "all";
+
+export interface AnalyticsFunnelStep {
+  id: string;
+  group: "activation" | "payment" | "retention";
+  fromLabel: string;
+  toLabel: string;
+  fromUsers: number;
+  toUsers: number;
+  conversionRate: number;
+  dropOffUsers: number;
+  description: string;
+}
+
 export interface AdminAnalyticsResponse {
+  meta: {
+    timezone: "Asia/Shanghai";
+    generatedAt: string;
+    today: string;
+    funnelRange: AnalyticsFunnelRange;
+    funnelRangeLabel: string;
+  };
   overview: {
     totalPageViews: number;
     todayPageViews: number;
+    todayVisitors: number;
     uniqueVisitors: number;
     totalUsers: number;
     todayRegistrations: number;
@@ -66,6 +81,9 @@ export interface AdminAnalyticsResponse {
     repeatPurchaseRate: number;
     pendingOrders: number;
     pendingOrderUsers: number;
+    todayPendingOrders: number;
+    todayCreatedOrders: number;
+    todayPaidOrders: number;
     purchaseClicks: number;
     purchaseClickUsers: number;
     pricingPageViews: number;
@@ -78,9 +96,14 @@ export interface AdminAnalyticsResponse {
     revenueCents: number;
     todayRevenueCents: number;
     creditsConsumed: number;
+    todayTasks: number;
+    todaySucceededTasks: number;
+    todayTaskUsers: number;
+  };
+  funnel: {
+    steps: AnalyticsFunnelStep[];
   };
   daily: AnalyticsDailyPoint[];
-  topPages: AnalyticsTopPage[];
   acquisitionChannels: AnalyticsChannelPoint[];
   taskTypes: AnalyticsTaskTypePoint[];
   recentPaidOrders: Array<{

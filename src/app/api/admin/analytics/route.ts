@@ -1,35 +1,65 @@
 import { NextResponse } from "next/server";
 import { getDbSnapshot } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import type { AdminAnalyticsResponse } from "@/types/analytics";
+import type {
+  AdminAnalyticsResponse,
+  AnalyticsEventRecord,
+  AnalyticsFunnelRange,
+  AnalyticsFunnelStep
+} from "@/types/analytics";
+import type { OrderRecord } from "@/types/billing";
 
 export const runtime = "nodejs";
 
 const ANALYTICS_CACHE_MS = 30_000;
-let analyticsCache: { expiresAt: number; response: AdminAnalyticsResponse } | null = null;
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const analyticsCache = new Map<string, { expiresAt: number; response: AdminAnalyticsResponse }>();
 
-function startOfToday() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
+function beijingDateKey(input: string | number | Date | null | undefined) {
+  if (input === null || input === undefined || input === "") return "";
+  const timestamp = input instanceof Date ? input.getTime() : typeof input === "number" ? input : new Date(input).getTime();
+  if (!Number.isFinite(timestamp)) return "";
+  return new Date(timestamp + BEIJING_OFFSET_MS).toISOString().slice(0, 10);
 }
 
-function dateKey(input: string | null | undefined) {
-  if (!input) return "";
-  const date = new Date(input);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+function beijingDayStartMs(dateKey: string) {
+  return Date.parse(`${dateKey}T00:00:00+08:00`);
 }
 
 function lastDays(days: number) {
   const keys: string[] = [];
-  const today = startOfToday();
+  const todayStart = beijingDayStartMs(beijingDateKey(Date.now()));
   for (let index = days - 1; index >= 0; index -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - index);
-    keys.push(date.toISOString().slice(0, 10));
+    keys.push(beijingDateKey(todayStart - index * DAY_MS));
   }
   return keys;
+}
+
+function parseFunnelRange(value: string | null): AnalyticsFunnelRange {
+  if (value === "today" || value === "7d" || value === "30d" || value === "all") return value;
+  return "all";
+}
+
+function funnelRangeLabel(range: AnalyticsFunnelRange) {
+  if (range === "today") return "今日";
+  if (range === "7d") return "近 7 天";
+  if (range === "30d") return "近 30 天";
+  return "全部历史";
+}
+
+function funnelRangeStart(range: AnalyticsFunnelRange, todayKey: string) {
+  const todayStart = beijingDayStartMs(todayKey);
+  if (range === "today") return todayStart;
+  if (range === "7d") return todayStart - 6 * DAY_MS;
+  if (range === "30d") return todayStart - 29 * DAY_MS;
+  return null;
+}
+
+function isInRange(input: string | null | undefined, startMs: number | null) {
+  if (!input) return false;
+  const timestamp = new Date(input).getTime();
+  return Number.isFinite(timestamp) && (startMs === null || timestamp >= startMs);
 }
 
 function eventIdentity(event: { userId?: string | null; visitorId: string }) {
@@ -45,27 +75,6 @@ function displayUser(user?: { email?: string | null; phone?: string | null; name
   if (user.email) return user.email;
   if (user.phone) return user.phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
   return user.name || "未知用户";
-}
-
-function pageFeatureLabel(path: string) {
-  const pathname = path.split("?")[0] || "/";
-  if (pathname === "/") return "首页";
-  if (pathname.startsWith("/editor")) return "智能修图";
-  if (pathname.startsWith("/text-to-image")) return "文生图";
-  if (pathname.startsWith("/remove-background")) return "智能抠图";
-  if (pathname.startsWith("/image-enhancer")) return "图片增强";
-  if (pathname.startsWith("/object-remover")) return "去杂物";
-  if (pathname.startsWith("/product")) return "商品图生成";
-  if (pathname.startsWith("/poster")) return "封面海报生成";
-  if (pathname.startsWith("/pricing")) return "积分购买页";
-  if (pathname.startsWith("/checkout")) return "支付结账页";
-  if (pathname.startsWith("/login")) return "登录页";
-  if (pathname.startsWith("/register")) return "注册页";
-  if (pathname.startsWith("/history")) return "历史记录";
-  if (pathname.startsWith("/account")) return "账户中心";
-  if (pathname.startsWith("/templates")) return "模板中心";
-  if (pathname.startsWith("/admin")) return "管理员后台";
-  return "其他页面";
 }
 
 function taskTypeLabel(type: string) {
@@ -97,7 +106,159 @@ function repeatPurchaseMetrics(orders: Array<{ userId: string }>) {
   };
 }
 
-export async function GET() {
+function buildConversionFunnel(input: {
+  events: AnalyticsEventRecord[];
+  orders: OrderRecord[];
+  range: AnalyticsFunnelRange;
+  todayKey: string;
+}): AnalyticsFunnelStep[] {
+  const rangeStart = funnelRangeStart(input.range, input.todayKey);
+  const visitorToUser = new Map<string, string>();
+  for (const event of input.events) {
+    if (event.userId) visitorToUser.set(event.visitorId, event.userId);
+  }
+
+  const identityForEvent = (event: AnalyticsEventRecord) =>
+    event.userId
+      ? `user:${event.userId}`
+      : visitorToUser.has(event.visitorId)
+        ? `user:${visitorToUser.get(event.visitorId)}`
+        : `visitor:${event.visitorId}`;
+
+  const eventsInRange = input.events.filter((event) => isInRange(event.createdAt, rangeStart));
+  const firstEventTimes = (events: AnalyticsEventRecord[]) => {
+    const result = new Map<string, number>();
+    for (const event of events) {
+      const timestamp = new Date(event.createdAt).getTime();
+      if (!Number.isFinite(timestamp)) continue;
+      const identity = identityForEvent(event);
+      const current = result.get(identity);
+      if (current === undefined || timestamp < current) result.set(identity, timestamp);
+    }
+    return result;
+  };
+  const convertedAfter = (from: Map<string, number>, to: Map<string, number>) => {
+    let converted = 0;
+    for (const [identity, fromTime] of from) {
+      const toTime = to.get(identity);
+      if (toTime !== undefined && toTime >= fromTime) converted += 1;
+    }
+    return converted;
+  };
+  const makeStep = (
+    id: string,
+    group: AnalyticsFunnelStep["group"],
+    fromLabel: string,
+    toLabel: string,
+    fromUsers: number,
+    toUsers: number,
+    description: string
+  ): AnalyticsFunnelStep => {
+    const safeToUsers = Math.min(fromUsers, toUsers);
+    return {
+      id,
+      group,
+      fromLabel,
+      toLabel,
+      fromUsers,
+      toUsers: safeToUsers,
+      conversionRate: fromUsers > 0 ? safeToUsers / fromUsers : 0,
+      dropOffUsers: Math.max(0, fromUsers - safeToUsers),
+      description
+    };
+  };
+
+  const pageViews = eventsInRange.filter((event) => event.type === "page_view");
+  const homepageViews = firstEventTimes(pageViews.filter((event) => event.path.split("?")[0] === "/"));
+  const toolViews = firstEventTimes(
+    pageViews.filter((event) =>
+      pathStartsWith(event.path, [
+        "/editor",
+        "/text-to-image",
+        "/remove-background",
+        "/image-enhancer",
+        "/object-remover",
+        "/product",
+        "/poster"
+      ])
+    )
+  );
+
+  const pricingViews = firstEventTimes(
+    pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]))
+  );
+  const ordersInRange = input.orders.filter((order) => isInRange(order.createdAt, rangeStart));
+  const firstOrderTimes = new Map<string, number>();
+  for (const order of ordersInRange) {
+    const identity = `user:${order.userId}`;
+    const timestamp = new Date(order.createdAt).getTime();
+    const current = firstOrderTimes.get(identity);
+    if (Number.isFinite(timestamp) && (current === undefined || timestamp < current)) {
+      firstOrderTimes.set(identity, timestamp);
+    }
+  }
+  const orderCreators = new Set(ordersInRange.map((order) => order.userId));
+  const paidOrderUsers = new Set(
+    ordersInRange.filter((order) => order.status === "paid").map((order) => order.userId)
+  );
+
+  const paidOrdersByUser = new Map<string, OrderRecord[]>();
+  for (const order of input.orders) {
+    if (order.status !== "paid" || !order.paidAt) continue;
+    const list = paidOrdersByUser.get(order.userId) ?? [];
+    list.push(order);
+    paidOrdersByUser.set(order.userId, list);
+  }
+  let firstPayUsers = 0;
+  let repeatPayUsers = 0;
+  for (const orders of paidOrdersByUser.values()) {
+    orders.sort((left, right) => new Date(left.paidAt || 0).getTime() - new Date(right.paidAt || 0).getTime());
+    if (!isInRange(orders[0]?.paidAt, rangeStart)) continue;
+    firstPayUsers += 1;
+    if (orders.length >= 2) repeatPayUsers += 1;
+  }
+
+  return [
+    makeStep(
+      "home_to_tool",
+      "activation",
+      "访问首页",
+      "进入工具",
+      homepageViews.size,
+      convertedAfter(homepageViews, toolViews),
+      "同一访问者进入首页后，继续打开任一图片工具"
+    ),
+    makeStep(
+      "pricing_to_order",
+      "payment",
+      "查看价格页",
+      "创建订单",
+      pricingViews.size,
+      convertedAfter(pricingViews, firstOrderTimes),
+      "同一用户查看价格页后创建任意积分订单"
+    ),
+    makeStep(
+      "order_to_paid",
+      "payment",
+      "创建订单",
+      "支付成功",
+      orderCreators.size,
+      paidOrderUsers.size,
+      "按创建订单的去重用户统计当前支付结果"
+    ),
+    makeStep(
+      "first_paid_to_repeat",
+      "retention",
+      "首次付费",
+      "再次购买",
+      firstPayUsers,
+      repeatPayUsers,
+      "该周期首次付费用户中，当前已经完成第二次购买的人数"
+    )
+  ];
+}
+
+export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "请先登录" } }, { status: 401 });
@@ -106,25 +267,33 @@ export async function GET() {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "没有管理员权限" } }, { status: 403 });
   }
 
-  if (analyticsCache && analyticsCache.expiresAt > Date.now()) {
-    return NextResponse.json(analyticsCache.response, {
-      headers: { "Cache-Control": "private, max-age=30" }
+  const url = new URL(request.url);
+  const range = parseFunnelRange(url.searchParams.get("range"));
+  const todayKey = beijingDateKey(Date.now());
+  const cacheKey = `${todayKey}:${range}`;
+  const cached = analyticsCache.get(cacheKey);
+  if (url.searchParams.get("refresh") !== "1" && cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.response, {
+      headers: { "Cache-Control": "private, no-store" }
     });
   }
 
   const db = await getDbSnapshot({ includeAnalytics: true });
-  const today = startOfToday();
-  const todayKey = today.toISOString().slice(0, 10);
   const paidOrders = db.orders.filter((order) => order.status === "paid");
   const repeatPurchases = repeatPurchaseMetrics(paidOrders);
   const pendingOrders = db.orders.filter((order) => order.status === "pending");
+  const todayCreatedOrders = db.orders.filter((order) => beijingDateKey(order.createdAt) === todayKey);
+  const todayPendingOrders = todayCreatedOrders.filter((order) => order.status === "pending");
+  const todayPaidOrders = paidOrders.filter((order) => beijingDateKey(order.paidAt) === todayKey);
   const pendingOrderUsers = new Set(pendingOrders.map((order) => order.userId)).size;
   const succeededTasks = db.imageTasks.filter((task) => task.status === "succeeded");
   const failedTasks = db.imageTasks.filter((task) => task.status === "failed");
+  const todayTasks = db.imageTasks.filter((task) => beijingDateKey(task.createdAt) === todayKey);
+  const todaySucceededTasks = todayTasks.filter((task) => task.status === "succeeded");
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view");
   const purchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
   const acquisitionEvents = db.analyticsEvents.filter((event) => event.type === "acquisition_channel");
-  const todayPageViews = pageViews.filter((event) => new Date(event.createdAt).getTime() >= today.getTime());
+  const todayPageViews = pageViews.filter((event) => beijingDateKey(event.createdAt) === todayKey);
   const uniqueVisitors = new Set(pageViews.map((event) => event.visitorId)).size;
   const purchaseClickUsers = new Set(purchaseClicks.map(eventIdentity)).size;
   const pricingPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
@@ -132,7 +301,7 @@ export async function GET() {
   const generationPageViews = pageViews.filter((event) =>
     pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"])
   );
-  const activeCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const activeCutoff = funnelRangeStart("7d", todayKey) ?? Date.now() - 7 * DAY_MS;
   const activeUserEvents7d = pageViews.filter((event) => {
     if (!event.userId) return false;
     return new Date(event.createdAt).getTime() >= activeCutoff;
@@ -145,35 +314,15 @@ export async function GET() {
   const dayKeys = lastDays(60);
   const daily = dayKeys.map((key) => ({
     date: key,
-    pageViews: pageViews.filter((event) => dateKey(event.createdAt) === key).length,
-    purchaseClicks: purchaseClicks.filter((event) => dateKey(event.createdAt) === key).length,
-    registrations: db.users.filter((item) => dateKey(item.createdAt) === key).length,
-    paidOrders: paidOrders.filter((order) => dateKey(order.paidAt) === key).length,
+    pageViews: pageViews.filter((event) => beijingDateKey(event.createdAt) === key).length,
+    purchaseClicks: purchaseClicks.filter((event) => beijingDateKey(event.createdAt) === key).length,
+    registrations: db.users.filter((item) => beijingDateKey(item.createdAt) === key).length,
+    paidOrders: paidOrders.filter((order) => beijingDateKey(order.paidAt) === key).length,
     revenueCents: paidOrders
-      .filter((order) => dateKey(order.paidAt) === key)
+      .filter((order) => beijingDateKey(order.paidAt) === key)
       .reduce((sum, order) => sum + order.amountCents, 0),
-    succeededTasks: succeededTasks.filter((task) => dateKey(task.updatedAt) === key).length
+    succeededTasks: succeededTasks.filter((task) => beijingDateKey(task.updatedAt) === key).length
   }));
-
-  const pageMap = new Map<string, { label: string; paths: Set<string>; views: number; visitors: Set<string> }>();
-  for (const event of pageViews) {
-    const label = pageFeatureLabel(event.path);
-    const current = pageMap.get(label) ?? { label, paths: new Set<string>(), views: 0, visitors: new Set<string>() };
-    current.views += 1;
-    current.paths.add(event.path.split("?")[0] || "/");
-    current.visitors.add(event.visitorId);
-    pageMap.set(label, current);
-  }
-
-  const topPages = [...pageMap.entries()]
-    .map(([, item]) => ({
-      path: [...item.paths][0] || "",
-      label: item.label,
-      views: item.views,
-      uniqueVisitors: item.visitors.size
-    }))
-    .sort((left, right) => right.views - left.views)
-    .slice(0, 8);
 
   const channelMap = new Map<string, number>();
   for (const event of acquisitionEvents) {
@@ -216,13 +365,28 @@ export async function GET() {
       };
     });
 
+  const funnelSteps = buildConversionFunnel({
+    events: db.analyticsEvents,
+    orders: db.orders,
+    range,
+    todayKey
+  });
+
   const response: AdminAnalyticsResponse = {
+    meta: {
+      timezone: "Asia/Shanghai",
+      generatedAt: new Date().toISOString(),
+      today: todayKey,
+      funnelRange: range,
+      funnelRangeLabel: funnelRangeLabel(range)
+    },
     overview: {
       totalPageViews: pageViews.length,
       todayPageViews: todayPageViews.length,
+      todayVisitors: new Set(todayPageViews.map((event) => event.visitorId)).size,
       uniqueVisitors,
       totalUsers: db.users.length,
-      todayRegistrations: db.users.filter((item) => dateKey(item.createdAt) === todayKey).length,
+      todayRegistrations: db.users.filter((item) => beijingDateKey(item.createdAt) === todayKey).length,
       verifiedUsers: db.users.filter((item) => item.emailVerified || item.phoneVerified).length,
       totalTasks: db.imageTasks.length,
       succeededTasks: succeededTasks.length,
@@ -233,6 +397,9 @@ export async function GET() {
       repeatPurchaseRate: repeatPurchases.repeatPurchaseRate,
       pendingOrders: pendingOrders.length,
       pendingOrderUsers,
+      todayPendingOrders: todayPendingOrders.length,
+      todayCreatedOrders: todayCreatedOrders.length,
+      todayPaidOrders: todayPaidOrders.length,
       purchaseClicks: purchaseClicks.length,
       purchaseClickUsers,
       pricingPageViews: pricingPageViews.length,
@@ -243,24 +410,27 @@ export async function GET() {
       activeUsers7d: new Set(activeUserEvents7d.map((event) => event.userId)).size,
       todayActiveUsers: new Set(todayActiveUserEvents.map((event) => event.userId)).size,
       revenueCents: paidOrders.reduce((sum, order) => sum + order.amountCents, 0),
-      todayRevenueCents: paidOrders
-        .filter((order) => dateKey(order.paidAt) === todayKey)
-        .reduce((sum, order) => sum + order.amountCents, 0),
-      creditsConsumed
+      todayRevenueCents: todayPaidOrders.reduce((sum, order) => sum + order.amountCents, 0),
+      creditsConsumed,
+      todayTasks: todayTasks.length,
+      todaySucceededTasks: todaySucceededTasks.length,
+      todayTaskUsers: new Set(todayTasks.map((task) => task.userId)).size
+    },
+    funnel: {
+      steps: funnelSteps
     },
     daily,
-    topPages,
     acquisitionChannels,
     taskTypes,
     recentPaidOrders
   };
 
-  analyticsCache = {
+  analyticsCache.set(cacheKey, {
     expiresAt: Date.now() + ANALYTICS_CACHE_MS,
     response
-  };
+  });
 
   return NextResponse.json(response, {
-    headers: { "Cache-Control": "private, max-age=30" }
+    headers: { "Cache-Control": "private, no-store" }
   });
 }
