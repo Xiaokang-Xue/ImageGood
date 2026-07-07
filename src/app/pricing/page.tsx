@@ -81,7 +81,7 @@ export default function PricingPage() {
         <p className="text-sm font-semibold text-blue-600">购买积分</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">选择适合你的积分包</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-muted">
-          新用户注册赠送 1 次免费生成，积分用完后可按需购买。
+          积分可用于 ImageGood 全部 AI 图片工具。支付成功自动到账，生成失败不扣积分。
         </p>
       </div>
 
@@ -133,8 +133,8 @@ export default function PricingPage() {
       </Card>
 
       {loading ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((item) => (
             <Card key={item} className="h-[300px] animate-pulse p-6" />
           ))}
         </div>
@@ -147,7 +147,7 @@ export default function PricingPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
         {packages.map((item) => (
           <Card
             key={item.id}
@@ -157,11 +157,16 @@ export default function PricingPage() {
           >
             {item.recommended ? (
               <div className="absolute right-4 top-4 rounded-full bg-neutral-950 px-3 py-1 text-xs font-bold text-white">
-                推荐套餐
+                推荐
+              </div>
+            ) : null}
+            {item.badgeLabel ? (
+              <div className="mb-4 inline-flex w-fit rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-bold text-neutral-700">
+                {item.badgeLabel}
               </div>
             ) : null}
             <h2 className="text-xl font-bold text-ink">{item.name}</h2>
-            <p className="mt-2 text-sm text-muted">{item.subtitle}</p>
+            {item.subtitle !== item.badgeLabel ? <p className="mt-2 text-sm text-muted">{item.subtitle}</p> : null}
             {item.description ? <p className="mt-3 min-h-[44px] text-sm leading-6 text-slate-600">{item.description}</p> : null}
             <div className="mt-6">
               <span className="text-4xl font-bold text-ink">¥{formatPackagePrice(item.priceCents)}</span>
@@ -176,6 +181,12 @@ export default function PricingPage() {
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 支付成功后自动到账
               </p>
+              {item.oneTimeNotice ? (
+                <p className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  {item.oneTimeNotice}
+                </p>
+              ) : null}
             </div>
             <Button className="mt-6 w-full" loading={loadingPackage === item.id} onClick={() => handleBuy(item.id)}>
               {item.buttonLabel ?? "购买积分"}

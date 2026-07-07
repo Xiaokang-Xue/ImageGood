@@ -2,41 +2,57 @@ import type { CreditPackage } from "@/types/billing";
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {
+    id: "first_purchase",
+    name: "首购体验包",
+    priceCents: 990,
+    credits: 8,
+    subtitle: "新用户专享",
+    description: "适合先体验 ImageGood 基础功能",
+    buttonLabel: "立即体验",
+    badgeLabel: "新用户专享",
+    oneTimePerUser: true,
+    oneTimeNotice: "每个账号限购 1 次"
+  },
+  {
     id: "starter",
     name: "入门包",
     priceCents: 1990,
-    credits: 15,
-    subtitle: "轻量体验",
-    description: "适合首次体验 AI 修图、抠图和文生图",
-    buttonLabel: "立即体验"
+    credits: 18,
+    subtitle: "轻量使用",
+    description: "适合临时修图、抠图和生成图片",
+    buttonLabel: "立即购买",
+    badgeLabel: "轻量使用"
   },
   {
     id: "standard",
     name: "标准包",
-    priceCents: 4990,
+    priceCents: 3990,
     credits: 45,
-    subtitle: "日常使用",
+    subtitle: "日常推荐",
     description: "适合日常修图、商品图处理和封面生成",
-    buttonLabel: "立即购买"
+    buttonLabel: "选择标准包",
+    badgeLabel: "日常推荐"
   },
   {
     id: "pro",
     name: "创作者包",
-    priceCents: 9900,
+    priceCents: 7990,
     credits: 100,
     subtitle: "推荐选择",
-    description: "适合持续创作，图片处理更自由",
+    description: "适合持续创作，积分更多更自由",
     buttonLabel: "推荐购买",
+    badgeLabel: "推荐选择",
     recommended: true
   },
   {
     id: "business",
     name: "专业包",
-    priceCents: 19900,
+    priceCents: 14900,
     credits: 220,
-    subtitle: "高频使用",
+    subtitle: "高频使用首选",
     description: "适合高频生成、商品图和内容创作",
-    buttonLabel: "开通专业包"
+    buttonLabel: "开通专业包",
+    badgeLabel: "最划算"
   }
 ];
 

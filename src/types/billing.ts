@@ -2,7 +2,7 @@ export type CreditTransactionType = "grant" | "consume" | "purchase" | "refund" 
 export type OrderStatus = "pending" | "paid" | "cancelled" | "expired" | "failed";
 export type PaymentProvider = "wechat" | "alipay" | "manual";
 export type PaymentMethod = "native" | "page" | "manual";
-export type CreditPackageId = "starter" | "standard" | "pro" | "business" | "wechat_test";
+export type CreditPackageId = "first_purchase" | "starter" | "standard" | "pro" | "business" | "wechat_test";
 
 export interface CreditPackage {
   id: CreditPackageId;
@@ -12,7 +12,10 @@ export interface CreditPackage {
   subtitle: string;
   description?: string;
   buttonLabel?: string;
+  badgeLabel?: string;
   recommended?: boolean;
+  oneTimePerUser?: boolean;
+  oneTimeNotice?: string;
 }
 
 export interface BillingPackagesResponse {

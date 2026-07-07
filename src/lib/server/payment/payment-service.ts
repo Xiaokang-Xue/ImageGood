@@ -13,7 +13,7 @@ import {
 import { AlipayProvider, alipayAmountToCents, parseAlipayNotify } from "@/lib/server/payment/alipay-provider";
 import { MockPaymentProvider } from "@/lib/server/payment/mock-payment-provider";
 import { WechatPayProvider, parseWechatPaymentNotify } from "@/lib/server/payment/wechat-pay-provider";
-import type { CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
+import type { CreditPackage, CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
 import type {
   PaymentProvider,
   PaymentProviderName,
@@ -167,12 +167,7 @@ function providerForOrder(order: OrderRecord): PaymentProviderName | undefined {
   return undefined;
 }
 
-function createPendingOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName): OrderRecord {
-  const packageItem = findCreditPackage(packageId);
-  if (!packageItem) {
-    throw new PaymentError("INVALID_PACKAGE", "积分包不存在", 404);
-  }
-
+function createPendingOrder(userId: string, packageItem: CreditPackage, providerName: PaymentProviderName): OrderRecord {
   const now = nowIso();
   return {
     id: randomUUID(),
@@ -201,14 +196,49 @@ export async function listPaymentPackages() {
   return CREDIT_PACKAGES;
 }
 
+async function getReusableLimitedPackageOrder(userId: string, packageItem: CreditPackage) {
+  if (!packageItem.oneTimePerUser) return null;
+
+  const db = await getDbSnapshot();
+  const userOrders = db.orders
+    .filter((order) => order.userId === userId && order.packageId === packageItem.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  if (userOrders.some((order) => order.status === "paid")) {
+    throw new PaymentError(
+      "PACKAGE_PURCHASE_LIMIT_REACHED",
+      `${packageItem.name}每个账号限购 1 次，可选择其他积分包继续购买`,
+      409
+    );
+  }
+
+  return (
+    userOrders.find((order) => {
+      if (order.status !== "pending") return false;
+      if (!order.expiredAt) return true;
+      return new Date(order.expiredAt).getTime() > Date.now();
+    }) ?? null
+  );
+}
+
 export async function createPaymentOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName = "alipay") {
   if (providerName !== "wechat" && providerName !== "alipay") {
     throw new PaymentError("INVALID_PAYMENT_PROVIDER", "不支持的支付方式", 400);
   }
 
+  const packageItem = findCreditPackage(packageId);
+  if (!packageItem) {
+    throw new PaymentError("INVALID_PACKAGE", "积分包不存在", 404);
+  }
+
+  const reusableOrder = await getReusableLimitedPackageOrder(userId, packageItem);
+  if (reusableOrder) {
+    return reusableOrder;
+  }
+
   await assertPaymentConfigReady(providerName);
   const provider = getPaymentProvider(providerName);
-  const order = createPendingOrder(userId, packageId, providerName);
+  const order = createPendingOrder(userId, packageItem, providerName);
 
   await withDb((db) => {
     if (db.orders.some((item) => item.outTradeNo === order.outTradeNo)) {
