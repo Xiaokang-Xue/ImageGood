@@ -14,6 +14,19 @@ export interface AnalyticsEventRecord {
   createdAt: string;
 }
 
+export interface AnalyticsDailySummaryRecord {
+  id: string;
+  date: string;
+  pageViews: number;
+  pricingPageViews: number;
+  checkoutPageViews: number;
+  generationPageViews: number;
+  purchaseClicks: number;
+  acquisitionChannels: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AnalyticsMetric {
   label: string;
   value: number;

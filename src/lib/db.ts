@@ -2,11 +2,13 @@ import "server-only";
 import { createHash } from "crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
-import type { AnalyticsEventRecord } from "@/types/analytics";
+import type { AnalyticsDailySummaryRecord, AnalyticsEventRecord } from "@/types/analytics";
 import type { AdminOrderRecord, CreditTransactionRecord, OrderRecord, OrderStatus, PaymentProvider } from "@/types/billing";
 import type { ImageTaskRecord } from "@/types/task";
 
 const ANALYTICS_EVENT_TYPES = new Set(["page_view", "purchase_click", "acquisition_channel"]);
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+const ANALYTICS_GENERATION_PATHS = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"];
 
 export interface DbUser {
   id: string;
@@ -75,6 +77,7 @@ interface DatabaseShape {
   orders: OrderRecord[];
   imageTasks: ImageTaskRecord[];
   analyticsEvents: AnalyticsEventRecord[];
+  analyticsDailySummaries: AnalyticsDailySummaryRecord[];
 }
 
 type DbCollectionName = keyof DatabaseShape;
@@ -88,7 +91,8 @@ const COLLECTIONS: DbCollectionName[] = [
   "creditTransactions",
   "orders",
   "imageTasks",
-  "analyticsEvents"
+  "analyticsEvents",
+  "analyticsDailySummaries"
 ];
 
 const EMPTY_DB: DatabaseShape = {
@@ -100,7 +104,8 @@ const EMPTY_DB: DatabaseShape = {
   creditTransactions: [],
   orders: [],
   imageTasks: [],
-  analyticsEvents: []
+  analyticsEvents: [],
+  analyticsDailySummaries: []
 };
 
 let writeQueue = Promise.resolve();
@@ -165,8 +170,122 @@ function cloneEmptyDb(): DatabaseShape {
     creditTransactions: [],
     orders: [],
     imageTasks: [],
-    analyticsEvents: []
+    analyticsEvents: [],
+    analyticsDailySummaries: []
   };
+}
+
+function beijingDateKey(input: string | number | Date | null | undefined) {
+  if (input === null || input === undefined || input === "") return "";
+  const timestamp = input instanceof Date ? input.getTime() : typeof input === "number" ? input : new Date(input).getTime();
+  if (!Number.isFinite(timestamp)) return "";
+  return new Date(timestamp + BEIJING_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function pathStartsWith(path: string, prefixes: string[]) {
+  return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`));
+}
+
+function emptyAnalyticsDailySummary(date: string, now = new Date().toISOString()): AnalyticsDailySummaryRecord {
+  return {
+    id: date,
+    date,
+    pageViews: 0,
+    pricingPageViews: 0,
+    checkoutPageViews: 0,
+    generationPageViews: 0,
+    purchaseClicks: 0,
+    acquisitionChannels: 0,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function analyticsDeltaFromEvent(event: AnalyticsEventRecord) {
+  const delta = {
+    pageViews: 0,
+    pricingPageViews: 0,
+    checkoutPageViews: 0,
+    generationPageViews: 0,
+    purchaseClicks: 0,
+    acquisitionChannels: 0
+  };
+
+  if (event.type === "page_view") {
+    delta.pageViews += 1;
+    if (pathStartsWith(event.path, ["/pricing"])) delta.pricingPageViews += 1;
+    if (pathStartsWith(event.path, ["/checkout"])) delta.checkoutPageViews += 1;
+    if (pathStartsWith(event.path, ANALYTICS_GENERATION_PATHS)) delta.generationPageViews += 1;
+  } else if (event.type === "purchase_click") {
+    delta.purchaseClicks += 1;
+  } else if (event.type === "acquisition_channel") {
+    delta.acquisitionChannels += 1;
+  }
+
+  return delta;
+}
+
+function incrementAnalyticsDailySummary(db: DatabaseShape, event: AnalyticsEventRecord) {
+  const date = beijingDateKey(event.createdAt);
+  if (!date) return;
+
+  const now = new Date().toISOString();
+  let summary = db.analyticsDailySummaries.find((item) => item.id === date || item.date === date);
+  if (!summary) {
+    summary = emptyAnalyticsDailySummary(date, now);
+    db.analyticsDailySummaries.push(summary);
+  }
+
+  const delta = analyticsDeltaFromEvent(event);
+  summary.pageViews += delta.pageViews;
+  summary.pricingPageViews += delta.pricingPageViews;
+  summary.checkoutPageViews += delta.checkoutPageViews;
+  summary.generationPageViews += delta.generationPageViews;
+  summary.purchaseClicks += delta.purchaseClicks;
+  summary.acquisitionChannels += delta.acquisitionChannels;
+  summary.updatedAt = now;
+}
+
+function backfillAnalyticsDailySummariesFromEvents(db: DatabaseShape) {
+  const summariesByDate = new Map<string, AnalyticsDailySummaryRecord>();
+  for (const summary of db.analyticsDailySummaries) {
+    summariesByDate.set(summary.date, summary);
+  }
+
+  const retainedCounts = new Map<string, AnalyticsDailySummaryRecord>();
+  for (const event of db.analyticsEvents) {
+    const date = beijingDateKey(event.createdAt);
+    if (!date) continue;
+    let summary = retainedCounts.get(date);
+    if (!summary) {
+      summary = emptyAnalyticsDailySummary(date);
+      retainedCounts.set(date, summary);
+    }
+    const delta = analyticsDeltaFromEvent(event);
+    summary.pageViews += delta.pageViews;
+    summary.pricingPageViews += delta.pricingPageViews;
+    summary.checkoutPageViews += delta.checkoutPageViews;
+    summary.generationPageViews += delta.generationPageViews;
+    summary.purchaseClicks += delta.purchaseClicks;
+    summary.acquisitionChannels += delta.acquisitionChannels;
+  }
+
+  const now = new Date().toISOString();
+  for (const [date, retained] of retainedCounts) {
+    let summary = summariesByDate.get(date);
+    if (!summary) {
+      summary = emptyAnalyticsDailySummary(date, now);
+      db.analyticsDailySummaries.push(summary);
+      summariesByDate.set(date, summary);
+    }
+    summary.pageViews = Math.max(summary.pageViews, retained.pageViews);
+    summary.pricingPageViews = Math.max(summary.pricingPageViews, retained.pricingPageViews);
+    summary.checkoutPageViews = Math.max(summary.checkoutPageViews, retained.checkoutPageViews);
+    summary.generationPageViews = Math.max(summary.generationPageViews, retained.generationPageViews);
+    summary.purchaseClicks = Math.max(summary.purchaseClicks, retained.purchaseClicks);
+    summary.acquisitionChannels = Math.max(summary.acquisitionChannels, retained.acquisitionChannels);
+    summary.updatedAt = now;
+  }
 }
 
 function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
@@ -264,6 +383,24 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
             userId: event.userId ?? null,
             userAgent: event.userAgent ?? null
           }))
+      : [],
+    analyticsDailySummaries: Array.isArray(data.analyticsDailySummaries)
+      ? data.analyticsDailySummaries.map((summary) => {
+          const date = summary.date || summary.id || "";
+          const now = new Date().toISOString();
+          return {
+            id: summary.id || date,
+            date,
+            pageViews: Number(summary.pageViews || 0),
+            pricingPageViews: Number(summary.pricingPageViews || 0),
+            checkoutPageViews: Number(summary.checkoutPageViews || 0),
+            generationPageViews: Number(summary.generationPageViews || 0),
+            purchaseClicks: Number(summary.purchaseClicks || 0),
+            acquisitionChannels: Number(summary.acquisitionChannels || 0),
+            createdAt: summary.createdAt || now,
+            updatedAt: summary.updatedAt || summary.createdAt || now
+          };
+        })
       : []
   };
 }
@@ -1075,6 +1212,137 @@ export async function getAdminOrderPage(options?: {
   };
 }
 
+const MYSQL_SUMMARY_NUMBER = "CAST(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(record, ?)), '0') AS UNSIGNED)";
+
+async function upsertMysqlAnalyticsDailySummaryDelta(event: AnalyticsEventRecord) {
+  const date = beijingDateKey(event.createdAt);
+  if (!date) return;
+
+  const delta = analyticsDeltaFromEvent(event);
+  const now = new Date().toISOString();
+  const summary = {
+    ...emptyAnalyticsDailySummary(date, now),
+    pageViews: delta.pageViews,
+    pricingPageViews: delta.pricingPageViews,
+    checkoutPageViews: delta.checkoutPageViews,
+    generationPageViews: delta.generationPageViews,
+    purchaseClicks: delta.purchaseClicks,
+    acquisitionChannels: delta.acquisitionChannels
+  };
+  const json = JSON.stringify(summary);
+  const pool = await getMysqlPool();
+
+  await pool.execute(
+    `INSERT INTO imagegood_records (collection, id, record, record_hash)
+     VALUES ('analyticsDailySummaries', ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       record = JSON_SET(
+         record,
+         '$.pageViews', ${MYSQL_SUMMARY_NUMBER} + ?,
+         '$.pricingPageViews', ${MYSQL_SUMMARY_NUMBER} + ?,
+         '$.checkoutPageViews', ${MYSQL_SUMMARY_NUMBER} + ?,
+         '$.generationPageViews', ${MYSQL_SUMMARY_NUMBER} + ?,
+         '$.purchaseClicks', ${MYSQL_SUMMARY_NUMBER} + ?,
+         '$.acquisitionChannels', ${MYSQL_SUMMARY_NUMBER} + ?,
+         '$.updatedAt', ?
+       ),
+       record_hash = NULL`,
+    [
+      date,
+      json,
+      hashJson(json),
+      "$.pageViews",
+      delta.pageViews,
+      "$.pricingPageViews",
+      delta.pricingPageViews,
+      "$.checkoutPageViews",
+      delta.checkoutPageViews,
+      "$.generationPageViews",
+      delta.generationPageViews,
+      "$.purchaseClicks",
+      delta.purchaseClicks,
+      "$.acquisitionChannels",
+      delta.acquisitionChannels,
+      now
+    ]
+  );
+}
+
+async function upsertMysqlAnalyticsDailySummaryMinimum(summary: AnalyticsDailySummaryRecord) {
+  const json = JSON.stringify(summary);
+  const pool = await getMysqlPool();
+  await pool.execute(
+    `INSERT INTO imagegood_records (collection, id, record, record_hash)
+     VALUES ('analyticsDailySummaries', ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       record = JSON_SET(
+         record,
+         '$.pageViews', GREATEST(${MYSQL_SUMMARY_NUMBER}, ?),
+         '$.pricingPageViews', GREATEST(${MYSQL_SUMMARY_NUMBER}, ?),
+         '$.checkoutPageViews', GREATEST(${MYSQL_SUMMARY_NUMBER}, ?),
+         '$.generationPageViews', GREATEST(${MYSQL_SUMMARY_NUMBER}, ?),
+         '$.purchaseClicks', GREATEST(${MYSQL_SUMMARY_NUMBER}, ?),
+         '$.acquisitionChannels', GREATEST(${MYSQL_SUMMARY_NUMBER}, ?),
+         '$.updatedAt', ?
+       ),
+       record_hash = NULL`,
+    [
+      summary.date,
+      json,
+      hashJson(json),
+      "$.pageViews",
+      summary.pageViews,
+      "$.pricingPageViews",
+      summary.pricingPageViews,
+      "$.checkoutPageViews",
+      summary.checkoutPageViews,
+      "$.generationPageViews",
+      summary.generationPageViews,
+      "$.purchaseClicks",
+      summary.purchaseClicks,
+      "$.acquisitionChannels",
+      summary.acquisitionChannels,
+      summary.updatedAt
+    ]
+  );
+}
+
+async function backfillMysqlAnalyticsDailySummariesFromRetainedEvents() {
+  const pool = await getMysqlPool();
+  const result = await pool.query(
+    "SELECT record FROM imagegood_records WHERE collection = 'analyticsEvents'"
+  );
+  const summaries = new Map<string, AnalyticsDailySummaryRecord>();
+
+  for (const row of rowsFromResult(result)) {
+    const normalized = normalizeDb({ analyticsEvents: [parseMysqlJsonRecord(row.record) as AnalyticsEventRecord] });
+    const event = normalized.analyticsEvents[0];
+    if (!event) continue;
+    const date = beijingDateKey(event.createdAt);
+    if (!date) continue;
+
+    let summary = summaries.get(date);
+    if (!summary) {
+      summary = emptyAnalyticsDailySummary(date);
+      summaries.set(date, summary);
+    }
+
+    const delta = analyticsDeltaFromEvent(event);
+    summary.pageViews += delta.pageViews;
+    summary.pricingPageViews += delta.pricingPageViews;
+    summary.checkoutPageViews += delta.checkoutPageViews;
+    summary.generationPageViews += delta.generationPageViews;
+    summary.purchaseClicks += delta.purchaseClicks;
+    summary.acquisitionChannels += delta.acquisitionChannels;
+  }
+
+  const now = new Date().toISOString();
+  for (const summary of summaries.values()) {
+    summary.updatedAt = now;
+    await upsertMysqlAnalyticsDailySummaryMinimum(summary);
+  }
+}
+
 export async function initDb() {
   if (isMysqlDatabaseUrl()) {
     await ensureMysqlSchema();
@@ -1088,6 +1356,10 @@ export async function initDb() {
 export async function appendAnalyticsEvent(event: AnalyticsEventRecord, maxEvents = 20_000) {
   if (!isMysqlDatabaseUrl()) {
     await withFileDb((db) => {
+      if (db.analyticsDailySummaries.length === 0 || db.analyticsEvents.length >= maxEvents) {
+        backfillAnalyticsDailySummariesFromEvents(db);
+      }
+      incrementAnalyticsDailySummary(db, event);
       db.analyticsEvents.push(event);
       if (db.analyticsEvents.length > maxEvents) {
         db.analyticsEvents = db.analyticsEvents.slice(-maxEvents);
@@ -1103,9 +1375,11 @@ export async function appendAnalyticsEvent(event: AnalyticsEventRecord, maxEvent
     "INSERT INTO imagegood_records (collection, id, record, record_hash) VALUES ('analyticsEvents', ?, ?, ?) ON DUPLICATE KEY UPDATE record = VALUES(record), record_hash = VALUES(record_hash)",
     [event.id, json, hashJson(json)]
   );
+  await upsertMysqlAnalyticsDailySummaryDelta(event);
 
   if (Math.random() < 0.02) {
     const keep = Math.max(1000, Math.floor(maxEvents));
+    await backfillMysqlAnalyticsDailySummariesFromRetainedEvents();
     await pool.execute(
       `DELETE FROM imagegood_records
        WHERE collection = 'analyticsEvents'

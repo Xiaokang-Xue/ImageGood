@@ -3,6 +3,7 @@ import { getDbSnapshot } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import type {
   AdminAnalyticsResponse,
+  AnalyticsDailySummaryRecord,
   AnalyticsEventRecord,
   AnalyticsFunnelRange,
   AnalyticsFunnelStep
@@ -88,6 +89,104 @@ function taskTypeLabel(type: string) {
     poster: "封面海报"
   };
   return labels[type] || "其他任务";
+}
+
+interface TrafficCounts {
+  pageViews: number;
+  pricingPageViews: number;
+  checkoutPageViews: number;
+  generationPageViews: number;
+  purchaseClicks: number;
+  acquisitionChannels: number;
+}
+
+function emptyTrafficCounts(): TrafficCounts {
+  return {
+    pageViews: 0,
+    pricingPageViews: 0,
+    checkoutPageViews: 0,
+    generationPageViews: 0,
+    purchaseClicks: 0,
+    acquisitionChannels: 0
+  };
+}
+
+function eventTrafficDelta(event: AnalyticsEventRecord): TrafficCounts {
+  const delta = emptyTrafficCounts();
+  if (event.type === "page_view") {
+    delta.pageViews += 1;
+    if (pathStartsWith(event.path, ["/pricing"])) delta.pricingPageViews += 1;
+    if (pathStartsWith(event.path, ["/checkout"])) delta.checkoutPageViews += 1;
+    if (pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"])) {
+      delta.generationPageViews += 1;
+    }
+  } else if (event.type === "purchase_click") {
+    delta.purchaseClicks += 1;
+  } else if (event.type === "acquisition_channel") {
+    delta.acquisitionChannels += 1;
+  }
+  return delta;
+}
+
+function addTrafficCounts(target: TrafficCounts, delta: TrafficCounts) {
+  target.pageViews += delta.pageViews;
+  target.pricingPageViews += delta.pricingPageViews;
+  target.checkoutPageViews += delta.checkoutPageViews;
+  target.generationPageViews += delta.generationPageViews;
+  target.purchaseClicks += delta.purchaseClicks;
+  target.acquisitionChannels += delta.acquisitionChannels;
+}
+
+function maxTrafficCounts(left: TrafficCounts, right: TrafficCounts): TrafficCounts {
+  return {
+    pageViews: Math.max(left.pageViews, right.pageViews),
+    pricingPageViews: Math.max(left.pricingPageViews, right.pricingPageViews),
+    checkoutPageViews: Math.max(left.checkoutPageViews, right.checkoutPageViews),
+    generationPageViews: Math.max(left.generationPageViews, right.generationPageViews),
+    purchaseClicks: Math.max(left.purchaseClicks, right.purchaseClicks),
+    acquisitionChannels: Math.max(left.acquisitionChannels, right.acquisitionChannels)
+  };
+}
+
+function trafficCountsFromSummary(summary: AnalyticsDailySummaryRecord): TrafficCounts {
+  return {
+    pageViews: summary.pageViews,
+    pricingPageViews: summary.pricingPageViews,
+    checkoutPageViews: summary.checkoutPageViews,
+    generationPageViews: summary.generationPageViews,
+    purchaseClicks: summary.purchaseClicks,
+    acquisitionChannels: summary.acquisitionChannels
+  };
+}
+
+function buildTrafficCounters(summaries: AnalyticsDailySummaryRecord[], events: AnalyticsEventRecord[]) {
+  const summaryByDate = new Map<string, TrafficCounts>();
+  const retainedByDate = new Map<string, TrafficCounts>();
+  const byDate = new Map<string, TrafficCounts>();
+  const total = emptyTrafficCounts();
+
+  for (const summary of summaries) {
+    const current = summaryByDate.get(summary.date) ?? emptyTrafficCounts();
+    addTrafficCounts(current, trafficCountsFromSummary(summary));
+    summaryByDate.set(summary.date, current);
+  }
+
+  for (const event of events) {
+    const date = beijingDateKey(event.createdAt);
+    if (!date) continue;
+    const current = retainedByDate.get(date) ?? emptyTrafficCounts();
+    addTrafficCounts(current, eventTrafficDelta(event));
+    retainedByDate.set(date, current);
+  }
+
+  const dates = new Set([...summaryByDate.keys(), ...retainedByDate.keys()]);
+  for (const date of dates) {
+    const merged = maxTrafficCounts(summaryByDate.get(date) ?? emptyTrafficCounts(), retainedByDate.get(date) ?? emptyTrafficCounts());
+    byDate.set(date, merged);
+    addTrafficCounts(total, merged);
+  }
+
+  return { byDate, total };
 }
 
 function repeatPurchaseMetrics(orders: Array<{ userId: string }>) {
@@ -293,6 +392,8 @@ export async function GET(request: Request) {
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view");
   const purchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
   const acquisitionEvents = db.analyticsEvents.filter((event) => event.type === "acquisition_channel");
+  const trafficCounters = buildTrafficCounters(db.analyticsDailySummaries, db.analyticsEvents);
+  const todayTraffic = trafficCounters.byDate.get(todayKey) ?? emptyTrafficCounts();
   const todayPageViews = pageViews.filter((event) => beijingDateKey(event.createdAt) === todayKey);
   const uniqueVisitors = new Set(pageViews.map((event) => event.visitorId)).size;
   const purchaseClickUsers = new Set(purchaseClicks.map(eventIdentity)).size;
@@ -314,8 +415,8 @@ export async function GET(request: Request) {
   const dayKeys = lastDays(60);
   const daily = dayKeys.map((key) => ({
     date: key,
-    pageViews: pageViews.filter((event) => beijingDateKey(event.createdAt) === key).length,
-    purchaseClicks: purchaseClicks.filter((event) => beijingDateKey(event.createdAt) === key).length,
+    pageViews: trafficCounters.byDate.get(key)?.pageViews ?? 0,
+    purchaseClicks: trafficCounters.byDate.get(key)?.purchaseClicks ?? 0,
     registrations: db.users.filter((item) => beijingDateKey(item.createdAt) === key).length,
     paidOrders: paidOrders.filter((order) => beijingDateKey(order.paidAt) === key).length,
     revenueCents: paidOrders
@@ -381,8 +482,8 @@ export async function GET(request: Request) {
       funnelRangeLabel: funnelRangeLabel(range)
     },
     overview: {
-      totalPageViews: pageViews.length,
-      todayPageViews: todayPageViews.length,
+      totalPageViews: trafficCounters.total.pageViews,
+      todayPageViews: todayTraffic.pageViews,
       todayVisitors: new Set(todayPageViews.map((event) => event.visitorId)).size,
       uniqueVisitors,
       totalUsers: db.users.length,
@@ -400,11 +501,11 @@ export async function GET(request: Request) {
       todayPendingOrders: todayPendingOrders.length,
       todayCreatedOrders: todayCreatedOrders.length,
       todayPaidOrders: todayPaidOrders.length,
-      purchaseClicks: purchaseClicks.length,
+      purchaseClicks: trafficCounters.total.purchaseClicks,
       purchaseClickUsers,
-      pricingPageViews: pricingPageViews.length,
+      pricingPageViews: trafficCounters.total.pricingPageViews,
       pricingVisitors: new Set(pricingPageViews.map((event) => event.visitorId)).size,
-      checkoutPageViews: checkoutPageViews.length,
+      checkoutPageViews: trafficCounters.total.checkoutPageViews,
       checkoutVisitors: new Set(checkoutPageViews.map((event) => event.visitorId)).size,
       generationPageVisitors: new Set(generationPageViews.map((event) => event.visitorId)).size,
       activeUsers7d: new Set(activeUserEvents7d.map((event) => event.userId)).size,

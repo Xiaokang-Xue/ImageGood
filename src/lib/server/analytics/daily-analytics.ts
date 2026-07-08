@@ -3,7 +3,7 @@ import path from "path";
 
 type DailyReportRange = "today" | "yesterday";
 
-type DbRecordCollection = "users" | "orders" | "imageTasks" | "creditTransactions" | "analyticsEvents";
+type DbRecordCollection = "users" | "orders" | "imageTasks" | "creditTransactions" | "analyticsEvents" | "analyticsDailySummaries";
 
 interface StoredUser {
   id: string;
@@ -48,12 +48,26 @@ interface StoredAnalyticsEvent {
   createdAt?: string;
 }
 
+interface StoredAnalyticsDailySummary {
+  id: string;
+  date: string;
+  pageViews: number;
+  pricingPageViews: number;
+  checkoutPageViews: number;
+  generationPageViews: number;
+  purchaseClicks: number;
+  acquisitionChannels: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 interface AnalyticsDatabase {
   users: StoredUser[];
   orders: StoredOrder[];
   imageTasks: StoredImageTask[];
   creditTransactions: StoredCreditTransaction[];
   analyticsEvents: StoredAnalyticsEvent[];
+  analyticsDailySummaries: StoredAnalyticsDailySummary[];
 }
 
 export interface DailyAnalyticsReport {
@@ -139,7 +153,8 @@ const COLLECTIONS: DbRecordCollection[] = [
   "orders",
   "imageTasks",
   "creditTransactions",
-  "analyticsEvents"
+  "analyticsEvents",
+  "analyticsDailySummaries"
 ];
 
 function databaseUrl() {
@@ -198,6 +213,106 @@ function pathStartsWith(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(`${prefix}?`));
 }
 
+interface TrafficCounts {
+  pageViews: number;
+  pricingPageViews: number;
+  checkoutPageViews: number;
+  generationPageViews: number;
+  purchaseClicks: number;
+  acquisitionChannels: number;
+}
+
+function emptyTrafficCounts(): TrafficCounts {
+  return {
+    pageViews: 0,
+    pricingPageViews: 0,
+    checkoutPageViews: 0,
+    generationPageViews: 0,
+    purchaseClicks: 0,
+    acquisitionChannels: 0
+  };
+}
+
+function eventDateKey(event: StoredAnalyticsEvent) {
+  return event.createdAt ? localDateKey(new Date(event.createdAt)) : "";
+}
+
+function addTrafficCounts(target: TrafficCounts, delta: TrafficCounts) {
+  target.pageViews += delta.pageViews;
+  target.pricingPageViews += delta.pricingPageViews;
+  target.checkoutPageViews += delta.checkoutPageViews;
+  target.generationPageViews += delta.generationPageViews;
+  target.purchaseClicks += delta.purchaseClicks;
+  target.acquisitionChannels += delta.acquisitionChannels;
+}
+
+function maxTrafficCounts(left: TrafficCounts, right: TrafficCounts): TrafficCounts {
+  return {
+    pageViews: Math.max(left.pageViews, right.pageViews),
+    pricingPageViews: Math.max(left.pricingPageViews, right.pricingPageViews),
+    checkoutPageViews: Math.max(left.checkoutPageViews, right.checkoutPageViews),
+    generationPageViews: Math.max(left.generationPageViews, right.generationPageViews),
+    purchaseClicks: Math.max(left.purchaseClicks, right.purchaseClicks),
+    acquisitionChannels: Math.max(left.acquisitionChannels, right.acquisitionChannels)
+  };
+}
+
+function eventTrafficDelta(event: StoredAnalyticsEvent, generationPaths: string[]): TrafficCounts {
+  const delta = emptyTrafficCounts();
+  if (event.type === "page_view") {
+    delta.pageViews += 1;
+    if (pathStartsWith(event.path, ["/pricing"])) delta.pricingPageViews += 1;
+    if (pathStartsWith(event.path, ["/checkout"])) delta.checkoutPageViews += 1;
+    if (pathStartsWith(event.path, generationPaths)) delta.generationPageViews += 1;
+  } else if (event.type === "purchase_click") {
+    delta.purchaseClicks += 1;
+  } else if (event.type === "acquisition_channel") {
+    delta.acquisitionChannels += 1;
+  }
+  return delta;
+}
+
+function summaryTrafficCounts(summary: StoredAnalyticsDailySummary): TrafficCounts {
+  return {
+    pageViews: summary.pageViews,
+    pricingPageViews: summary.pricingPageViews,
+    checkoutPageViews: summary.checkoutPageViews,
+    generationPageViews: summary.generationPageViews,
+    purchaseClicks: summary.purchaseClicks,
+    acquisitionChannels: summary.acquisitionChannels
+  };
+}
+
+function buildTrafficCounters(db: AnalyticsDatabase, generationPaths: string[]) {
+  const summaryByDate = new Map<string, TrafficCounts>();
+  const retainedByDate = new Map<string, TrafficCounts>();
+  const byDate = new Map<string, TrafficCounts>();
+  const total = emptyTrafficCounts();
+
+  for (const summary of db.analyticsDailySummaries) {
+    const current = summaryByDate.get(summary.date) ?? emptyTrafficCounts();
+    addTrafficCounts(current, summaryTrafficCounts(summary));
+    summaryByDate.set(summary.date, current);
+  }
+
+  for (const event of db.analyticsEvents) {
+    const date = eventDateKey(event);
+    if (!date) continue;
+    const current = retainedByDate.get(date) ?? emptyTrafficCounts();
+    addTrafficCounts(current, eventTrafficDelta(event, generationPaths));
+    retainedByDate.set(date, current);
+  }
+
+  const dates = new Set([...summaryByDate.keys(), ...retainedByDate.keys()]);
+  for (const date of dates) {
+    const merged = maxTrafficCounts(summaryByDate.get(date) ?? emptyTrafficCounts(), retainedByDate.get(date) ?? emptyTrafficCounts());
+    byDate.set(date, merged);
+    addTrafficCounts(total, merged);
+  }
+
+  return { byDate, total };
+}
+
 function paidOrderTime(order: StoredOrder) {
   const value = order.paidAt || order.updatedAt || order.createdAt;
   if (!value) return Number.NaN;
@@ -226,7 +341,8 @@ function emptyAnalyticsDatabase(): AnalyticsDatabase {
     orders: [],
     imageTasks: [],
     creditTransactions: [],
-    analyticsEvents: []
+    analyticsEvents: [],
+    analyticsDailySummaries: []
   };
 }
 
@@ -279,7 +395,21 @@ async function readFileAnalyticsDatabase(): Promise<AnalyticsDatabase> {
     orders: Array.isArray(parsed.orders) ? parsed.orders : [],
     imageTasks: Array.isArray(parsed.imageTasks) ? parsed.imageTasks : [],
     creditTransactions: Array.isArray(parsed.creditTransactions) ? parsed.creditTransactions : [],
-    analyticsEvents: Array.isArray(parsed.analyticsEvents) ? parsed.analyticsEvents : []
+    analyticsEvents: Array.isArray(parsed.analyticsEvents) ? parsed.analyticsEvents : [],
+    analyticsDailySummaries: Array.isArray(parsed.analyticsDailySummaries)
+      ? parsed.analyticsDailySummaries.map((summary: StoredAnalyticsDailySummary) => ({
+          id: summary.id || summary.date,
+          date: summary.date || summary.id,
+          pageViews: Number(summary.pageViews || 0),
+          pricingPageViews: Number(summary.pricingPageViews || 0),
+          checkoutPageViews: Number(summary.checkoutPageViews || 0),
+          generationPageViews: Number(summary.generationPageViews || 0),
+          purchaseClicks: Number(summary.purchaseClicks || 0),
+          acquisitionChannels: Number(summary.acquisitionChannels || 0),
+          createdAt: summary.createdAt,
+          updatedAt: summary.updatedAt
+        }))
+      : []
   };
 }
 
@@ -300,6 +430,8 @@ export async function getDailyAnalyticsReport(input: {
   const allCheckoutPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
   const generationPaths = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"];
   const allGenerationPageViews = allPageViews.filter((event) => pathStartsWith(event.path, generationPaths));
+  const trafficCounters = buildTrafficCounters(db, generationPaths);
+  const rangeTraffic = trafficCounters.byDate.get(date) ?? emptyTrafficCounts();
   const allSucceededTasks = db.imageTasks.filter((task) => task.status === "succeeded");
   const allFailedTasks = db.imageTasks.filter((task) => task.status === "failed");
   const allCreditsConsumed = db.creditTransactions
@@ -369,16 +501,16 @@ export async function getDailyAnalyticsReport(input: {
       alipayPaidOrders: paidOrders.filter((order) => order.paymentProvider === "alipay").length,
       pendingOrders: pendingOrders.length,
       pendingOrderUsers: new Set(pendingOrders.map((order) => order.userId)).size,
-      purchaseClicks: purchaseClicks.length
+      purchaseClicks: rangeTraffic.purchaseClicks || purchaseClicks.length
     },
     content: {
       newHistoryRecords: succeededTasks.length
     },
     traffic: {
-      pageViews: pageViews.length,
-      pricingPageViews: pricingPageViews.length,
-      checkoutPageViews: checkoutPageViews.length,
-      generationPageViews: generationPageViews.length
+      pageViews: rangeTraffic.pageViews || pageViews.length,
+      pricingPageViews: rangeTraffic.pricingPageViews || pricingPageViews.length,
+      checkoutPageViews: rangeTraffic.checkoutPageViews || checkoutPageViews.length,
+      generationPageViews: rangeTraffic.generationPageViews || generationPageViews.length
     },
     cumulative: {
       users: {
@@ -403,16 +535,16 @@ export async function getDailyAnalyticsReport(input: {
         alipayPaidOrders: allPaidOrders.filter((order) => order.paymentProvider === "alipay").length,
         pendingOrders: allPendingOrders.length,
         pendingOrderUsers: new Set(allPendingOrders.map((order) => order.userId)).size,
-        purchaseClicks: allPurchaseClicks.length
+        purchaseClicks: trafficCounters.total.purchaseClicks || allPurchaseClicks.length
       },
       content: {
         historyRecords: allSucceededTasks.length
       },
       traffic: {
-        pageViews: allPageViews.length,
-        pricingPageViews: allPricingPageViews.length,
-        checkoutPageViews: allCheckoutPageViews.length,
-        generationPageViews: allGenerationPageViews.length
+        pageViews: trafficCounters.total.pageViews || allPageViews.length,
+        pricingPageViews: trafficCounters.total.pricingPageViews || allPricingPageViews.length,
+        checkoutPageViews: trafficCounters.total.checkoutPageViews || allCheckoutPageViews.length,
+        generationPageViews: trafficCounters.total.generationPageViews || allGenerationPageViews.length
       }
     }
   };
