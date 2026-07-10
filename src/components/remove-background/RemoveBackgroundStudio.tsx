@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Download, Eraser, History, Loader2, Palette, UploadCloud } from "lucide-react";
+import { Download, Eraser, History, Palette, UploadCloud } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
@@ -344,11 +345,14 @@ export function RemoveBackgroundStudio() {
 
             <div className="flex min-h-[520px] items-center justify-center rounded-lg border border-line bg-white p-4" style={previewStyle}>
               {loading ? (
-                <div className="text-center">
-                  <Loader2 className="mx-auto h-10 w-10 animate-spin text-studio-600" />
-                  <p className="mt-4 text-lg font-bold text-ink">正在去除背景，请稍候</p>
-                  <p className="mt-2 text-sm text-muted">系统正在保留主体边缘细节。</p>
-                </div>
+                <GenerationLoadingPanel
+                  taskType="remove-background"
+                  taskId={taskId}
+                  minHeightClassName="min-h-[500px]"
+                  className="w-full"
+                />
+              ) : error ? (
+                <GenerationErrorPanel message={error} onRetry={handleGenerate} minHeightClassName="min-h-[500px]" className="w-full" />
               ) : resultUrl ? (
                 <SmartImage
                   src={resultUrl}

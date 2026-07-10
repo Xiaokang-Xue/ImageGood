@@ -22,6 +22,7 @@ export default function ObjectRemoverPage() {
       emptyResultDescription="上传图片并描述需要移除的对象后，即可查看 AI 处理结果。"
       resultAlt="去杂物处理结果"
       downloadName="imagegood-object-removed.png"
+      taskType="object-remove"
       promptLabel="需要移除什么？"
       promptPlaceholder="例如：去掉背景里的路人、去掉桌上的杂物、去掉右下角水印"
       promptRequired

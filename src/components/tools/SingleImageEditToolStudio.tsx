@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Download, History, Loader2, Sparkles, UploadCloud } from "lucide-react";
+import { Download, History, Sparkles, UploadCloud } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { GenerationErrorPanel, GenerationLoadingPanel, type GenerationLoadingTaskType } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
@@ -35,6 +36,7 @@ interface SingleImageEditToolStudioProps {
   emptyResultDescription: string;
   resultAlt: string;
   downloadName: string;
+  taskType?: GenerationLoadingTaskType;
   defaultPrompt?: string;
   promptLabel?: string;
   promptPlaceholder?: string;
@@ -82,11 +84,11 @@ export function SingleImageEditToolStudio({
   uploadTitle,
   uploadSubtitle,
   buttonLabel,
-  processingTitle,
   emptyResultTitle,
   emptyResultDescription,
   resultAlt,
   downloadName,
+  taskType = "edit",
   defaultPrompt = "",
   promptLabel,
   promptPlaceholder,
@@ -274,11 +276,9 @@ export function SingleImageEditToolStudio({
 
           <div className="flex min-h-[520px] items-center justify-center rounded-lg border border-line bg-slate-50 p-4">
             {loading ? (
-              <div className="text-center">
-                <Loader2 className="mx-auto h-10 w-10 animate-spin text-studio-600" />
-                <p className="mt-4 text-lg font-bold text-ink">{processingTitle}</p>
-                <p className="mt-2 text-sm text-muted">处理时间可能较长，请不要关闭页面。</p>
-              </div>
+              <GenerationLoadingPanel taskType={taskType} taskId={taskId} minHeightClassName="min-h-[500px]" className="w-full" />
+            ) : error ? (
+              <GenerationErrorPanel message={error} onRetry={handleGenerate} minHeightClassName="min-h-[500px]" className="w-full" />
             ) : resultUrl ? (
               <SmartImage
                 src={resultUrl}

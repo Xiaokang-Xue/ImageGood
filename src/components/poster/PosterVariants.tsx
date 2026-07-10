@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Download } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { downloadImage } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -11,10 +12,13 @@ interface PosterVariantsProps {
   results: PosterImageResult[];
   activeId?: string;
   loading?: boolean;
+  taskId?: string;
+  error?: string;
+  onRetry?: () => void;
   onSelect: (result: PosterImageResult, index: number) => void;
 }
 
-export function PosterVariants({ results, activeId, loading, onSelect }: PosterVariantsProps) {
+export function PosterVariants({ results, activeId, loading, taskId, error, onRetry, onSelect }: PosterVariantsProps) {
   return (
     <Card className="p-5">
       <div className="mb-5 flex items-center justify-between">
@@ -28,11 +32,9 @@ export function PosterVariants({ results, activeId, loading, onSelect }: PosterV
       </div>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-          {[1, 2, 3, 4, 5, 6].map((item) => (
-            <div key={item} className="h-48 animate-pulse rounded-lg bg-slate-100" />
-          ))}
-        </div>
+        <GenerationLoadingPanel taskType="poster" taskId={taskId} minHeightClassName="min-h-[260px]" compact />
+      ) : error ? (
+        <GenerationErrorPanel message={error} onRetry={onRetry} minHeightClassName="min-h-[220px]" />
       ) : results.length === 0 ? (
         <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
           <div>

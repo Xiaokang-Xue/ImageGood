@@ -3,6 +3,7 @@
 import { Download, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { downloadImage } from "@/lib/api-client";
 import type { ProductImageResult } from "@/types/image";
@@ -10,10 +11,13 @@ import type { ProductImageResult } from "@/types/image";
 interface ProductResultGridProps {
   results: ProductImageResult[];
   loading?: boolean;
+  taskId?: string;
+  error?: string;
+  onRetry?: () => void;
   onEdit: (result: ProductImageResult) => void;
 }
 
-export function ProductResultGrid({ results, loading, onEdit }: ProductResultGridProps) {
+export function ProductResultGrid({ results, loading, taskId, error, onRetry, onEdit }: ProductResultGridProps) {
   return (
     <Card className="p-5">
       <div className="mb-5 flex items-center justify-between">
@@ -27,11 +31,9 @@ export function ProductResultGrid({ results, loading, onEdit }: ProductResultGri
       </div>
 
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-[340px] animate-pulse rounded-lg bg-slate-100" />
-          ))}
-        </div>
+        <GenerationLoadingPanel taskType="product" taskId={taskId} minHeightClassName="min-h-[360px]" compact />
+      ) : error ? (
+        <GenerationErrorPanel message={error} onRetry={onRetry} minHeightClassName="min-h-[300px]" />
       ) : results.length === 0 ? (
         <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
           <div>

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Download, History, PenLine, RefreshCcw } from "lucide-react";
+import { Download, History, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { downloadImage } from "@/lib/api-client";
 import type { EditImageResult } from "@/types/image";
@@ -12,13 +13,14 @@ interface ResultGalleryProps {
   results: EditImageResult[];
   selectedId?: string;
   loading?: boolean;
+  taskId?: string;
   error?: string;
   onSelect: (result: EditImageResult) => void;
   onContinueEdit?: (result: EditImageResult) => void;
   onRetry?: () => void;
 }
 
-export function ResultGallery({ results, loading, error, onSelect, onContinueEdit, onRetry }: ResultGalleryProps) {
+export function ResultGallery({ results, loading, taskId, error, onSelect, onContinueEdit, onRetry }: ResultGalleryProps) {
   const mainResult = results[0];
 
   return (
@@ -36,26 +38,9 @@ export function ResultGallery({ results, loading, error, onSelect, onContinueEdi
       </div>
 
       {loading ? (
-        <div className="flex min-h-[520px] items-center justify-center rounded-2xl border border-line bg-slate-50 px-6 text-center">
-          <div>
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-studio-100 border-t-studio-600" />
-            <p className="mt-5 text-lg font-bold text-ink">图片生成中，请稍候</p>
-            <p className="mt-2 text-sm text-muted">正在处理图片细节，完成后会自动展示结果。</p>
-          </div>
-        </div>
+        <GenerationLoadingPanel taskType="edit" taskId={taskId} minHeightClassName="min-h-[520px]" />
       ) : error ? (
-        <div className="flex min-h-[520px] items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-6 text-center">
-          <div className="max-w-md">
-            <p className="text-lg font-bold text-rose-700">生成失败，请稍后重试</p>
-            <p className="mt-2 text-sm leading-6 text-rose-600">{error}</p>
-            {onRetry ? (
-              <Button className="mt-5" variant="outline" onClick={onRetry}>
-                <RefreshCcw className="h-4 w-4" />
-                重试
-              </Button>
-            ) : null}
-          </div>
-        </div>
+        <GenerationErrorPanel message={error} onRetry={onRetry} minHeightClassName="min-h-[520px]" />
       ) : !mainResult ? (
         <div className="flex min-h-[520px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
           <div>

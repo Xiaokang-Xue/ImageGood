@@ -37,6 +37,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [taskId, setTaskId] = useState("");
   const pollingController = useRef<AbortController | null>(null);
   const {
     uploadedImage,
@@ -92,6 +93,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     setLoading(true);
     setError("");
     setNotice("");
+    setTaskId("");
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -110,6 +112,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
           quality: "auto",
           outputFormat: "png"
         });
+        setTaskId(response.taskId);
 
         let result = response.results?.[0] as EditImageResult | undefined;
         let historyItem = response.historyItem as HistoryItem | undefined;
@@ -292,6 +295,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
             results={visibleResults}
             selectedId={selectedResult?.id}
             loading={loading}
+            taskId={taskId}
             error={error}
             onSelect={(result) => setSelectedResult(result)}
             onContinueEdit={handleContinueEdit}

@@ -99,6 +99,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const [variantIndex, setVariantIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [taskId, setTaskId] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const pollingController = useRef<AbortController | null>(null);
 
@@ -158,6 +159,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const handleGenerate = async () => {
     setLoading(true);
     setError("");
+    setTaskId("");
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -169,6 +171,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
         style,
         ratio
       });
+      setTaskId(response.taskId);
 
       let nextResults = response.results ?? [];
       if (nextResults.length === 0) {
@@ -324,6 +327,9 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
           results={results}
           activeId={activeResult?.id}
           loading={loading}
+          taskId={taskId}
+          error={error}
+          onRetry={handleGenerate}
           onSelect={(result, index) => {
             setActiveResult(result);
             setVariantIndex(index);

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Download, History, ImagePlus, Loader2, Sparkles } from "lucide-react";
+import { Download, History, ImagePlus, Sparkles } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import {
   apiClient,
@@ -251,11 +252,14 @@ export function TextToImageStudio() {
 
           <div className="flex min-h-[520px] items-center justify-center rounded-lg border border-line bg-slate-50 p-4">
             {loading ? (
-              <div className="text-center">
-                <Loader2 className="mx-auto h-10 w-10 animate-spin text-studio-600" />
-                <p className="mt-4 text-lg font-bold text-ink">图片生成中，请稍候</p>
-                <p className="mt-2 text-sm text-muted">生成时间可能较长，请不要关闭页面。</p>
-              </div>
+              <GenerationLoadingPanel
+                taskType="text-to-image"
+                taskId={taskId}
+                minHeightClassName="min-h-[500px]"
+                className="w-full"
+              />
+            ) : error ? (
+              <GenerationErrorPanel message={error} onRetry={handleGenerate} minHeightClassName="min-h-[500px]" className="w-full" />
             ) : resultUrl ? (
               <SmartImage
                 src={resultUrl}

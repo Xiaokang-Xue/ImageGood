@@ -96,6 +96,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const [results, setResults] = useState<ProductImageResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [taskId, setTaskId] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const pollingController = useRef<AbortController | null>(null);
 
@@ -151,6 +152,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
 
     setLoading(true);
     setError("");
+    setTaskId("");
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -165,6 +167,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
           sellingPoints: selectedIndustry ? `${sellingPoints}。行业方向：${selectedIndustry}` : sellingPoints,
           ratio
         });
+        setTaskId(response.taskId);
 
         let nextResults = response.results ?? [];
         if (nextResults.length === 0) {
@@ -370,7 +373,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       </div>
 
       <div className="mt-6">
-        <ProductResultGrid results={results} loading={loading} onEdit={handleEdit} />
+        <ProductResultGrid results={results} loading={loading} taskId={taskId} error={error} onRetry={handleGenerate} onEdit={handleEdit} />
       </div>
 
       <Card className="mt-6 p-5">

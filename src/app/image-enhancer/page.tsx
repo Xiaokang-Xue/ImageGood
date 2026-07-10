@@ -22,6 +22,7 @@ export default function ImageEnhancerPage() {
       emptyResultDescription="上传图片后点击开始增强，即可查看处理结果。"
       resultAlt="图片增强结果"
       downloadName="imagegood-enhanced.png"
+      taskType="image-enhance"
       relatedTools={[
         { label: "去杂物", href: "/object-remover" },
         { label: "AI 修图", href: "/editor" },
