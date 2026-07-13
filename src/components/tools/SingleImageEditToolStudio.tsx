@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Download, History, Sparkles, UploadCloud } from "lucide-react";
+import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel, type GenerationLoadingTaskType } from "@/components/ui/GenerationLoadingPanel";
+import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
@@ -21,6 +23,7 @@ import {
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 
 interface SingleImageEditToolStudioProps {
   endpoint: string;
@@ -104,6 +107,8 @@ export function SingleImageEditToolStudio({
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const [mobileInputActive, setMobileInputActive] = useState(true);
+  const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -133,8 +138,10 @@ export function SingleImageEditToolStudio({
     setLoading(true);
     setError("");
     setErrorActionHref("");
+    setCreditPrompt(null);
     setTaskId("");
     setResultUrl("");
+    setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -157,7 +164,7 @@ export function SingleImageEditToolStudio({
       }
 
       setResultUrl(url);
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+      setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
@@ -166,6 +173,13 @@ export function SingleImageEditToolStudio({
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
         router.push(requestError.actionUrl || "/pricing");
+        return;
+      }
+      if (isInsufficientCreditsError(requestError)) {
+        setError("");
+        setErrorActionHref("");
+        setCreditPrompt("insufficient");
+        setMobileInputActive(true);
         return;
       }
       setErrorActionHref(
@@ -178,6 +192,17 @@ export function SingleImageEditToolStudio({
       }
       if (!controller.signal.aborted) setLoading(false);
     }
+  };
+
+  const handleMobileAction = () => {
+    if (loading) return;
+    if (mobileInputActive) {
+      void handleGenerate();
+      return;
+    }
+    setError("");
+    setErrorActionHref("");
+    setMobileInputActive(true);
   };
 
   return (
@@ -207,15 +232,17 @@ export function SingleImageEditToolStudio({
         </div>
       ) : null}
 
+      {creditPrompt ? <CreditPurchasePrompt variant={creditPrompt} /> : null}
+
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <Card className="p-5">
+        <Card className={`${!mobileInputActive ? "hidden md:block" : ""} p-5`}>
           <div className="mb-5 flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-indigo-500/20">
               <Sparkles className="h-5 w-5" />
             </span>
             <div>
               <h2 className="text-xl font-bold text-ink">{uploadTitle}</h2>
-              <p className="mt-1 text-sm text-muted">成功处理消耗 1 个积分，失败不扣积分。</p>
+              <p className="mt-1 text-sm text-muted">上传图片并设置本次处理需求。</p>
             </div>
           </div>
 
@@ -232,6 +259,7 @@ export function SingleImageEditToolStudio({
               setImageFile(file);
               setResultUrl("");
               setError("");
+              setMobileInputActive(true);
             }}
           />
 
@@ -250,7 +278,7 @@ export function SingleImageEditToolStudio({
             </div>
           ) : null}
 
-          <Button className="mt-6 w-full" size="lg" loading={loading} onClick={handleGenerate}>
+          <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={handleGenerate}>
             {buttonLabel}
           </Button>
 
@@ -265,7 +293,7 @@ export function SingleImageEditToolStudio({
           ) : null}
         </Card>
 
-        <Card className="p-5">
+        <Card className={`${mobileInputActive ? "hidden md:block" : ""} p-5`}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-studio-600">处理结果</p>
@@ -276,7 +304,7 @@ export function SingleImageEditToolStudio({
 
           <div className="flex min-h-[520px] items-center justify-center rounded-lg border border-line bg-slate-50 p-4">
             {loading ? (
-              <GenerationLoadingPanel taskType={taskType} taskId={taskId} minHeightClassName="min-h-[500px]" className="w-full" />
+              <GenerationLoadingPanel taskType={taskType} taskId={taskId} previewUrl={imageUrl} minHeightClassName="min-h-[360px] md:min-h-[500px]" className="w-full" />
             ) : error ? (
               <GenerationErrorPanel message={error} onRetry={handleGenerate} minHeightClassName="min-h-[500px]" className="w-full" />
             ) : resultUrl ? (
@@ -322,6 +350,13 @@ export function SingleImageEditToolStudio({
           ) : null}
         </Card>
       </div>
+
+      <MobileToolActionBar
+        label={mobileInputActive ? buttonLabel : resultUrl ? "调整后再处理" : "返回修改"}
+        loading={loading}
+        mode={mobileInputActive ? "generate" : "back"}
+        onClick={handleMobileAction}
+      />
     </PageShell>
   );
 }

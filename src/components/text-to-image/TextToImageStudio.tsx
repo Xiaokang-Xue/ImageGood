@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Download, History, ImagePlus, Sparkles } from "lucide-react";
+import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
+import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { SmartImage } from "@/components/ui/SmartImage";
 import {
   apiClient,
@@ -20,6 +22,7 @@ import {
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { cn } from "@/lib/utils";
 import type { TextToImageStyle } from "@/types/image";
 
@@ -81,6 +84,8 @@ export function TextToImageStudio() {
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const [mobileInputActive, setMobileInputActive] = useState(true);
+  const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -98,8 +103,10 @@ export function TextToImageStudio() {
     setLoading(true);
     setError("");
     setErrorActionHref("");
+    setCreditPrompt(null);
     setResultUrl("");
     setTaskId("");
+    setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -125,7 +132,7 @@ export function TextToImageStudio() {
       }
 
       setResultUrl(url);
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+      setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
@@ -134,6 +141,13 @@ export function TextToImageStudio() {
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
         router.push(requestError.actionUrl || "/pricing");
+        return;
+      }
+      if (isInsufficientCreditsError(requestError)) {
+        setError("");
+        setErrorActionHref("");
+        setCreditPrompt("insufficient");
+        setMobileInputActive(true);
         return;
       }
       setErrorActionHref(
@@ -148,6 +162,17 @@ export function TextToImageStudio() {
     }
   };
 
+  const handleMobileAction = () => {
+    if (loading) return;
+    if (mobileInputActive) {
+      void handleGenerate();
+      return;
+    }
+    setError("");
+    setErrorActionHref("");
+    setMobileInputActive(true);
+  };
+
   return (
     <PageShell>
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -155,7 +180,7 @@ export function TextToImageStudio() {
           <p className="text-sm font-semibold text-studio-600">文生图</p>
           <h1 className="mt-2 text-3xl font-bold tracking-normal text-ink">输入一句描述，生成高质量图片</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-            适合头像、商品图、封面背景、场景图和创意图片。每次成功生成消耗 1 个积分，失败不扣积分。
+            适合头像、商品图、封面背景、场景图和创意图片。
           </p>
         </div>
         <Link href="/history">
@@ -177,8 +202,10 @@ export function TextToImageStudio() {
         </div>
       ) : null}
 
+      {creditPrompt ? <CreditPurchasePrompt variant={creditPrompt} /> : null}
+
       <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <Card className="p-5">
+        <Card className={`${!mobileInputActive ? "hidden md:block" : ""} p-5`}>
           <div className="mb-5 flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-indigo-500/20">
               <Sparkles className="h-5 w-5" />
@@ -234,12 +261,12 @@ export function TextToImageStudio() {
             </div>
           </div>
 
-          <Button className="mt-6 w-full" size="lg" loading={loading} onClick={handleGenerate}>
+          <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={handleGenerate}>
             生成图片
           </Button>
         </Card>
 
-        <Card className="overflow-hidden p-5">
+        <Card className={`${mobileInputActive ? "hidden md:block" : ""} overflow-hidden p-5`}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-studio-600">生成结果</p>
@@ -296,6 +323,13 @@ export function TextToImageStudio() {
           ) : null}
         </Card>
       </div>
+
+      <MobileToolActionBar
+        label={mobileInputActive ? "生成图片" : resultUrl ? "调整描述" : "返回修改"}
+        loading={loading}
+        mode={mobileInputActive ? "generate" : "back"}
+        onClick={handleMobileAction}
+      />
     </PageShell>
   );
 }

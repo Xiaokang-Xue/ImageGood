@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImagePlus, SlidersHorizontal } from "lucide-react";
+import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { PageShell } from "@/components/layout/PageShell";
 import { ProductResultGrid } from "@/components/product/ProductResultGrid";
 import { ProductTemplateSelector } from "@/components/product/ProductTemplateSelector";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
@@ -17,10 +19,12 @@ import {
   imageUrlToUploadFile,
   isAbortError,
   isEmailNotVerifiedError,
+  isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
 import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
+import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
@@ -98,6 +102,8 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const [error, setError] = useState("");
   const [taskId, setTaskId] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [mobileInputActive, setMobileInputActive] = useState(true);
+  const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -152,7 +158,9 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
 
     setLoading(true);
     setError("");
+    setCreditPrompt(null);
     setTaskId("");
+    setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -212,7 +220,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       }
 
       setResults(nextResults);
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+      setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
@@ -221,6 +229,12 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
         router.push(requestError.actionUrl || "/pricing");
+        return;
+      }
+      if (isInsufficientCreditsError(requestError)) {
+        setError("");
+        setCreditPrompt("insufficient");
+        setMobileInputActive(true);
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {
@@ -243,6 +257,16 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const handleEdit = (result: ProductImageResult) => {
     setUploadedImage(result.url);
     router.push("/editor");
+  };
+
+  const handleMobileAction = () => {
+    if (loading) return;
+    if (mobileInputActive) {
+      void handleGenerate();
+      return;
+    }
+    setError("");
+    setMobileInputActive(true);
   };
 
   return (
@@ -272,13 +296,9 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
         </div>
       ) : null}
 
-      {loading ? (
-        <div className="mb-6 rounded-lg border border-studio-200 bg-studio-50 px-4 py-3 text-sm font-semibold text-studio-700">
-          图片生成中，可能需要较长时间，请不要关闭页面。
-        </div>
-      ) : null}
+      {creditPrompt ? <CreditPurchasePrompt variant={creditPrompt} /> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_340px]">
+      <div className={`${!mobileInputActive ? "hidden md:grid" : "grid"} gap-6 xl:grid-cols-[320px_minmax(0,1fr)_340px]`}>
         <Card className="p-5">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white">
@@ -299,6 +319,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
               setImageUrl(url);
               setImageFile(file);
               setError("");
+              setMobileInputActive(true);
             }}
           />
         </Card>
@@ -366,17 +387,17 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
             </div>
           </div>
 
-          <Button className="mt-6 w-full" size="lg" loading={loading} onClick={handleGenerate}>
+          <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={handleGenerate}>
             {loading ? "生成中..." : "生成商品图"}
           </Button>
         </Card>
       </div>
 
-      <div className="mt-6">
-        <ProductResultGrid results={results} loading={loading} taskId={taskId} error={error} onRetry={handleGenerate} onEdit={handleEdit} />
+      <div className={`${mobileInputActive ? "hidden md:block" : "block"} mt-6`}>
+        <ProductResultGrid results={results} loading={loading} taskId={taskId} previewUrl={imageUrl} error={error} onRetry={handleGenerate} onEdit={handleEdit} />
       </div>
 
-      <Card className="mt-6 p-5">
+      <Card className={`${!mobileInputActive ? "hidden md:block" : ""} mt-6 p-5`}>
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-studio-600">热门行业模板</p>
@@ -408,6 +429,13 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
           </p>
         ) : null}
       </Card>
+
+      <MobileToolActionBar
+        label={mobileInputActive ? "生成商品图" : results.length > 0 ? "调整后再生成" : "返回修改"}
+        loading={loading}
+        mode={mobileInputActive ? "generate" : "back"}
+        onClick={handleMobileAction}
+      />
     </PageShell>
   );
 }

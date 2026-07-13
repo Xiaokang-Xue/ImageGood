@@ -1,35 +1,20 @@
 "use client";
 
-import { Expand, Eraser, Image, Send, Sparkles, Wand2 } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { toolLabels, toolPrompts } from "@/lib/studio-content";
-import { cn } from "@/lib/utils";
-import type { EditTool } from "@/types/image";
-
-const tools: Array<{ key: EditTool; icon: typeof Image }> = [
-  { key: "background", icon: Image },
-  { key: "remove", icon: Eraser },
-  { key: "enhance", icon: Sparkles },
-  { key: "style", icon: Wand2 },
-  { key: "expand", icon: Expand }
-];
 
 interface PromptPanelProps {
   prompt: string;
-  selectedTool: EditTool;
   loading?: boolean;
   onPromptChange: (value: string) => void;
-  onToolChange: (tool: EditTool) => void;
   onGenerate: () => void;
 }
 
 export function PromptPanel({
   prompt,
-  selectedTool,
   loading,
   onPromptChange,
-  onToolChange,
   onGenerate
 }: PromptPanelProps) {
   return (
@@ -50,43 +35,7 @@ export function PromptPanel({
         />
       </label>
 
-      <div className="mt-5">
-        <p className="text-sm font-semibold text-slate-700">快捷工具</p>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {tools.map((tool) => {
-            const Icon = tool.icon;
-            const active = selectedTool === tool.key;
-            return (
-              <button
-                key={tool.key}
-                type="button"
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border px-3 py-3 text-sm font-semibold transition",
-                  active
-                    ? "border-studio-500 bg-studio-50 text-studio-700 shadow-sm"
-                    : "border-line bg-white text-slate-700 hover:border-studio-200 hover:bg-studio-50"
-                )}
-                onClick={() => {
-                  if (active) {
-                    onToolChange("custom");
-                    if (prompt === toolPrompts[tool.key]) {
-                      onPromptChange("");
-                    }
-                    return;
-                  }
-                  onToolChange(tool.key);
-                  onPromptChange(toolPrompts[tool.key]);
-                }}
-              >
-                <Icon className="h-4 w-4" />
-                {toolLabels[tool.key]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <Button className="mt-6 w-full" size="lg" loading={loading} onClick={onGenerate}>
+      <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={onGenerate}>
         {loading ? "生成中..." : "生成结果"}
         {!loading ? <Send className="h-4 w-4" /> : null}
       </Button>

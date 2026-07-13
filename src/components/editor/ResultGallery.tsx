@@ -14,13 +14,14 @@ interface ResultGalleryProps {
   selectedId?: string;
   loading?: boolean;
   taskId?: string;
+  previewUrl?: string | null;
   error?: string;
   onSelect: (result: EditImageResult) => void;
   onContinueEdit?: (result: EditImageResult) => void;
   onRetry?: () => void;
 }
 
-export function ResultGallery({ results, loading, taskId, error, onSelect, onContinueEdit, onRetry }: ResultGalleryProps) {
+export function ResultGallery({ results, loading, taskId, previewUrl, error, onSelect, onContinueEdit, onRetry }: ResultGalleryProps) {
   const mainResult = results[0];
 
   return (
@@ -38,7 +39,7 @@ export function ResultGallery({ results, loading, taskId, error, onSelect, onCon
       </div>
 
       {loading ? (
-        <GenerationLoadingPanel taskType="edit" taskId={taskId} minHeightClassName="min-h-[520px]" />
+        <GenerationLoadingPanel taskType="edit" taskId={taskId} previewUrl={previewUrl} minHeightClassName="min-h-[360px] md:min-h-[520px]" />
       ) : error ? (
         <GenerationErrorPanel message={error} onRetry={onRetry} minHeightClassName="min-h-[520px]" />
       ) : !mainResult ? (

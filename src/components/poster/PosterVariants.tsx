@@ -32,7 +32,7 @@ export function PosterVariants({ results, activeId, loading, taskId, error, onRe
       </div>
 
       {loading ? (
-        <GenerationLoadingPanel taskType="poster" taskId={taskId} minHeightClassName="min-h-[260px]" compact />
+        <GenerationLoadingPanel taskType="poster" taskId={taskId} minHeightClassName="min-h-[320px] md:min-h-[360px]" compact />
       ) : error ? (
         <GenerationErrorPanel message={error} onRetry={onRetry} minHeightClassName="min-h-[220px]" />
       ) : results.length === 0 ? (

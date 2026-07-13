@@ -4,12 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
-import { BeforeAfter } from "@/components/editor/BeforeAfter";
+import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { HistoryTimeline } from "@/components/editor/HistoryTimeline";
 import { PromptPanel } from "@/components/editor/PromptPanel";
 import { ResultGallery } from "@/components/editor/ResultGallery";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
+import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
   apiClient,
@@ -17,10 +18,12 @@ import {
   imageUrlToUploadFile,
   isAbortError,
   isEmailNotVerifiedError,
+  isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
 import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
+import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { toolPrompts } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
 import type { EditImageResult, EditTool, HistoryItem } from "@/types/image";
@@ -34,10 +37,13 @@ interface EditorWorkspaceProps {
 
 export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const router = useRouter();
+  const routedTool = initialTool && editableTools.includes(initialTool as EditTool) ? (initialTool as EditTool) : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [taskId, setTaskId] = useState("");
+  const [mobileInputActive, setMobileInputActive] = useState(true);
+  const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
   const {
     uploadedImage,
@@ -63,16 +69,23 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   }, []);
 
   useEffect(() => {
-    if (!initialTool || !editableTools.includes(initialTool as EditTool)) return;
-    const tool = initialTool as EditTool;
-    setSelectedTool(tool);
-    setPrompt(toolPrompts[tool]);
-  }, [initialTool, setPrompt, setSelectedTool]);
+    if (!routedTool) return;
+    setSelectedTool(routedTool);
+    setPrompt(toolPrompts[routedTool]);
+  }, [routedTool, setPrompt, setSelectedTool]);
+
+  useEffect(() => {
+    if (routedTool || selectedTool === "custom") return;
+    if (prompt === toolPrompts[selectedTool]) {
+      setPrompt("");
+    }
+    setSelectedTool("custom");
+  }, [prompt, routedTool, selectedTool, setPrompt, setSelectedTool]);
 
   const originalImage = uploadedImage;
   const inputPreview = currentImage ?? originalImage;
   const visibleResults = editResults;
-  const currentVersion = selectedResult?.url ?? visibleResults[0]?.url ?? currentImage ?? null;
+  const mainResult = visibleResults[0];
 
   const activeStep = useMemo(() => {
     if (editResults.length > 0) return 3;
@@ -93,7 +106,9 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     setLoading(true);
     setError("");
     setNotice("");
+    setCreditPrompt(null);
     setTaskId("");
+    setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -178,8 +193,8 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
 
       setEditResults([result]);
       setSelectedResult(result);
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
       addHistoryItem(historyItem);
+      setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
@@ -188,6 +203,12 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
         router.push(requestError.actionUrl || "/pricing");
+        return;
+      }
+      if (isInsufficientCreditsError(requestError)) {
+        setError("");
+        setCreditPrompt("insufficient");
+        setMobileInputActive(true);
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {
@@ -213,7 +234,22 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     setSelectedTool("custom");
     setPrompt("");
     setError("");
+    setMobileInputActive(true);
     setNotice("已将生成结果设为下一次修改的输入图，请在右侧输入新的修改需求。");
+  };
+
+  const handleMobileAction = () => {
+    if (loading) return;
+    if (mobileInputActive) {
+      void handleGenerate();
+      return;
+    }
+    if (mainResult) {
+      handleContinueEdit(mainResult);
+      return;
+    }
+    setError("");
+    setMobileInputActive(true);
   };
 
   return (
@@ -266,14 +302,10 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
         </div>
       ) : null}
 
-      {loading ? (
-        <div className="mb-6 rounded-lg border border-studio-200 bg-studio-50 px-4 py-3 text-sm font-semibold text-studio-700">
-          图片生成中，可能需要较长时间，请不要关闭页面。
-        </div>
-      ) : null}
+      {creditPrompt ? <CreditPurchasePrompt variant={creditPrompt} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
-        <Card className="p-5">
+        <Card className={`${!mobileInputActive ? "hidden md:block" : ""} p-5`}>
           <div className="mb-4">
             <p className="text-sm font-semibold text-studio-600">当前输入图</p>
             <h2 className="mt-1 text-xl font-bold text-ink">
@@ -290,33 +322,40 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
           />
         </Card>
 
-        <div className="grid gap-6">
+        <div className={`${mobileInputActive ? "hidden md:grid" : "grid"} gap-6`}>
           <ResultGallery
             results={visibleResults}
             selectedId={selectedResult?.id}
             loading={loading}
             taskId={taskId}
+            previewUrl={inputPreview}
             error={error}
             onSelect={(result) => setSelectedResult(result)}
             onContinueEdit={handleContinueEdit}
             onRetry={handleGenerate}
           />
-          <BeforeAfter before={originalImage} after={currentVersion} />
         </div>
 
-        <PromptPanel
-          prompt={prompt}
-          selectedTool={selectedTool}
-          loading={loading}
-          onPromptChange={setPrompt}
-          onToolChange={setSelectedTool}
-          onGenerate={handleGenerate}
-        />
+        <div className={!mobileInputActive ? "hidden md:block" : ""}>
+          <PromptPanel
+            prompt={prompt}
+            loading={loading}
+            onPromptChange={setPrompt}
+            onGenerate={handleGenerate}
+          />
+        </div>
       </div>
 
       <div className="mt-6">
         <HistoryTimeline items={history} />
       </div>
+
+      <MobileToolActionBar
+        label={mobileInputActive ? "生成结果" : mainResult ? "继续修改" : "返回修改"}
+        loading={loading}
+        mode={mobileInputActive ? "generate" : "back"}
+        onClick={handleMobileAction}
+      />
     </PageShell>
   );
 }

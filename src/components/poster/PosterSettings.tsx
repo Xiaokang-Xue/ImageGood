@@ -139,7 +139,7 @@ export function PosterSettings({
         </div>
       </div>
 
-      <Button className="mt-6 w-full" size="lg" loading={loading} onClick={onGenerate}>
+      <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={onGenerate}>
         {!loading ? <WandSparkles className="h-4 w-4" /> : null}
         {loading ? "生成中..." : "AI 生成封面"}
       </Button>

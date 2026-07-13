@@ -81,3 +81,86 @@ img {
 .scrollbar-soft::-webkit-scrollbar-track {
   background: transparent;
 }
+
+.generation-checkerboard {
+  background-color: #e5e7eb;
+  background-image:
+    linear-gradient(45deg, #f5f5f5 25%, transparent 25%),
+    linear-gradient(-45deg, #f5f5f5 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f5f5f5 75%),
+    linear-gradient(-45deg, transparent 75%, #f5f5f5 75%);
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  background-size: 24px 24px;
+}
+
+.generation-scan {
+  animation: generation-scan 3.4s ease-in-out infinite;
+}
+
+.generation-breathe {
+  animation: generation-breathe 2.8s ease-in-out infinite;
+}
+
+.generation-icon-pulse {
+  animation: generation-icon-pulse 2.2s ease-in-out infinite;
+}
+
+.generation-focus-frame {
+  animation: generation-focus-frame 4.6s ease-in-out infinite;
+}
+
+.generation-preview-image {
+  animation: generation-preview 5.5s ease-in-out infinite;
+}
+
+.generation-drift {
+  animation: generation-drift 5.2s ease-in-out infinite;
+}
+
+.generation-drift-delayed {
+  animation: generation-drift 5.2s ease-in-out 0.8s infinite reverse;
+}
+
+@keyframes generation-scan {
+  0% { left: -30%; opacity: 0; }
+  18% { opacity: 0.75; }
+  82% { opacity: 0.75; }
+  100% { left: 110%; opacity: 0; }
+}
+
+@keyframes generation-breathe {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.9); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+@keyframes generation-icon-pulse {
+  0%, 100% { transform: scale(0.96); background-color: rgba(0, 0, 0, 0.18); }
+  50% { transform: scale(1.04); background-color: rgba(255, 255, 255, 0.16); }
+}
+
+@keyframes generation-focus-frame {
+  0%, 100% { transform: translate3d(-1.5%, -1%, 0) scale(0.96); opacity: 0.38; }
+  50% { transform: translate3d(1.5%, 1%, 0) scale(1.02); opacity: 0.75; }
+}
+
+@keyframes generation-preview {
+  0%, 100% { transform: scale(1.035); filter: blur(1px) saturate(0.82); }
+  50% { transform: scale(1.07); filter: blur(0) saturate(1); }
+}
+
+@keyframes generation-drift {
+  0%, 100% { transform: translate3d(-2%, -2%, 0); }
+  50% { transform: translate3d(3%, 2%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-scan,
+  .generation-breathe,
+  .generation-icon-pulse,
+  .generation-focus-frame,
+  .generation-preview-image,
+  .generation-drift,
+  .generation-drift-delayed {
+    animation: none;
+  }
+}

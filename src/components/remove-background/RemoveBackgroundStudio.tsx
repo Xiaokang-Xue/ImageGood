@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Download, Eraser, History, Palette, UploadCloud } from "lucide-react";
+import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
+import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
@@ -22,6 +24,7 @@ import {
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 
 const transparentPreviewStyle = {
   backgroundImage:
@@ -90,6 +93,8 @@ export function RemoveBackgroundStudio() {
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("transparent");
   const [customBackground, setCustomBackground] = useState("#f8fafc");
   const [downloadingBackground, setDownloadingBackground] = useState(false);
+  const [mobileInputActive, setMobileInputActive] = useState(true);
+  const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -114,8 +119,10 @@ export function RemoveBackgroundStudio() {
     setLoading(true);
     setError("");
     setErrorActionHref("");
+    setCreditPrompt(null);
     setTaskId("");
     setResultUrl("");
+    setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -140,7 +147,7 @@ export function RemoveBackgroundStudio() {
       }
 
       setResultUrl(url);
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+      setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
@@ -149,6 +156,13 @@ export function RemoveBackgroundStudio() {
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
         router.push(requestError.actionUrl || "/pricing");
+        return;
+      }
+      if (isInsufficientCreditsError(requestError)) {
+        setError("");
+        setErrorActionHref("");
+        setCreditPrompt("insufficient");
+        setMobileInputActive(true);
         return;
       }
       setErrorActionHref(
@@ -161,6 +175,18 @@ export function RemoveBackgroundStudio() {
       }
       if (!controller.signal.aborted) setLoading(false);
     }
+  };
+
+  const handleMobileAction = () => {
+    if (loading) return;
+    if (mobileInputActive) {
+      void handleGenerate();
+      return;
+    }
+    setError("");
+    setErrorActionHref("");
+    setCreditPrompt(null);
+    setMobileInputActive(true);
   };
 
   const previewStyle =
@@ -243,15 +269,17 @@ export function RemoveBackgroundStudio() {
         </div>
       ) : null}
 
+      {creditPrompt ? <CreditPurchasePrompt variant={creditPrompt} /> : null}
+
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <Card className="p-5">
+        <Card className={`${!mobileInputActive ? "hidden md:block" : ""} p-5`}>
           <div className="mb-5 flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-indigo-500/20">
               <Eraser className="h-5 w-5" />
             </span>
             <div>
               <h2 className="text-xl font-bold text-ink">上传需要抠图的图片</h2>
-              <p className="mt-1 text-sm text-muted">每次成功抠图消耗 1 个积分。</p>
+              <p className="mt-1 text-sm text-muted">系统会自动识别主体并保留边缘细节。</p>
             </div>
           </div>
 
@@ -268,16 +296,17 @@ export function RemoveBackgroundStudio() {
               setImageFile(file);
               setResultUrl("");
               setError("");
+              setMobileInputActive(true);
             }}
           />
 
-          <Button className="mt-6 w-full" size="lg" loading={loading} onClick={handleGenerate}>
+          <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={handleGenerate}>
             开始抠图
           </Button>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="p-5">
+        <div className={`${mobileInputActive ? "hidden md:grid" : "grid"} gap-6 lg:grid-cols-2`}>
+          <Card className="hidden p-5 md:block">
             <div className="mb-4">
               <p className="text-sm font-semibold text-studio-600">原图</p>
               <h2 className="mt-1 text-xl font-bold text-ink">输入素材</h2>
@@ -348,7 +377,8 @@ export function RemoveBackgroundStudio() {
                 <GenerationLoadingPanel
                   taskType="remove-background"
                   taskId={taskId}
-                  minHeightClassName="min-h-[500px]"
+                  previewUrl={imageUrl}
+                  minHeightClassName="min-h-[360px] md:min-h-[500px]"
                   className="w-full"
                 />
               ) : error ? (
@@ -391,6 +421,13 @@ export function RemoveBackgroundStudio() {
           </Card>
         </div>
       </div>
+
+      <MobileToolActionBar
+        label={mobileInputActive ? "开始抠图" : resultUrl ? "更换或调整图片" : "返回修改"}
+        loading={loading}
+        mode={mobileInputActive ? "generate" : "back"}
+        onClick={handleMobileAction}
+      />
     </PageShell>
   );
 }

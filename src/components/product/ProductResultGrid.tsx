@@ -12,12 +12,13 @@ interface ProductResultGridProps {
   results: ProductImageResult[];
   loading?: boolean;
   taskId?: string;
+  previewUrl?: string | null;
   error?: string;
   onRetry?: () => void;
   onEdit: (result: ProductImageResult) => void;
 }
 
-export function ProductResultGrid({ results, loading, taskId, error, onRetry, onEdit }: ProductResultGridProps) {
+export function ProductResultGrid({ results, loading, taskId, previewUrl, error, onRetry, onEdit }: ProductResultGridProps) {
   return (
     <Card className="p-5">
       <div className="mb-5 flex items-center justify-between">
@@ -31,7 +32,7 @@ export function ProductResultGrid({ results, loading, taskId, error, onRetry, on
       </div>
 
       {loading ? (
-        <GenerationLoadingPanel taskType="product" taskId={taskId} minHeightClassName="min-h-[360px]" compact />
+        <GenerationLoadingPanel taskType="product" taskId={taskId} previewUrl={previewUrl} minHeightClassName="min-h-[320px] md:min-h-[360px]" compact />
       ) : error ? (
         <GenerationErrorPanel message={error} onRetry={onRetry} minHeightClassName="min-h-[300px]" />
       ) : results.length === 0 ? (

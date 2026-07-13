@@ -4,20 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays, MessageCircle, Newspaper, PenTool, Trophy } from "lucide-react";
+import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { PageShell } from "@/components/layout/PageShell";
 import { LayerPanel } from "@/components/poster/LayerPanel";
 import { PosterCanvas } from "@/components/poster/PosterCanvas";
 import { palettes, PosterSettings } from "@/components/poster/PosterSettings";
 import { PosterVariants } from "@/components/poster/PosterVariants";
 import { Card } from "@/components/ui/Card";
+import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import {
   apiClient,
   getImageErrorMessage,
   isAbortError,
   isEmailNotVerifiedError,
+  isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { cn } from "@/lib/utils";
 import type { PosterImageResult, PosterLayerKey, PosterLayerVisibility, PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
@@ -101,6 +105,8 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const [error, setError] = useState("");
   const [taskId, setTaskId] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [mobileInputActive, setMobileInputActive] = useState(true);
+  const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -159,7 +165,9 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
   const handleGenerate = async () => {
     setLoading(true);
     setError("");
+    setCreditPrompt(null);
     setTaskId("");
+    setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
     pollingController.current = controller;
@@ -197,7 +205,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
       setResults(nextResults);
       setActiveResult(nextResults[0]);
       setVariantIndex(0);
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
+      setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
       if (isUnauthorizedError(requestError)) {
@@ -206,6 +214,12 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
       }
       if (isPaymentSourceSurveyRequiredError(requestError)) {
         router.push(requestError.actionUrl || "/pricing");
+        return;
+      }
+      if (isInsufficientCreditsError(requestError)) {
+        setError("");
+        setCreditPrompt("insufficient");
+        setMobileInputActive(true);
         return;
       }
       if (isEmailNotVerifiedError(requestError)) {
@@ -226,6 +240,16 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
       ...current,
       [key]: !current[key]
     }));
+  };
+
+  const handleMobileAction = () => {
+    if (loading) return;
+    if (mobileInputActive) {
+      void handleGenerate();
+      return;
+    }
+    setError("");
+    setMobileInputActive(true);
   };
 
   return (
@@ -255,13 +279,9 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
         </div>
       ) : null}
 
-      {loading ? (
-        <div className="mb-6 rounded-lg border border-studio-200 bg-studio-50 px-4 py-3 text-sm font-semibold text-studio-700">
-          图片生成中，可能需要较长时间，请不要关闭页面。
-        </div>
-      ) : null}
+      {creditPrompt ? <CreditPurchasePrompt variant={creditPrompt} /> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[250px_minmax(0,1fr)_360px]">
+      <div className={`${!mobileInputActive ? "hidden md:grid" : "grid"} gap-6 xl:grid-cols-[250px_minmax(0,1fr)_360px]`}>
         <Card className="p-5">
           <div className="mb-5">
             <p className="text-sm font-semibold text-studio-600">用途选择</p>
@@ -322,7 +342,7 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className={`${mobileInputActive ? "hidden md:block" : "block"} mt-6`}>
         <PosterVariants
           results={results}
           activeId={activeResult?.id}
@@ -336,6 +356,13 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
           }}
         />
       </div>
+
+      <MobileToolActionBar
+        label={mobileInputActive ? "AI 生成封面" : results.length > 0 ? "调整后再生成" : "返回修改"}
+        loading={loading}
+        mode={mobileInputActive ? "generate" : "back"}
+        onClick={handleMobileAction}
+      />
     </PageShell>
   );
 }
