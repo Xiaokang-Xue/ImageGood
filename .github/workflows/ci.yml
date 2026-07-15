@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      AUTH_SECRET: ci-only-secret-not-used-in-production-please-rotate
+      AUTH_COOKIE_SECURE: "false"
+      DATABASE_URL: file:./ci.db
+      IMAGE_API_MODE: mock
+      IMAGE_STORAGE_PROVIDER: local
+      PAYMENT_MODE: mock
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Initialize local data store
+        run: npm run db:push
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test mock deployment
+        shell: bash
+        run: |
+          npm run start -- -H 127.0.0.1 > /tmp/imagegood-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          ready=false
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" != "true" ]; then
+            cat /tmp/imagegood-next.log
+            exit 1
+          fi
+
+          npm run test:smoke || {
+            cat /tmp/imagegood-next.log
+            exit 1
+          }

@@ -1,0 +1,39 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, Arial, Microsoft YaHei, sans-serif","primaryColor":"#ffffff","primaryTextColor":"#111827","primaryBorderColor":"#9ca3af","lineColor":"#6b7280","secondaryColor":"#f8fafc","tertiaryColor":"#ffffff","clusterBkg":"#f8fafc","clusterBorder":"#d1d5db"},"flowchart":{"curve":"basis","nodeSpacing":38,"rankSpacing":54,"htmlLabels":true}}}%%
+flowchart TB
+    subgraph Submit["提交任务"]
+      direction LR
+      Input["选择工具<br/>输入图片或提示词"] --> Guard["前端校验<br/>登录 · 联系方式 · 积分"] --> Pending["创建任务<br/><b>pending</b>"]
+    end
+
+    subgraph Execute["服务端异步执行"]
+      direction LR
+      Processing["进入执行<br/><b>processing</b>"] --> Provider["调用图片<br/>Provider"] --> Storage["保存结果<br/>COS / 本地存储"] --> Commit["数据库事务<br/>succeeded · 历史记录 · 幂等扣积分"]
+    end
+
+    subgraph Feedback["状态反馈"]
+      direction LR
+      Poll["前端轮询<br/>任务状态"] --> Result["展示与下载<br/>生成结果"]
+    end
+
+    Pending --> Processing
+    Pending -. "返回 taskId" .-> Poll
+    Commit --> Poll
+
+    Provider -. "模型调用失败" .-> Failed["任务失败<br/><b>failed · 不扣积分</b>"]
+    Storage -. "存储失败" .-> Failed
+    Commit -. "数据库提交失败" .-> Failed
+    Failed --> Poll
+
+    classDef input fill:#ffffff,stroke:#6b7280,color:#111827,stroke-width:1.5px;
+    classDef active fill:#111827,stroke:#111827,color:#ffffff,stroke-width:1.5px;
+    classDef state fill:#eff6ff,stroke:#2563eb,color:#1e3a8a,stroke-width:1.5px;
+    classDef success fill:#ecfdf5,stroke:#059669,color:#065f46,stroke-width:1.5px;
+    classDef failure fill:#fff7ed,stroke:#ea580c,color:#9a3412,stroke-width:1.5px;
+    class Input,Guard input;
+    class Pending,Poll state;
+    class Processing,Provider active;
+    class Storage,Commit,Result success;
+    class Failed failure;
+    style Submit fill:#f9fafb,stroke:#d1d5db,stroke-width:1px;
+    style Execute fill:#f9fafb,stroke:#d1d5db,stroke-width:1px;
+    style Feedback fill:#f9fafb,stroke:#d1d5db,stroke-width:1px;

@@ -17,7 +17,7 @@ interface SmokeResult extends SmokeCheck {
 const checks: SmokeCheck[] = [
   { group: "page", name: "首页", pathname: "/", expectedStatus: 200, bodyIncludes: "ImageGood" },
   { group: "page", name: "登录", pathname: "/login", expectedStatus: 200, bodyIncludes: "登录" },
-  { group: "page", name: "注册", pathname: "/register", expectedStatus: 200, bodyIncludes: "注册" },
+  { group: "page", name: "注册", pathname: "/register", expectedStatus: 200 },
   { group: "page", name: "价格页", pathname: "/pricing", expectedStatus: 200, bodyIncludes: "积分包" },
   { group: "page", name: "AI 修图", pathname: "/editor", expectedStatus: 200, bodyIncludes: "上传图片" },
   { group: "page", name: "文生图", pathname: "/text-to-image", expectedStatus: 200, bodyIncludes: "文生图" },

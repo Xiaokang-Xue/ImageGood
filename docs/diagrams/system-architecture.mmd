@@ -1,0 +1,56 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, Arial, Microsoft YaHei, sans-serif","primaryColor":"#ffffff","primaryTextColor":"#111827","primaryBorderColor":"#9ca3af","lineColor":"#6b7280","secondaryColor":"#f8fafc","tertiaryColor":"#ffffff","clusterBkg":"#f8fafc","clusterBorder":"#d1d5db"},"flowchart":{"curve":"basis","nodeSpacing":34,"rankSpacing":48,"htmlLabels":true}}}%%
+flowchart TB
+    subgraph Entry["访问层"]
+      direction LR
+      Client["用户浏览器 / 移动端"] --> Edge["Nginx + HTTPS"] --> Next["Next.js App Router<br/>Route Handlers"]
+    end
+
+    subgraph Services["业务服务"]
+      direction LR
+      Auth["账号与鉴权"]
+      Image["图片任务"]
+      Billing["订单与积分"]
+      Ops["管理与运营"]
+      Auth ~~~ Image ~~~ Billing ~~~ Ops
+    end
+
+    Next --> Auth
+    Next --> Image
+    Next --> Billing
+    Next --> Ops
+
+    subgraph Infrastructure["基础设施适配"]
+      direction LR
+      Data[("MySQL / 本地 JSON<br/>数据层")]
+      Files[("腾讯云 COS / 本地<br/>图片存储")]
+      Models["OpenAI / Codex<br/>图片 Provider"]
+      Pay["微信支付 / 支付宝"]
+      Message["阿里云短信 / SMTP<br/>飞书机器人"]
+      Data ~~~ Files ~~~ Models ~~~ Pay ~~~ Message
+    end
+
+    Auth --> Data
+    Auth --> Message
+    Image --> Data
+    Image --> Files
+    Image --> Models
+    Billing --> Data
+    Billing --> Pay
+    Ops --> Data
+    Ops --> Message
+
+    Checks["冒烟测试 · 质量基线 · 任务巡检"] -. "验证与观测" .-> Next
+    Checks -.-> Image
+    Checks -.-> Ops
+
+    classDef edge fill:#111827,stroke:#111827,color:#ffffff,stroke-width:1.5px;
+    classDef service fill:#ffffff,stroke:#4b5563,color:#111827,stroke-width:1.5px;
+    classDef infra fill:#eff6ff,stroke:#2563eb,color:#1e3a8a,stroke-width:1.5px;
+    classDef observe fill:#ecfdf5,stroke:#059669,color:#065f46,stroke-width:1.5px;
+    class Client,Edge,Next edge;
+    class Auth,Image,Billing,Ops service;
+    class Data,Files,Models,Pay,Message infra;
+    class Checks observe;
+    style Entry fill:#ffffff,stroke:#d1d5db,stroke-width:1px;
+    style Services fill:#f9fafb,stroke:#d1d5db,stroke-width:1px;
+    style Infrastructure fill:#ffffff,stroke:#d1d5db,stroke-width:1px;

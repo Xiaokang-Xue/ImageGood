@@ -42,14 +42,14 @@ sudo -u appuser codex exec --help
 示例目录：
 
 ```bash
-sudo mkdir -p /opt/ai-image-studio
-sudo chown -R appuser:appuser /opt/ai-image-studio
-cd /opt/ai-image-studio
+sudo mkdir -p /opt/imagegood
+sudo chown -R appuser:appuser /opt/imagegood
+cd /opt/imagegood
 git clone <your-repo-url> .
 npm install
 ```
 
-如果没有使用 Git，也可以把项目目录上传到 `/opt/ai-image-studio`。
+如果没有使用 Git，也可以把项目目录上传到 `/opt/imagegood`。
 
 ## 3. 配置 Next.js 环境变量
 
@@ -142,14 +142,14 @@ After=network.target
 [Service]
 Type=simple
 User=appuser
-WorkingDirectory=/opt/ai-image-studio
+WorkingDirectory=/opt/imagegood
 Environment=HOST=127.0.0.1
 Environment=PORT=8000
 Environment=CODEX_IMAGE_API_WORKDIR=/data/codex_image_api_runs
 Environment=CODEX_BIN=codex
 Environment=CODEX_TIMEOUT_SECONDS=900
 Environment=MAX_UPLOAD_BYTES=20971520
-ExecStart=/usr/bin/python3 /opt/ai-image-studio/server/codex_image_api.py
+ExecStart=/usr/bin/python3 /opt/imagegood/server/codex_image_api.py
 Restart=always
 RestartSec=5
 
@@ -190,7 +190,7 @@ npm run dev
 
 ```bash
 npm install -g pm2
-pm2 start npm --name ai-image-studio -- run start
+pm2 start npm --name imagegood -- run start
 pm2 save
 pm2 startup
 ```
@@ -202,7 +202,7 @@ Next.js 默认监听 `3000` 端口。
 创建配置：
 
 ```bash
-sudo nano /etc/nginx/sites-available/ai-image-studio
+sudo nano /etc/nginx/sites-available/imagegood
 ```
 
 示例：
@@ -232,7 +232,7 @@ server {
 启用：
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/ai-image-studio /etc/nginx/sites-enabled/ai-image-studio
+sudo ln -s /etc/nginx/sites-available/imagegood /etc/nginx/sites-enabled/imagegood
 sudo nginx -t
 sudo systemctl reload nginx
 ```

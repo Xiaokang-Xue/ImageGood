@@ -29,7 +29,7 @@
 如果网站进程由 PM2 管理，可先查看日志：
 
 ```bash
-pm2 logs ai-image-studio --lines 300
+pm2 logs imagegood --lines 300
 ```
 
 在保存到文件的日志中按 `taskId` 查询：

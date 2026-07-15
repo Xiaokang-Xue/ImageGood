@@ -63,7 +63,7 @@ export class WechatPayProvider implements PaymentProvider {
         Authorization: authorization,
         Accept: "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "ai-image-studio/1.0"
+        "User-Agent": "imagegood/1.0"
       },
       body
     });
