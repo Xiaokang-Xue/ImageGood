@@ -14,7 +14,9 @@
 
 </div>
 
-![ImageGood 首页](docs/assets/screenshots/home.png)
+<div align="center">
+  <img src="docs/assets/screenshots/home.png" alt="ImageGood 首页" width="1180" />
+</div>
 
 ImageGood 支持上传图片或输入文字完成 AI 修图、文生图、智能抠图、图片增强、去杂物、商品图和封面海报生成。图片任务由服务端异步执行，成功后保存结果、写入历史记录并扣除积分，失败不扣积分。
 
@@ -39,26 +41,28 @@ ImageGood 支持上传图片或输入文字完成 AI 修图、文生图、智能
 - 腾讯云 COS 图片存储，以及本地文件存储模式。
 - 管理员订单后台、运营看板、转化漏斗和飞书日报。
 
-## 界面预览
-
-### AI 修图工作台
-
-![ImageGood AI 修图工作台](docs/assets/screenshots/editor.png)
-
-桌面端采用输入素材、结果预览和控制面板并列布局；移动端收敛为单任务工作流并保留固定主操作按钮。
-
 ## 任务流程
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Pending: 创建任务
-    Pending --> Processing: 后台开始执行
-    Processing --> Succeeded: 模型生成并保存结果
-    Processing --> Failed: 模型、存储或任务执行失败
-    Succeeded --> CreditCharged: 幂等扣除积分并写入流水
-    Failed --> NoCharge: 不扣积分
-    CreditCharged --> [*]
-    NoCharge --> [*]
+flowchart LR
+    Create["创建任务<br/>pending"] --> Execute["服务端执行<br/>processing"]
+    Execute --> Model["调用图片模型"]
+    Model --> Store["保存生成结果"]
+    Store --> Commit["提交成功状态<br/>幂等扣除积分"]
+    Commit --> Done["生成完成<br/>succeeded"]
+
+    Execute -. 执行异常 .-> Failed["生成失败<br/>failed · 不扣积分"]
+    Model -. 调用异常 .-> Failed
+    Store -. 存储异常 .-> Failed
+
+    classDef step fill:#fafafa,color:#171717,stroke:#a3a3a3,stroke-width:1px;
+    classDef active fill:#171717,color:#ffffff,stroke:#171717,stroke-width:1px;
+    classDef success fill:#ecfdf5,color:#065f46,stroke:#10b981,stroke-width:1px;
+    classDef failure fill:#fff7ed,color:#9a3412,stroke:#fb923c,stroke-width:1px;
+    class Create,Model,Store step;
+    class Execute active;
+    class Commit,Done success;
+    class Failed failure;
 ```
 
 前端创建任务后立即获得 `taskId`，再轮询任务状态。模型调用、结果存储、数据库更新和积分扣减均以同一 `taskId` 记录结构化日志。
@@ -66,21 +70,49 @@ stateDiagram-v2
 ## 系统架构
 
 ```mermaid
-flowchart LR
-    Browser[浏览器] --> Next[Next.js 页面与 API]
-    Next --> Auth[账号与会话]
-    Next --> Task[图片任务服务]
-    Next --> Pay[微信 / 支付宝]
-    Next --> Admin[管理与运营统计]
+flowchart TB
+    Browser["用户浏览器"] --> Web["Next.js Web 与 Route Handlers"]
 
-    Auth --> DB[(MySQL / 本地 JSON)]
-    Task --> Provider{图片 Provider}
-    Provider --> OpenAI[OpenAI-compatible API]
-    Provider --> Codex[Python Codex 服务]
-    Task --> Storage[(腾讯云 COS / 本地文件)]
-    Task --> DB
-    Pay --> DB
-    Admin --> DB
+    subgraph Services["业务服务"]
+        direction LR
+        Identity["账号与权限"]
+        ImageTask["图片任务"]
+        Billing["订单与积分"]
+        Operations["运营与管理"]
+    end
+
+    Web --> Identity
+    Web --> ImageTask
+    Web --> Billing
+    Web --> Operations
+
+    subgraph Infrastructure["服务端基础设施"]
+        direction LR
+        Database[("MySQL / 本地 JSON")]
+        Storage[("腾讯云 COS / 本地文件")]
+        Provider{"图片 Provider"}
+        Payment["微信 / 支付宝"]
+        Message["SMTP / 短信 / 飞书"]
+    end
+
+    Identity --> Database
+    Identity --> Message
+    ImageTask --> Database
+    ImageTask --> Storage
+    ImageTask --> Provider
+    Billing --> Database
+    Billing --> Payment
+    Operations --> Database
+    Operations --> Message
+
+    classDef entry fill:#171717,color:#ffffff,stroke:#171717,stroke-width:1px;
+    classDef service fill:#ffffff,color:#171717,stroke:#737373,stroke-width:1px;
+    classDef infra fill:#f5f5f5,color:#262626,stroke:#a3a3a3,stroke-width:1px;
+    class Browser,Web entry;
+    class Identity,ImageTask,Billing,Operations service;
+    class Database,Storage,Provider,Payment,Message infra;
+    style Services fill:#fafafa,stroke:#d4d4d4,stroke-width:1px;
+    style Infrastructure fill:#ffffff,stroke:#d4d4d4,stroke-width:1px;
 ```
 
 浏览器只访问 Next.js API。模型密钥、数据库连接、COS 凭据、短信、邮件和支付签名均保留在服务端。
