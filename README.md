@@ -696,6 +696,26 @@ npm run build
 npm run start -- -H 0.0.0.0
 ```
 
+## 自动化检查与任务排障
+
+部署前后可以运行核心页面冒烟测试。该测试不会生成图片、扣积分或创建支付订单：
+
+```bash
+npm run test:smoke -- --base-url=https://imagegood.net
+```
+
+在应用服务器上检查最近 24 小时图片任务的成功率、耗时、主要失败原因和长期未更新任务：
+
+```bash
+npm run ops:task-audit
+```
+
+图片任务会输出以 `taskId` 关联的结构化日志，覆盖任务创建、模型调用、COS 保存、数据库更新、积分扣减和最终状态。详细使用方式见：
+
+- [核心功能自动化冒烟测试](docs/smoke-testing.md)
+- [图片生成任务可观测性](docs/image-task-observability.md)
+- [质量基线](docs/quality-baseline.md)
+
 ## 飞书运营日报
 
 项目支持将每日运营数据自动推送到飞书群，适合用于每天固定时间查看网站运行情况。该能力不会爬取后台页面，而是通过服务端统计逻辑直接读取数据库记录。

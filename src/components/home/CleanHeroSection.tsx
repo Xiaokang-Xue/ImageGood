@@ -40,19 +40,19 @@ export function CleanHeroSection() {
             上传图片或输入文字，即可完成修图、文生图、智能抠图、商品图和封面海报生成。
           </p>
 
-          <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+          <div className="mt-8 grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-center sm:gap-3">
             {primaryActions.map((action) => {
               const Icon = action.icon;
               return (
-                <Link key={action.href} href={action.href}>
+                <Link key={action.href} href={action.href} className="min-w-0">
                   <Button
                     size="lg"
                     variant={action.primary ? "primary" : "secondary"}
-                    className="w-full min-w-[148px] sm:w-auto"
+                    className="w-full min-w-0 gap-1 px-2 text-xs sm:w-auto sm:min-w-[148px] sm:gap-2 sm:px-5 sm:text-base"
                   >
                     <Icon className="h-4 w-4" />
                     {action.label}
-                    {action.primary ? <ArrowRight className="h-4 w-4" /> : null}
+                    {action.primary ? <ArrowRight className="hidden h-4 w-4 sm:block" /> : null}
                   </Button>
                 </Link>
               );

@@ -18,9 +18,10 @@ export function ResultShowcase() {
       <div className="mx-auto grid max-w-[1280px] gap-12 px-4 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:px-8">
         <div>
           <h2 className="max-w-lg text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
-            更少步骤，更清楚的创作过程
+            <span className="md:hidden">清楚的创作过程</span>
+            <span className="hidden md:inline">更少步骤，更清楚的创作过程</span>
           </h2>
-          <p className="mt-4 max-w-lg text-base leading-7 text-neutral-600">
+          <p className="mt-4 hidden max-w-lg text-base leading-7 text-neutral-600 md:block">
             每个工具都遵循一致的输入、生成和下载流程。你不需要理解复杂模型参数，只需说明目标。
           </p>
 

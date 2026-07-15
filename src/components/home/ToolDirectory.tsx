@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   Eraser,
   ImagePlus,
-  Paintbrush,
   ScanLine,
   Scissors,
   ShoppingBag,
@@ -19,7 +18,6 @@ const icons: Record<(typeof taskCards)[number]["id"], LucideIcon> = {
   "remove-background": Scissors,
   "image-enhancer": ScanLine,
   "object-remover": Eraser,
-  background: Paintbrush,
   "text-to-image": ImagePlus,
   product: ShoppingBag,
   poster: Sparkles

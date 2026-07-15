@@ -47,7 +47,7 @@ export const taskCards = [
     id: "edit",
     group: "processing",
     title: "AI 修图",
-    description: "上传图片，说出想法，完成风格调整、换背景和视觉修饰。",
+    description: "上传图片，说出想法，完成细节修饰、画面调整和视觉优化。",
     route: "/editor"
   },
   {
@@ -70,13 +70,6 @@ export const taskCards = [
     title: "去杂物",
     description: "用文字说明要移除的对象，清理路人、杂物和多余元素。",
     route: "/object-remover"
-  },
-  {
-    id: "background",
-    group: "processing",
-    title: "换背景",
-    description: "保留主体细节，替换为商业摄影、纯色或自定义场景背景。",
-    route: "/editor?tool=background"
   },
   {
     id: "text-to-image",

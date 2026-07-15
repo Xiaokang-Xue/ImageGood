@@ -9,7 +9,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
       <CleanHeroSection />
-      <div className="[content-visibility:auto] [contain-intrinsic-size:900px]">
+      <div className="hidden [content-visibility:auto] [contain-intrinsic-size:900px] md:block">
         <ToolDirectory />
       </div>
       <div className="[content-visibility:auto] [contain-intrinsic-size:760px]">

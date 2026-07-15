@@ -11,7 +11,6 @@ import {
   LogIn,
   LogOut,
   Menu,
-  Paintbrush,
   ScanLine,
   Scissors,
   ShoppingBag,
@@ -41,8 +40,7 @@ const processingTools: ToolNavItem[] = [
   { label: "AI 修图", description: "用自然语言完成图片修改", href: "/editor", icon: WandSparkles },
   { label: "智能抠图", description: "生成透明背景 PNG", href: "/remove-background", icon: Scissors },
   { label: "图片增强", description: "提升清晰度与细节质感", href: "/image-enhancer", icon: ScanLine },
-  { label: "去杂物", description: "移除路人和多余元素", href: "/object-remover", icon: Eraser },
-  { label: "换背景", description: "快速替换图片背景", href: "/editor?tool=background", icon: Paintbrush }
+  { label: "去杂物", description: "移除路人和多余元素", href: "/object-remover", icon: Eraser }
 ];
 
 const generationTools: ToolNavItem[] = [

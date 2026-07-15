@@ -10,7 +10,10 @@
     "db:generate": "node scripts/db-generate.mjs",
     "db:push": "node scripts/db-push.mjs",
     "db:migrate-json": "node scripts/migrate-json-db-to-mysql.mjs",
-    "ops:daily-report": "tsx scripts/send-daily-feishu-report.ts"
+    "ops:daily-report": "tsx scripts/send-daily-feishu-report.ts",
+    "ops:quality-baseline": "tsx scripts/quality-baseline.ts",
+    "ops:task-audit": "node --conditions=react-server --import tsx scripts/image-task-audit.ts",
+    "test:smoke": "tsx scripts/smoke-test.ts"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^3.1.0",
@@ -24,6 +27,7 @@
     "openai": "^6.38.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^2.6.0",
     "zustand": "^5.0.2"
   },

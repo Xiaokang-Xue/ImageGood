@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { BillingError } from "@/lib/billing";
 import { getDbSnapshot, getImageTaskById, getUserImageTaskPage, withDb } from "@/lib/db";
 import { queryCodexTaskResult, recoverCodexTaskResult } from "@/lib/server/codex-image-provider";
+import { isCosStorageEnabled } from "@/lib/server/cos-storage";
 import {
   buildEditPrompt,
   buildImageEnhancePrompt,
@@ -12,6 +13,7 @@ import {
   buildTextToImagePrompt
 } from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
+import { logImageTaskEvent, type ImageTaskLogContext } from "@/lib/server/image-task-observability";
 import { cleanupLocalTaskDirectoryAfterUpload, normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
 import { assertPaymentSourceSurveyCompleted } from "@/lib/server/payment-source-survey";
 import type {
@@ -33,14 +35,6 @@ import type { ImageTaskRecord, ImageTaskType } from "@/types/task";
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function taskLog(message: string, payload: Record<string, unknown>) {
-  console.info(`[image-task] ${message}`, payload);
-}
-
-function taskErrorLog(message: string, payload: Record<string, unknown>) {
-  console.error(`[image-task] ${message}`, payload);
 }
 
 function userFacingImageError(error: unknown) {
@@ -102,6 +96,15 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
 
     db.imageTasks.push(task);
   });
+
+  logImageTaskEvent("task.created", {
+    taskId: task.id,
+    userId: task.userId,
+    taskType: task.type,
+    provider: task.provider,
+    status: task.status,
+    stage: "queue"
+  });
 }
 
 async function updateTask(taskId: string, patch: Partial<ImageTaskRecord>) {
@@ -122,6 +125,8 @@ async function failTask(taskId: string, error: unknown) {
     task.errorMessage = message;
     task.updatedAt = nowIso();
   });
+
+  return message;
 }
 
 async function saveResults(userId: string, taskId: string, urls: string[]) {
@@ -161,7 +166,9 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
       task.creditCharged ||
       db.creditTransactions.some((transaction) => transaction.type === "consume" && transaction.taskId === task.id);
 
-    if (!alreadyCharged) {
+    const creditChargedNow = !alreadyCharged;
+
+    if (creditChargedNow) {
       user.credits -= 1;
       user.updatedAt = now;
       task.creditCharged = true;
@@ -180,7 +187,12 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
       task.creditCharged = true;
     }
 
-    return { task, latestCredits: user.credits };
+    return {
+      task,
+      latestCredits: user.credits,
+      creditChargedNow,
+      creditsConsumed: creditChargedNow ? 1 : 0
+    };
   });
 }
 
@@ -198,21 +210,177 @@ function creditReasonForTask(type: ImageTaskType) {
   return labels[type] || "图片生成";
 }
 
+async function observeTaskStep<T>(input: {
+  task: ImageTaskRecord;
+  stage: NonNullable<ImageTaskLogContext["stage"]>;
+  operation: string;
+  run: () => Promise<T>;
+  successFields?: (result: T) => Partial<ImageTaskLogContext>;
+}) {
+  const startedAt = Date.now();
+  const baseContext = {
+    taskId: input.task.id,
+    userId: input.task.userId,
+    taskType: input.task.type,
+    provider: input.task.provider,
+    stage: input.stage,
+    operation: input.operation
+  } satisfies ImageTaskLogContext;
+
+  logImageTaskEvent("stage.started", baseContext);
+
+  try {
+    const result = await input.run();
+    logImageTaskEvent("stage.succeeded", {
+      ...(input.successFields?.(result) ?? {}),
+      ...baseContext,
+      durationMs: Date.now() - startedAt
+    });
+    return result;
+  } catch (error) {
+    logImageTaskEvent(
+      "stage.failed",
+      {
+        ...baseContext,
+        durationMs: Date.now() - startedAt,
+        error
+      },
+      "error"
+    );
+    throw error;
+  }
+}
+
+async function saveTaskInput(task: ImageTaskRecord, image: File) {
+  return observeTaskStep({
+    task,
+    stage: "input_storage",
+    operation: "save_upload",
+    run: async () => {
+      const inputImageUrl = await saveUploadFile(image, task.userId, task.id);
+      await updateTask(task.id, { inputImageUrl });
+      return inputImageUrl;
+    },
+    successFields: () => ({
+      inputImageCount: 1,
+      storageProvider: isCosStorageEnabled() ? "cos" : "local"
+    })
+  });
+}
+
+async function runProviderStep<T>(task: ImageTaskRecord, operation: string, run: () => Promise<T>) {
+  return observeTaskStep({
+    task,
+    stage: "provider",
+    operation,
+    run,
+    successFields: () => ({ outputImageCount: 1 })
+  });
+}
+
+async function completeTask(task: ImageTaskRecord, generatedUrl: string) {
+  const saved = await observeTaskStep({
+    task,
+    stage: "result_storage",
+    operation: "save_generated_result",
+    run: () => saveResults(task.userId, task.id, [generatedUrl]),
+    successFields: (result) => ({
+      outputImageCount: result.resultImages.length,
+      storageProvider: isCosStorageEnabled() ? "cos" : "local"
+    })
+  });
+
+  const result = await observeTaskStep({
+    task,
+    stage: "database",
+    operation: "mark_succeeded_and_charge_credit",
+    run: () => markTaskSucceeded(task.id, saved),
+    successFields: (completed) => ({
+      status: "succeeded",
+      creditCharged: completed.task.creditCharged === true,
+      creditsConsumed: completed.creditsConsumed,
+      latestCredits: completed.latestCredits
+    })
+  });
+
+  try {
+    await observeTaskStep({
+      task,
+      stage: "cleanup",
+      operation: "cleanup_local_task_directory",
+      run: () => cleanupLocalTaskDirectoryAfterUpload(task.id)
+    });
+  } catch (error) {
+    logImageTaskEvent(
+      "cleanup.skipped",
+      {
+        taskId: task.id,
+        userId: task.userId,
+        taskType: task.type,
+        provider: task.provider,
+        stage: "cleanup",
+        status: "succeeded",
+        error
+      },
+      "warn"
+    );
+  }
+
+  logImageTaskEvent("task.succeeded", {
+    taskId: task.id,
+    userId: task.userId,
+    taskType: task.type,
+    provider: task.provider,
+    status: "succeeded",
+    totalDurationMs: Math.max(0, Date.now() - new Date(task.createdAt).getTime()),
+    outputImageCount: saved.resultImages.length,
+    creditCharged: result.task.creditCharged === true,
+    creditsConsumed: result.creditsConsumed,
+    latestCredits: result.latestCredits
+  });
+
+  return result;
+}
+
 async function recoverTaskResultIfPresent(taskId: string) {
   const task = await getImageTaskById(taskId);
   if (!task || task.provider !== "codex") return null;
 
-  const recovered = (await queryCodexTaskResult(task.id)) || (await recoverCodexTaskResult(task.id));
-  if (!recovered) return null;
-
-  const saved = await saveResults(task.userId, task.id, [recovered.url]);
-  const result = await markTaskSucceeded(task.id, saved);
-  await cleanupLocalTaskDirectoryAfterUpload(task.id);
-  taskLog("recovered result from codex workdir", {
+  const startedAt = Date.now();
+  logImageTaskEvent("recovery.started", {
     taskId: task.id,
     userId: task.userId,
-    sourcePath: recovered.sourcePath,
-    resultImageUrl: saved.resultImageUrl,
+    taskType: task.type,
+    provider: task.provider,
+    stage: "recovery"
+  });
+
+  const recovered = (await queryCodexTaskResult(task.id)) || (await recoverCodexTaskResult(task.id));
+  if (!recovered) {
+    logImageTaskEvent(
+      "recovery.not_found",
+      {
+        taskId: task.id,
+        userId: task.userId,
+        taskType: task.type,
+        provider: task.provider,
+        stage: "recovery",
+        durationMs: Date.now() - startedAt
+      },
+      "warn"
+    );
+    return null;
+  }
+
+  const result = await completeTask(task, recovered.url);
+  logImageTaskEvent("recovery.succeeded", {
+    taskId: task.id,
+    userId: task.userId,
+    taskType: task.type,
+    provider: task.provider,
+    stage: "recovery",
+    status: "succeeded",
+    durationMs: Date.now() - startedAt,
     latestCredits: result.latestCredits
   });
   return result.task;
@@ -221,33 +389,50 @@ async function recoverTaskResultIfPresent(taskId: string) {
 function startBackgroundTask(task: ImageTaskRecord, runner: () => Promise<void>) {
   void (async () => {
     const startedAt = Date.now();
-    taskLog("start", {
-      taskId: task.id,
-      userId: task.userId,
-      type: task.type,
-      provider: task.provider,
-      startedAt: new Date(startedAt).toISOString()
-    });
 
     try {
       await updateTask(task.id, { status: "processing" });
-      await runner();
-      taskLog("finished", {
-        taskId: task.id,
-        elapsedMs: Date.now() - startedAt
-      });
-    } catch (error) {
-      const recovered = await recoverTaskResultIfPresent(task.id);
-      if (recovered) return;
-
-      await failTask(task.id, error);
-      taskErrorLog("failed", {
+      logImageTaskEvent("task.processing", {
         taskId: task.id,
         userId: task.userId,
-        type: task.type,
-        elapsedMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : String(error)
+        taskType: task.type,
+        provider: task.provider,
+        status: "processing",
+        stage: "queue",
+        durationMs: Date.now() - startedAt
       });
+      await runner();
+    } catch (error) {
+      try {
+        const recovered = await recoverTaskResultIfPresent(task.id);
+        if (recovered) return;
+      } catch (recoveryError) {
+        logImageTaskEvent(
+          "recovery.failed",
+          {
+            taskId: task.id,
+            userId: task.userId,
+            taskType: task.type,
+            provider: task.provider,
+            stage: "recovery",
+            error: recoveryError
+          },
+          "error"
+        );
+      }
+
+      await failTask(task.id, error);
+      logImageTaskEvent("task.failed", {
+        taskId: task.id,
+        userId: task.userId,
+        taskType: task.type,
+        provider: task.provider,
+        status: "failed",
+        totalDurationMs: Math.max(0, Date.now() - new Date(task.createdAt).getTime()),
+        creditCharged: false,
+        creditsConsumed: 0,
+        error
+      }, "error");
     }
   })();
 }
@@ -285,29 +470,19 @@ export async function runEditTask(input: {
   await insertTaskWithCreditCheck(task);
 
   startBackgroundTask(task, async () => {
-    const inputImageUrl = await saveUploadFile(input.image, input.userId, task.id);
-    await updateTask(task.id, { inputImageUrl });
+    await saveTaskInput(task, input.image);
 
-    const generated = await provider.editImage({
-      taskId: task.id,
-      image: input.image,
-      prompt,
-      size: input.size,
-      quality: input.quality,
-      outputFormat: input.outputFormat
-    });
-    const saved = await saveResults(input.userId, task.id, [generated.url]);
-    const result = await markTaskSucceeded(task.id, saved);
-    await cleanupLocalTaskDirectoryAfterUpload(task.id);
-
-    taskLog("succeeded", {
-      taskId: task.id,
-      userId: input.userId,
-      type: task.type,
-      resultImageUrl: saved.resultImageUrl,
-      latestCredits: result.latestCredits,
-      creditCharged: true
-    });
+    const generated = await runProviderStep(task, "edit", () =>
+      provider.editImage({
+        taskId: task.id,
+        image: input.image,
+        prompt,
+        size: input.size,
+        quality: input.quality,
+        outputFormat: input.outputFormat
+      })
+    );
+    await completeTask(task, generated.url);
   });
 
   return startResponse(task);
@@ -336,29 +511,19 @@ export async function runProductTask(input: {
   await insertTaskWithCreditCheck(task);
 
   startBackgroundTask(task, async () => {
-    const inputImageUrl = await saveUploadFile(input.image, input.userId, task.id);
-    await updateTask(task.id, { inputImageUrl });
+    await saveTaskInput(task, input.image);
 
-    const generated = await provider.editImage({
-      taskId: task.id,
-      image: input.image,
-      prompt,
-      size: input.size,
-      quality: "auto",
-      outputFormat: "png"
-    });
-    const saved = await saveResults(input.userId, task.id, [generated.url]);
-    const result = await markTaskSucceeded(task.id, saved);
-    await cleanupLocalTaskDirectoryAfterUpload(task.id);
-
-    taskLog("succeeded", {
-      taskId: task.id,
-      userId: input.userId,
-      type: task.type,
-      resultImageUrl: saved.resultImageUrl,
-      latestCredits: result.latestCredits,
-      creditCharged: true
-    });
+    const generated = await runProviderStep(task, "edit_product", () =>
+      provider.editImage({
+        taskId: task.id,
+        image: input.image,
+        prompt,
+        size: input.size,
+        quality: "auto",
+        outputFormat: "png"
+      })
+    );
+    await completeTask(task, generated.url);
   });
 
   return startResponse(task);
@@ -386,25 +551,16 @@ export async function runPosterTask(input: {
   await insertTaskWithCreditCheck(task);
 
   startBackgroundTask(task, async () => {
-    const generated = await provider.generateImage({
-      taskId: task.id,
-      prompt,
-      size: input.size,
-      quality: "auto",
-      outputFormat: "png"
-    });
-    const saved = await saveResults(input.userId, task.id, [generated.url]);
-    const result = await markTaskSucceeded(task.id, saved);
-    await cleanupLocalTaskDirectoryAfterUpload(task.id);
-
-    taskLog("succeeded", {
-      taskId: task.id,
-      userId: input.userId,
-      type: task.type,
-      resultImageUrl: saved.resultImageUrl,
-      latestCredits: result.latestCredits,
-      creditCharged: true
-    });
+    const generated = await runProviderStep(task, "generate_poster", () =>
+      provider.generateImage({
+        taskId: task.id,
+        prompt,
+        size: input.size,
+        quality: "auto",
+        outputFormat: "png"
+      })
+    );
+    await completeTask(task, generated.url);
   });
 
   return startResponse(task);
@@ -434,25 +590,16 @@ export async function runTextToImageTask(input: {
   await insertTaskWithCreditCheck(task);
 
   startBackgroundTask(task, async () => {
-    const generated = await provider.generateImage({
-      taskId: task.id,
-      prompt,
-      size: input.size,
-      quality: input.quality,
-      outputFormat: input.outputFormat
-    });
-    const saved = await saveResults(input.userId, task.id, [generated.url]);
-    const result = await markTaskSucceeded(task.id, saved);
-    await cleanupLocalTaskDirectoryAfterUpload(task.id);
-
-    taskLog("succeeded", {
-      taskId: task.id,
-      userId: input.userId,
-      type: task.type,
-      resultImageUrl: saved.resultImageUrl,
-      latestCredits: result.latestCredits,
-      creditCharged: true
-    });
+    const generated = await runProviderStep(task, "generate_text_to_image", () =>
+      provider.generateImage({
+        taskId: task.id,
+        prompt,
+        size: input.size,
+        quality: input.quality,
+        outputFormat: input.outputFormat
+      })
+    );
+    await completeTask(task, generated.url);
   });
 
   return startResponse(task);
@@ -478,28 +625,18 @@ export async function runRemoveBackgroundTask(input: {
   await insertTaskWithCreditCheck(task);
 
   startBackgroundTask(task, async () => {
-    const inputImageUrl = await saveUploadFile(input.image, input.userId, task.id);
-    await updateTask(task.id, { inputImageUrl });
+    await saveTaskInput(task, input.image);
 
-    const generated = await provider.removeBackground({
-      taskId: task.id,
-      image: input.image,
-      prompt,
-      size: input.size,
-      quality: input.quality
-    });
-    const saved = await saveResults(input.userId, task.id, [generated.url]);
-    const result = await markTaskSucceeded(task.id, saved);
-    await cleanupLocalTaskDirectoryAfterUpload(task.id);
-
-    taskLog("succeeded", {
-      taskId: task.id,
-      userId: input.userId,
-      type: task.type,
-      resultImageUrl: saved.resultImageUrl,
-      latestCredits: result.latestCredits,
-      creditCharged: true
-    });
+    const generated = await runProviderStep(task, "remove_background", () =>
+      provider.removeBackground({
+        taskId: task.id,
+        image: input.image,
+        prompt,
+        size: input.size,
+        quality: input.quality
+      })
+    );
+    await completeTask(task, generated.url);
   });
 
   return startResponse(task);
@@ -527,29 +664,19 @@ async function runPromptedImageEditTask(input: {
   await insertTaskWithCreditCheck(task);
 
   startBackgroundTask(task, async () => {
-    const inputImageUrl = await saveUploadFile(input.image, input.userId, task.id);
-    await updateTask(task.id, { inputImageUrl });
+    await saveTaskInput(task, input.image);
 
-    const generated = await provider.editImage({
-      taskId: task.id,
-      image: input.image,
-      prompt: input.prompt,
-      size: input.size,
-      quality: input.quality,
-      outputFormat: input.outputFormat || "png"
-    });
-    const saved = await saveResults(input.userId, task.id, [generated.url]);
-    const result = await markTaskSucceeded(task.id, saved);
-    await cleanupLocalTaskDirectoryAfterUpload(task.id);
-
-    taskLog("succeeded", {
-      taskId: task.id,
-      userId: input.userId,
-      type: task.type,
-      resultImageUrl: saved.resultImageUrl,
-      latestCredits: result.latestCredits,
-      creditCharged: true
-    });
+    const generated = await runProviderStep(task, input.type, () =>
+      provider.editImage({
+        taskId: task.id,
+        image: input.image,
+        prompt: input.prompt,
+        size: input.size,
+        quality: input.quality,
+        outputFormat: input.outputFormat || "png"
+      })
+    );
+    await completeTask(task, generated.url);
   });
 
   return startResponse(task);
@@ -605,11 +732,18 @@ export async function getUserTask(userId: string, taskId: string) {
     try {
       await recoverTaskResultIfPresent(ownedTask.id);
     } catch (error) {
-      taskErrorLog("recover result skipped", {
-        taskId: ownedTask.id,
-        userId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logImageTaskEvent(
+        "recovery.poll_failed",
+        {
+          taskId: ownedTask.id,
+          userId,
+          taskType: ownedTask.type,
+          provider: ownedTask.provider,
+          stage: "recovery",
+          error
+        },
+        "warn"
+      );
     }
   }
 
