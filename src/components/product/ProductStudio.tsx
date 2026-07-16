@@ -16,14 +16,13 @@ import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
   apiClient,
   getImageErrorMessage,
-  imageUrlToUploadFile,
   isAbortError,
   isEmailNotVerifiedError,
   isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
-import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
+import { isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
@@ -165,10 +164,10 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
     const controller = new AbortController();
     pollingController.current = controller;
     try {
-      const submitProduct = async (imageOverride?: File) => {
+      const submitProduct = async () => {
         const response = await apiClient.createProductImages({
-          image: imageOverride ?? imageFile ?? undefined,
-          imageUrl: imageOverride ? undefined : imageUrl ?? undefined,
+          image: imageFile ?? undefined,
+          imageUrl: imageUrl ?? undefined,
           template,
           scene,
           style,
@@ -202,22 +201,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
         return nextResults;
       };
 
-      let nextResults: ProductImageResult[];
-      try {
-        nextResults = await submitProduct();
-      } catch (firstError) {
-        if (!isImageCompatibilityError(firstError)) {
-          throw firstError;
-        }
-
-        const retrySourceFile = imageFile ?? (imageUrl ? await imageUrlToUploadFile(imageUrl, "product-input") : null);
-        if (!retrySourceFile) {
-          throw firstError;
-        }
-
-        const normalizedFile = await forceNormalizeImageFileForUpload(retrySourceFile);
-        nextResults = await submitProduct(normalizedFile);
-      }
+      const nextResults = await submitProduct();
 
       setResults(nextResults);
       setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
@@ -242,7 +226,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
         return;
       }
       if (isImageCompatibilityError(requestError)) {
-        setError("系统已自动优化图片格式，但模型仍无法读取该图片，请更换图片后再试");
+        setError("图片已完成兼容性检查，但仍无法读取内容，请确认文件未损坏或更换图片后再试");
         return;
       }
       setError(getImageErrorMessage(requestError));

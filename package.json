@@ -13,14 +13,17 @@
     "ops:daily-report": "tsx scripts/send-daily-feishu-report.ts",
     "ops:quality-baseline": "tsx scripts/quality-baseline.ts",
     "ops:task-audit": "node --conditions=react-server --import tsx scripts/image-task-audit.ts",
-    "test:smoke": "tsx scripts/smoke-test.ts"
+    "test:smoke": "tsx scripts/smoke-test.ts",
+    "test:image-formats": "node --conditions=react-server --import tsx scripts/check-image-normalization.ts"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^3.1.0",
     "@alicloud/openapi-client": "^0.4.14",
     "@alicloud/tea-util": "^1.4.10",
+    "bmp-js": "^0.1.0",
     "clsx": "^2.1.1",
     "cos-nodejs-sdk-v5": "^2.14.7",
+    "heic-convert": "^2.1.0",
     "lucide-react": "^0.468.0",
     "mysql2": "^3.11.5",
     "next": "^14.2.23",
@@ -28,6 +31,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "server-only": "^0.0.1",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^2.6.0",
     "zustand": "^5.0.2"
   },

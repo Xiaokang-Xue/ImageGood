@@ -64,6 +64,9 @@ function fileExtensionFromMime(type: string) {
   if (type === "image/heic") return "heic";
   if (type === "image/heif") return "heif";
   if (type === "image/avif") return "avif";
+  if (type === "image/tiff") return "tiff";
+  if (type === "image/gif") return "gif";
+  if (type === "image/bmp" || type === "image/x-ms-bmp") return "bmp";
   return "png";
 }
 
@@ -77,6 +80,9 @@ function mimeFromExtension(pathOrName: string) {
   if (extension === ".heic") return "image/heic";
   if (extension === ".heif") return "image/heif";
   if (extension === ".avif") return "image/avif";
+  if (extension === ".tif" || extension === ".tiff") return "image/tiff";
+  if (extension === ".gif") return "image/gif";
+  if (extension === ".bmp") return "image/bmp";
   return "";
 }
 
@@ -93,6 +99,18 @@ function mimeFromBytes(bytes: Uint8Array) {
     String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
   ) {
     return "image/webp";
+  }
+  if (bytes.length >= 6) {
+    const signature = String.fromCharCode(...bytes.slice(0, 6));
+    if (signature === "GIF87a" || signature === "GIF89a") return "image/gif";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) return "image/bmp";
+  if (
+    bytes.length >= 4 &&
+    ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00) ||
+      (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a))
+  ) {
+    return "image/tiff";
   }
   if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif")) {
     return "image/avif";

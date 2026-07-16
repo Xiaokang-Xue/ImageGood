@@ -4,6 +4,12 @@ import { useRef, useState } from "react";
 import { ImagePlus, UploadCloud } from "lucide-react";
 import { SmartImage } from "@/components/ui/SmartImage";
 import {
+  IMAGE_FILE_INPUT_ACCEPT,
+  IMAGE_UPLOAD_FORMAT_DESCRIPTION,
+  MAX_SOURCE_IMAGE_BYTES,
+  formatImageByteLimit
+} from "@/config/image-upload";
+import {
   ImageNormalizationError,
   isPotentialImageFile,
   prepareImageFileForUpload,
@@ -23,7 +29,7 @@ interface UploadDropzoneProps {
 export function UploadDropzone({
   value,
   title = "上传图片",
-  subtitle = "支持点击或拖拽上传 PNG、JPG、WebP",
+  subtitle = "点击选择图片，系统会在生成前完成格式兼容处理",
   compact = false,
   className,
   onImageSelected
@@ -87,7 +93,7 @@ export function UploadDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={IMAGE_FILE_INPUT_ACCEPT}
         className="hidden"
         onChange={(event) => void readFile(event.target.files?.[0])}
       />
@@ -96,7 +102,7 @@ export function UploadDropzone({
         <div className="flex h-full min-h-[inherit] flex-col items-center justify-center px-6 text-center">
           <div className="mb-5 h-12 w-12 animate-spin rounded-full border-4 border-neutral-200 border-t-neutral-950" />
           <p className="text-lg font-semibold text-ink">正在优化图片格式</p>
-          <p className="mt-2 max-w-sm text-sm leading-6 text-muted">仅在图片格式不兼容或超过 10MB 时自动转换</p>
+          <p className="mt-2 max-w-sm text-sm leading-6 text-muted">正在生成任务前检查编码、色彩模式和文件大小</p>
         </div>
       ) : value ? (
         <SmartImage src={value} alt="上传预览" className="h-full min-h-[inherit] w-full rounded-none border-0" />
@@ -107,6 +113,9 @@ export function UploadDropzone({
           </div>
           <p className="text-lg font-semibold text-ink">{title}</p>
           {subtitle ? <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{subtitle}</p> : null}
+          <p className="mt-2 max-w-md text-xs leading-5 text-neutral-500">
+            {IMAGE_UPLOAD_FORMAT_DESCRIPTION}，最大 {formatImageByteLimit(MAX_SOURCE_IMAGE_BYTES)}
+          </p>
           <div className="mt-5 hidden rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-500 sm:block">
             拖到这里即可开始
           </div>

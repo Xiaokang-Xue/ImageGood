@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     assertContactVerified(user);
 
     const formData = await request.formData();
-    const image = getRequiredImageFile(formData);
+    const image = await getRequiredImageFile(formData);
     const prompt = getFormString(formData, "prompt");
 
     const data = await runRemoveBackgroundTask({

@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     assertContactVerified(user);
 
     const formData = await request.formData();
-    const image = getRequiredImageFile(formData);
+    const image = await getRequiredImageFile(formData);
     const template = normalize(getFormString(formData, "template", "white-bg"), templates, "white-bg");
     const scene = normalize(getFormString(formData, "scene", "desk"), scenes, "desk");
     const style = normalize(getFormString(formData, "style", "premium"), styles, "premium");

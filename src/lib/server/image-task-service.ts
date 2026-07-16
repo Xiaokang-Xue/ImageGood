@@ -42,7 +42,7 @@ function userFacingImageError(error: unknown) {
   const lower = message.toLowerCase();
 
   if (lower.includes("invalid image file") || lower.includes("image file or mode") || lower.includes("unsupported image")) {
-    return "图片格式需要自动优化，系统正在重新处理";
+    return "图片已完成兼容性检查，但模型仍无法读取内容，请更换图片后再试";
   }
 
   return message;

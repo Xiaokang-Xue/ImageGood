@@ -15,14 +15,13 @@ import { UploadDropzone } from "@/components/ui/UploadDropzone";
 import {
   apiClient,
   getImageErrorMessage,
-  imageUrlToUploadFile,
   isAbortError,
   isEmailNotVerifiedError,
   isInsufficientCreditsError,
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
-import { forceNormalizeImageFileForUpload, isImageCompatibilityError } from "@/lib/client-image-normalizer";
+import { isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { toolPrompts } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
@@ -115,12 +114,10 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
     try {
       const shouldUseCurrentImageUrl = Boolean(currentImage && currentImage !== uploadedImage && !currentImageFile);
       const selectedInputFile = shouldUseCurrentImageUrl ? null : currentImageFile ?? uploadedImageFile ?? null;
-      const selectedInputUrl = currentImage ?? originalImage ?? undefined;
-
-      const submitEdit = async (imageOverride?: File) => {
+      const submitEdit = async () => {
         const response = await apiClient.editImage({
-          image: imageOverride ?? selectedInputFile ?? undefined,
-          imageUrl: imageOverride ? undefined : currentImage ?? originalImage ?? undefined,
+          image: selectedInputFile ?? undefined,
+          imageUrl: currentImage ?? originalImage ?? undefined,
           prompt: finalPrompt,
           tool: finalTool,
           size: "1024x1024",
@@ -160,24 +157,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
         return { response, result, historyItem };
       };
 
-      let generation: Awaited<ReturnType<typeof submitEdit>>;
-      try {
-        generation = await submitEdit();
-      } catch (firstError) {
-        if (!isImageCompatibilityError(firstError)) {
-          throw firstError;
-        }
-
-        const retrySourceFile =
-          selectedInputFile ?? (selectedInputUrl ? await imageUrlToUploadFile(selectedInputUrl, "edit-input") : null);
-        if (!retrySourceFile) {
-          throw firstError;
-        }
-
-        setNotice("系统已自动优化图片格式，正在重新生成。");
-        const normalizedFile = await forceNormalizeImageFileForUpload(retrySourceFile);
-        generation = await submitEdit(normalizedFile);
-      }
+      const generation = await submitEdit();
 
       const { response, result } = generation;
       let { historyItem } = generation;
@@ -216,7 +196,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
         return;
       }
       if (isImageCompatibilityError(requestError)) {
-        setError("系统已自动优化图片格式，但模型仍无法读取该图片，请更换图片后再试");
+        setError("图片已完成兼容性检查，但仍无法读取内容，请确认文件未损坏或更换图片后再试");
         return;
       }
       setError(getImageErrorMessage(requestError));

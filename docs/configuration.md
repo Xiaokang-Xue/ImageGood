@@ -80,6 +80,20 @@ OPENAI_BASE_URL=https://你的兼容接口地址/v1
 
 模型名和接口能力必须以实际服务提供方为准。配置中转服务时，`OPENAI_BASE_URL` 应指向其 OpenAI-compatible `/v1` 地址。
 
+### 图片输入格式
+
+- JPEG、PNG、WebP 在编码、色彩空间、位深和大小符合接口要求时保留原始文件，不重复压缩。
+- HEIC、HEIF、AVIF、TIFF、GIF、BMP 会在创建生成任务前转换为标准 sRGB JPEG、PNG 或 WebP。
+- CMYK、灰度、调色板、16 位或多帧图片会在任务创建前转换；动画图片使用第一帧。
+- 原始上传文件上限为 50MB。模型输入内部上限为 10MB，仅在转换结果仍超限时按文件体积等比缩小，不设置固定最长边。
+- 无法解码、内容损坏或不属于上述光栅图片格式的文件会在任务创建前被拒绝，不会调用模型或扣除积分。
+
+格式兼容回归检查：
+
+```bash
+npm run test:image-formats
+```
+
 ### Python Codex 服务
 
 ```env

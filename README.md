@@ -55,13 +55,13 @@ ImageGood 支持上传图片或输入文字完成 AI 修图、文生图、智能
 
 ![ImageGood 图片任务流程](docs/assets/diagrams/image-task-flow.png)
 
-可维护源码：[docs/diagrams/image-task-flow.mmd](docs/diagrams/image-task-flow.mmd)。任务创建后立即返回 `taskId`；模型、存储或数据库提交任一环节失败，任务进入 `failed` 且不扣积分。
+任务创建后立即返回 `taskId`；模型、存储或数据库提交任一环节失败，任务进入 `failed` 且不扣积分。
 
 ## 系统架构
 
 ![ImageGood 系统架构](docs/assets/diagrams/system-architecture.png)
 
-可维护源码：[docs/diagrams/system-architecture.mmd](docs/diagrams/system-architecture.mmd)。浏览器只访问 Next.js 页面和 Route Handlers，模型、数据库、COS、通信与支付凭据均保留在服务端。
+浏览器只访问 Next.js 页面和 Route Handlers，模型、数据库、COS、通信与支付凭据均保留在服务端。
 
 ## 快速开始
 
@@ -152,9 +152,6 @@ ImageGood/
 - [支持说明](SUPPORT.md)
 - [安全策略](SECURITY.md)
 
-## Roadmap
-
-短期与候选方向见 [ROADMAP.md](ROADMAP.md)。路线图不承诺固定发布日期，发布记录以 [GitHub Releases](https://github.com/Xiaokang-Xue/ImageGood/releases) 和 [CHANGELOG.md](CHANGELOG.md) 为准。
 
 ## 参与贡献
 

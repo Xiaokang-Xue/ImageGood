@@ -1,7 +1,5 @@
 import type { EditTool, ImageOutputFormat, ImageQuality, ImageSize } from "@/types/image";
-
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+import { ImageInputNormalizationError, normalizeImageInputFile } from "@/lib/server/image-input-normalizer";
 const SUPPORTED_TOOLS = new Set<EditTool>(["background", "remove", "enhance", "style", "expand", "custom"]);
 const SUPPORTED_QUALITIES = new Set<ImageQuality>(["low", "medium", "high", "auto"]);
 const SUPPORTED_OUTPUT_FORMATS = new Set<ImageOutputFormat>(["png", "jpeg", "webp"]);
@@ -24,24 +22,24 @@ export function getFormString(formData: FormData, key: string, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
-export function getRequiredImageFile(formData: FormData) {
+export async function getRequiredImageFile(formData: FormData) {
   const value = formData.get("image");
 
   if (!(value instanceof File)) {
     throw new ImageRequestError("IMAGE_REQUIRED", "请先上传一张图片");
   }
 
-  validateImageFile(value);
-  return value;
+  return validateImageFile(value);
 }
 
-export function validateImageFile(file: File) {
-  if (!SUPPORTED_IMAGE_TYPES.has(file.type)) {
-    throw new ImageRequestError("UNSUPPORTED_IMAGE_TYPE", "仅支持 JPEG、PNG、WebP 格式图片");
-  }
-
-  if (file.size > MAX_IMAGE_SIZE) {
-    throw new ImageRequestError("IMAGE_TOO_LARGE", "图片大小不能超过 10MB");
+export async function validateImageFile(file: File) {
+  try {
+    return await normalizeImageInputFile(file);
+  } catch (error) {
+    if (error instanceof ImageInputNormalizationError) {
+      throw new ImageRequestError(error.code, error.message, error.status);
+    }
+    throw error;
   }
 }
 

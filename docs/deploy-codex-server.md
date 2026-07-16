@@ -212,7 +212,7 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    client_max_body_size 25m;
+    client_max_body_size 60m;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -344,7 +344,7 @@ CODEX_IMAGE_COMMAND='python3 /opt/image-worker/generate.py --prompt-file $prompt
 
 ### 图片过大
 
-前端 Next API 当前限制单图 10MB。Python API 默认请求体最大 20MB。Nginx 示例中是 25MB。
+浏览器原始上传单图上限为 50MB，因此 Nginx 建议使用 `client_max_body_size 60m`，为 multipart 请求留出余量。Next API 会在任务创建前将模型输入规范化到 10MB 以内；Python API 默认 20MB 请求体上限无需调整。
 
 ### 不要公开 Python API
 
