@@ -196,7 +196,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
         return;
       }
       if (isImageCompatibilityError(requestError)) {
-        setError("图片已完成兼容性检查，但仍无法读取内容，请确认文件未损坏或更换图片后再试");
+        setError("图片已转换为标准 PNG，但模型仍无法读取内容，请确认文件未损坏或更换图片后再试");
         return;
       }
       setError(getImageErrorMessage(requestError));

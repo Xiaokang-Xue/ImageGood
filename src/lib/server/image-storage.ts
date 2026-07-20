@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import { buildTaskObjectKey, isCosStorageEnabled, uploadBufferToCos } from "@/lib/server/cos-storage";
+import { detectBrowserImageMimeType, imageExtensionFromMimeType } from "@/lib/server/image-file";
 import type { ImageOutputFormat } from "@/types/image";
 
 const MIME_TYPES: Record<ImageOutputFormat, string> = {
@@ -16,30 +17,6 @@ export function base64ToDataUrl(base64: string, outputFormat: ImageOutputFormat 
 export function bytesToDataUrl(bytes: ArrayBuffer, mimeType = "image/png") {
   const base64 = Buffer.from(bytes).toString("base64");
   return `data:${mimeType};base64,${base64}`;
-}
-
-function extensionFromMime(mimeType: string) {
-  if (mimeType.includes("png")) return "png";
-  if (mimeType.includes("jpeg")) return "jpg";
-  if (mimeType.includes("webp")) return "webp";
-  if (mimeType.includes("gif")) return "gif";
-  return "png";
-}
-
-function mimeTypeFromBuffer(buffer: Buffer, fallback = "") {
-  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return "image/png";
-  }
-  if (buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) {
-    return "image/jpeg";
-  }
-  if (buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
-    return "image/webp";
-  }
-  if (buffer.subarray(0, 6).toString("ascii") === "GIF87a" || buffer.subarray(0, 6).toString("ascii") === "GIF89a") {
-    return "image/gif";
-  }
-  return fallback;
 }
 
 function parseDataUrl(dataUrl: string) {
@@ -63,6 +40,50 @@ function envBoolean(value: string | undefined, fallback = false) {
 
 function getCodexWorkDir() {
   return process.env.CODEX_IMAGE_API_WORKDIR || "/data/codex_image_api_runs";
+}
+
+const RESULT_DOWNLOAD_ATTEMPTS = 3;
+const RESULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function downloadRemoteResult(imageUrl: string) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= RESULT_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RESULT_DOWNLOAD_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(imageUrl, {
+        cache: "no-store",
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const mimeType = detectBrowserImageMimeType(buffer);
+      if (!mimeType) {
+        throw new Error("unsupported image response");
+      }
+
+      return { buffer, mimeType };
+    } catch (error) {
+      lastError = error;
+      if (attempt < RESULT_DOWNLOAD_ATTEMPTS) {
+        await wait(250 * attempt);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  const reason = lastError instanceof Error ? lastError.message : String(lastError || "unknown error");
+  throw new Error(`生成结果保存失败：无法读取有效图片（${reason}）`);
 }
 
 function taskImageUrl(taskId: string, filename: string) {
@@ -90,7 +111,7 @@ function codexTaskImageUrl(imagePath: string, taskId: string) {
 }
 
 export async function saveUploadFile(file: File, userId: string, taskId: string) {
-  const extension = extensionFromMime(file.type || "image/png");
+  const extension = imageExtensionFromMimeType(file.type || "image/png");
   const buffer = Buffer.from(await file.arrayBuffer());
 
   if (isCosStorageEnabled()) {
@@ -135,7 +156,7 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
     if (codexUrl) {
       try {
         const buffer = await readFile(imageUrl);
-        const mimeType = mimeTypeFromBuffer(buffer);
+        const mimeType = detectBrowserImageMimeType(buffer);
         return mimeType ? codexUrl : "";
       } catch {
         return "";
@@ -148,35 +169,28 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
 
   const parsed = parseDataUrl(imageUrl);
   if (parsed) {
-    mimeType = parsed.mimeType;
     buffer = parsed.buffer;
+    mimeType = detectBrowserImageMimeType(buffer) || parsed.mimeType;
   } else if (cosEnabled && imageUrl.startsWith("/generated/")) {
     try {
       const absolutePath = path.join(process.cwd(), "public", imageUrl.slice(1));
       buffer = await readFile(absolutePath);
-      mimeType = mimeTypeFromBuffer(buffer, mimeType);
-      if (!mimeType) return "";
+      mimeType = detectBrowserImageMimeType(buffer) || "";
+      if (!mimeType) throw new Error("生成结果不是有效图片");
     } catch {
       return "";
     }
   } else if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-    try {
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        return imageUrl;
-      }
-      mimeType = response.headers.get("content-type") || mimeType;
-      buffer = Buffer.from(await response.arrayBuffer());
-    } catch {
-      return imageUrl;
-    }
+    const downloaded = await downloadRemoteResult(imageUrl);
+    mimeType = downloaded.mimeType;
+    buffer = downloaded.buffer;
   } else if (path.isAbsolute(imageUrl)) {
     if (cosEnabled && !codexTaskImageUrl(imageUrl, taskId)) {
       return "";
     }
     try {
       buffer = await readFile(imageUrl);
-      mimeType = mimeTypeFromBuffer(buffer);
+      mimeType = detectBrowserImageMimeType(buffer) || "";
       if (!mimeType) return "";
     } catch {
       return "";
@@ -185,7 +199,13 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
     return imageUrl;
   }
 
-  const extension = extensionFromMime(mimeType);
+  const detectedMimeType = detectBrowserImageMimeType(buffer);
+  if (!detectedMimeType) {
+    throw new Error("生成结果不是浏览器支持的有效图片");
+  }
+  mimeType = detectedMimeType;
+
+  const extension = imageExtensionFromMimeType(mimeType);
   const filename = index === 1 ? `result.${extension}` : `result-${index}.${extension}`;
 
   if (cosEnabled) {

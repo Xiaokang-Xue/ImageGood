@@ -110,6 +110,7 @@ export function PosterCanvas({
             <SmartImage
               src={backgroundImage}
               alt="海报背景"
+              priority
               className="absolute inset-0 h-full w-full rounded-none border-0"
               imageClassName="object-cover"
               rounded={false}

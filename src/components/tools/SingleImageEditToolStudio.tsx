@@ -311,6 +311,7 @@ export function SingleImageEditToolStudio({
               <SmartImage
                 src={resultUrl}
                 alt={resultAlt}
+                priority
                 className="h-[620px] max-h-[70vh] w-full rounded-lg border-line bg-white"
                 imageClassName="object-contain"
               />

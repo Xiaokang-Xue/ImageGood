@@ -82,8 +82,8 @@ OPENAI_BASE_URL=https://你的兼容接口地址/v1
 
 ### 图片输入格式
 
-- JPEG、PNG、WebP 在编码、色彩空间、位深和大小符合接口要求时保留原始文件，不重复压缩。
-- HEIC、HEIF、AVIF、TIFF、GIF、BMP 会在创建生成任务前转换为标准 sRGB JPEG、PNG 或 WebP。
+- 用户可上传 JPEG、PNG、WebP；HEIC、HEIF、AVIF、TIFF、GIF、BMP 也会被识别。
+- 合规的标准 PNG 保留原始文件；其他格式会在创建生成任务前统一转换为单帧、8 位、sRGB PNG，避免不同图片 Provider 对 JPEG、WebP 和 HEIC 容器支持不一致。
 - CMYK、灰度、调色板、16 位或多帧图片会在任务创建前转换；动画图片使用第一帧。
 - 原始上传文件上限为 50MB。模型输入内部上限为 10MB，仅在转换结果仍超限时按文件体积等比缩小，不设置固定最长边。
 - 无法解码、内容损坏或不属于上述光栅图片格式的文件会在任务创建前被拒绝，不会调用模型或扣除积分。
@@ -92,6 +92,12 @@ OPENAI_BASE_URL=https://你的兼容接口地址/v1
 
 ```bash
 npm run test:image-formats
+```
+
+服务器上可使用一张真实 iPhone HEIC 照片验证完整解码链路；该命令只做本地格式转换，不会调用模型或扣除积分：
+
+```bash
+npm run test:image-formats -- --heic-file=/path/to/photo.heic
 ```
 
 ### Python Codex 服务

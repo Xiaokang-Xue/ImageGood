@@ -45,6 +45,54 @@ type CosConstructor = new (options: { SecretId: string; SecretKey: string }) => 
 
 let cosClient: CosClient | null = null;
 
+const OBJECT_CACHE_TTL_MS = 10 * 60 * 1000;
+const OBJECT_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const OBJECT_CACHE_MAX_ITEM_BYTES = 16 * 1024 * 1024;
+const objectBufferCache = new Map<string, { buffer: Buffer; expiresAt: number }>();
+let objectBufferCacheBytes = 0;
+
+function removeCachedObject(key: string) {
+  const cached = objectBufferCache.get(key);
+  if (!cached) return;
+  objectBufferCache.delete(key);
+  objectBufferCacheBytes -= cached.buffer.length;
+}
+
+function cacheObjectBuffer(key: string, buffer: Buffer) {
+  removeCachedObject(key);
+  if (buffer.length > OBJECT_CACHE_MAX_ITEM_BYTES) return;
+
+  const now = Date.now();
+  for (const [cachedKey, cached] of objectBufferCache) {
+    if (cached.expiresAt <= now) removeCachedObject(cachedKey);
+  }
+
+  while (objectBufferCacheBytes + buffer.length > OBJECT_CACHE_MAX_BYTES && objectBufferCache.size > 0) {
+    const oldestKey = objectBufferCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    removeCachedObject(oldestKey);
+  }
+
+  objectBufferCache.set(key, {
+    buffer,
+    expiresAt: now + OBJECT_CACHE_TTL_MS
+  });
+  objectBufferCacheBytes += buffer.length;
+}
+
+function getCachedObjectBuffer(key: string) {
+  const cached = objectBufferCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    removeCachedObject(key);
+    return null;
+  }
+
+  objectBufferCache.delete(key);
+  objectBufferCache.set(key, cached);
+  return cached.buffer;
+}
+
 function envBoolean(value: string | undefined, fallback = false) {
   if (value === undefined || value === "") return fallback;
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
@@ -185,6 +233,8 @@ export async function uploadBufferToCos(input: PutObjectInput) {
     );
   });
 
+  cacheObjectBuffer(key, input.body);
+
   return {
     key,
     url: cosObjectUrl(key)
@@ -203,6 +253,8 @@ export async function getCosObjectBuffer(key: string) {
   const config = getCosConfig();
   const client = await getCosClient();
   const normalizedKey = normalizeCosKey(key);
+  const cached = getCachedObjectBuffer(normalizedKey);
+  if (cached) return cached;
 
   return new Promise<Buffer>((resolve, reject) => {
     client.getObject(
@@ -220,15 +272,20 @@ export async function getCosObjectBuffer(key: string) {
         try {
           const body = data?.Body;
           if (Buffer.isBuffer(body)) {
+            cacheObjectBuffer(normalizedKey, body);
             resolve(body);
             return;
           }
           if (typeof body === "string") {
-            resolve(Buffer.from(body));
+            const buffer = Buffer.from(body);
+            cacheObjectBuffer(normalizedKey, buffer);
+            resolve(buffer);
             return;
           }
           if (body instanceof Readable) {
-            resolve(await streamToBuffer(body));
+            const buffer = await streamToBuffer(body);
+            cacheObjectBuffer(normalizedKey, buffer);
+            resolve(buffer);
             return;
           }
 

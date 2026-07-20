@@ -291,6 +291,7 @@ export function TextToImageStudio() {
               <SmartImage
                 src={resultUrl}
                 alt="文生图生成结果"
+                priority
                 className="h-[640px] max-h-[70vh] w-full rounded-lg border-line bg-white"
                 imageClassName="object-contain"
               />

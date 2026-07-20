@@ -44,12 +44,12 @@ export function ProductResultGrid({ results, loading, taskId, previewUrl, error,
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {results.map((result) => (
+          {results.map((result, index) => (
             <div
               key={result.id}
               className="group overflow-hidden rounded-lg border border-line bg-white transition hover:-translate-y-1 hover:border-studio-200 hover:shadow-card"
             >
-              <SmartImage src={result.url} alt={result.title} className="h-64 w-full rounded-none border-0" />
+              <SmartImage src={result.url} alt={result.title} priority={index === 0} className="h-64 w-full rounded-none border-0" />
               <div className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>

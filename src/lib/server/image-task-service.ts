@@ -13,6 +13,7 @@ import {
   buildTextToImagePrompt
 } from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
+import { normalizeImageInputFile } from "@/lib/server/image-input-normalizer";
 import { logImageTaskEvent, type ImageTaskLogContext } from "@/lib/server/image-task-observability";
 import { cleanupLocalTaskDirectoryAfterUpload, normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
 import { assertPaymentSourceSurveyCompleted } from "@/lib/server/payment-source-survey";
@@ -42,7 +43,7 @@ function userFacingImageError(error: unknown) {
   const lower = message.toLowerCase();
 
   if (lower.includes("invalid image file") || lower.includes("image file or mode") || lower.includes("unsupported image")) {
-    return "图片已完成兼容性检查，但模型仍无法读取内容，请更换图片后再试";
+    return "图片已转换为标准 PNG，但模型仍无法读取内容，请更换图片后再试";
   }
 
   return message;
@@ -278,6 +279,57 @@ async function runProviderStep<T>(task: ImageTaskRecord, operation: string, run:
   });
 }
 
+function isProviderImageCompatibilityError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("invalid image file") ||
+    message.includes("image file or mode") ||
+    message.includes("unsupported image") ||
+    message.includes("模型输入必须是标准 png")
+  );
+}
+
+async function runProviderImageStep<T>(
+  task: ImageTaskRecord,
+  operation: string,
+  image: File,
+  run: (providerImage: File) => Promise<T>
+) {
+  return runProviderStep(task, operation, async () => {
+    try {
+      return await run(image);
+    } catch (error) {
+      if (!isProviderImageCompatibilityError(error)) throw error;
+
+      logImageTaskEvent(
+        "input.compatibility_retry.started",
+        {
+          taskId: task.id,
+          userId: task.userId,
+          taskType: task.type,
+          provider: task.provider,
+          stage: "provider",
+          operation
+        },
+        "warn"
+      );
+
+      const retryImage = await normalizeImageInputFile(image, { forceReencode: true });
+      const result = await run(retryImage);
+
+      logImageTaskEvent("input.compatibility_retry.succeeded", {
+        taskId: task.id,
+        userId: task.userId,
+        taskType: task.type,
+        provider: task.provider,
+        stage: "provider",
+        operation
+      });
+      return result;
+    }
+  });
+}
+
 async function completeTask(task: ImageTaskRecord, generatedUrl: string) {
   const saved = await observeTaskStep({
     task,
@@ -472,10 +524,10 @@ export async function runEditTask(input: {
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
 
-    const generated = await runProviderStep(task, "edit", () =>
+    const generated = await runProviderImageStep(task, "edit", input.image, (providerImage) =>
       provider.editImage({
         taskId: task.id,
-        image: input.image,
+        image: providerImage,
         prompt,
         size: input.size,
         quality: input.quality,
@@ -513,10 +565,10 @@ export async function runProductTask(input: {
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
 
-    const generated = await runProviderStep(task, "edit_product", () =>
+    const generated = await runProviderImageStep(task, "edit_product", input.image, (providerImage) =>
       provider.editImage({
         taskId: task.id,
-        image: input.image,
+        image: providerImage,
         prompt,
         size: input.size,
         quality: "auto",
@@ -627,10 +679,10 @@ export async function runRemoveBackgroundTask(input: {
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
 
-    const generated = await runProviderStep(task, "remove_background", () =>
+    const generated = await runProviderImageStep(task, "remove_background", input.image, (providerImage) =>
       provider.removeBackground({
         taskId: task.id,
-        image: input.image,
+        image: providerImage,
         prompt,
         size: input.size,
         quality: input.quality
@@ -666,10 +718,10 @@ async function runPromptedImageEditTask(input: {
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
 
-    const generated = await runProviderStep(task, input.type, () =>
+    const generated = await runProviderImageStep(task, input.type, input.image, (providerImage) =>
       provider.editImage({
         taskId: task.id,
-        image: input.image,
+        image: providerImage,
         prompt: input.prompt,
         size: input.size,
         quality: input.quality,

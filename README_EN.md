@@ -55,13 +55,13 @@ The live deployment is available at [imagegood.net](https://imagegood.net). Actu
 
 ![ImageGood image job flow](docs/assets/diagrams/image-task-flow.png)
 
-Maintained Mermaid source: [docs/diagrams/image-task-flow.mmd](docs/diagrams/image-task-flow.mmd). Provider, storage, or database failures move the task to `failed` without charging credits.
+Provider, storage, or database failures move the task to `failed` without charging credits.
 
 ## System Architecture
 
 ![ImageGood system architecture](docs/assets/diagrams/system-architecture.png)
 
-Maintained Mermaid source: [docs/diagrams/system-architecture.mmd](docs/diagrams/system-architecture.mmd). The browser only calls Next.js pages and Route Handlers; provider, database, storage, messaging, and payment secrets remain server-side.
+The browser only calls Next.js pages and Route Handlers; provider, database, storage, messaging, and payment secrets remain server-side.
 
 ## Quick Start
 

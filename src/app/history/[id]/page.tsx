@@ -130,6 +130,7 @@ export default function HistoryDetailPage() {
                   <SmartImage
                     src={image}
                     alt={`生成结果 ${index + 1}`}
+                    priority={index === 0}
                     className="h-[720px] max-h-[72vh] min-h-[420px] w-full rounded-none border-0 bg-slate-50"
                     imageClassName="object-contain"
                   />

@@ -42,6 +42,7 @@ export function HeroSection() {
             compact
             title="上传图片，开始使用 ImageGood"
             subtitle="上传后进入编辑工作台，登录即可生成并保存结果"
+            showFormatDetails={false}
             className="min-h-[230px] border-white/25 bg-white/90 text-ink"
             onImageSelected={(imageUrl, file) => {
               setUploadedImage(imageUrl, file);

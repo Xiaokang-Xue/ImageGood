@@ -2,17 +2,10 @@ import { readFile, stat } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getImageTaskById } from "@/lib/db";
+import { detectBrowserImageMimeType, imageMimeTypeFromExtension } from "@/lib/server/image-file";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
-
-const IMAGE_MIME_TYPES: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".gif": "image/gif"
-};
 
 function safePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "");
@@ -20,16 +13,6 @@ function safePathSegment(value: string) {
 
 function getCodexWorkDir() {
   return process.env.CODEX_IMAGE_API_WORKDIR || "/data/codex_image_api_runs";
-}
-
-function imageLooksValid(buffer: Buffer) {
-  return (
-    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
-    buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) ||
-    (buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") ||
-    buffer.subarray(0, 6).toString("ascii") === "GIF87a" ||
-    buffer.subarray(0, 6).toString("ascii") === "GIF89a"
-  );
 }
 
 export async function GET(
@@ -52,7 +35,7 @@ export async function GET(
   const filename = path.basename(params.filename || "");
   const extension = path.extname(filename).toLowerCase();
 
-  if (!taskId || !filename || filename.startsWith("reference_") || filename.startsWith("input.") || !IMAGE_MIME_TYPES[extension]) {
+  if (!taskId || !filename || filename.startsWith("reference_") || filename.startsWith("input.") || !imageMimeTypeFromExtension(extension)) {
     return NextResponse.json({ error: { code: "IMAGE_NOT_FOUND", message: "图片不存在" } }, { status: 404 });
   }
 
@@ -76,18 +59,27 @@ export async function GET(
     }
 
     const buffer = await readFile(imagePath);
-    if (!imageLooksValid(buffer)) {
+    const mimeType = detectBrowserImageMimeType(buffer);
+    if (!mimeType) {
       return NextResponse.json({ error: { code: "INVALID_IMAGE", message: "图片文件不可用" } }, { status: 404 });
     }
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        "Content-Type": IMAGE_MIME_TYPES[extension],
+        "Content-Type": mimeType,
         "Content-Length": String(buffer.length),
-        "Cache-Control": "private, max-age=31536000, immutable"
+        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
+        Vary: "Cookie"
       }
     });
-  } catch {
+  } catch (error) {
+    console.error("[task-image] failed to read local image", {
+      taskId,
+      filename,
+      error: error instanceof Error ? error.message : String(error)
+    });
     return NextResponse.json({ error: { code: "IMAGE_NOT_FOUND", message: "图片不存在" } }, { status: 404 });
   }
 }

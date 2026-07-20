@@ -89,7 +89,7 @@ export function imageErrorResponse(error: unknown) {
               : "MODEL_CALL_FAILED",
         message:
           lowerMessage.includes("invalid image file") || lowerMessage.includes("image file or mode")
-            ? "图片已完成兼容性检查，但模型仍无法读取内容，请更换图片后再试"
+            ? "图片已转换为标准 PNG，但模型仍无法读取内容，请更换图片后再试"
             : message.includes("OpenAI SDK")
               ? message
               : `模型调用失败：${message}`

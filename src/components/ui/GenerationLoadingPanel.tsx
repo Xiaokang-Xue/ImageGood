@@ -49,10 +49,10 @@ const stageCopy: Record<GenerationLoadingTaskType, string[]> = {
 };
 
 function secondsToStageIndex(seconds: number) {
-  if (seconds < 5) return 0;
-  if (seconds < 15) return 1;
-  if (seconds < 35) return 2;
-  if (seconds < 60) return 3;
+  if (seconds < 10) return 0;
+  if (seconds < 45) return 1;
+  if (seconds < 105) return 2;
+  if (seconds < 180) return 3;
   return 4;
 }
 
@@ -98,7 +98,7 @@ export function GenerationLoadingPanel({
     return () => window.clearInterval(timer);
   }, []);
 
-  const derivedStatus: GenerationLoadingStatus = status ?? (elapsedSeconds >= 90 ? "timeout" : taskId ? "processing" : "pending");
+  const derivedStatus: GenerationLoadingStatus = status ?? (elapsedSeconds >= 300 ? "timeout" : taskId ? "processing" : "pending");
   const stageText = stageCopy[taskType][secondsToStageIndex(elapsedSeconds)];
   const statusText = useMemo(() => {
     if (derivedStatus === "pending") return "任务已提交";
@@ -165,9 +165,10 @@ export function GenerationLoadingPanel({
             <Clock3 className="h-3.5 w-3.5" />
             已等待 {formatElapsed(elapsedSeconds)}
           </span>
+          <span>通常约 2–4 分钟，复杂任务可能更久</span>
         </div>
         <p className="mt-2 text-xs leading-5 text-white/60 sm:text-sm">生成完成后会自动展示结果，你也可以稍后在历史记录中查看。</p>
-        {elapsedSeconds >= 60 ? (
+        {elapsedSeconds >= 120 ? (
           <Link href="/history" className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-white underline underline-offset-4 sm:text-sm">
             <History className="h-4 w-4" />
             稍后在历史记录查看

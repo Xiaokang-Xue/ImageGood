@@ -1,23 +1,25 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import { MAX_PROVIDER_IMAGE_BYTES } from "../src/config/image-upload";
+import { detectBrowserImageMimeType, imageExtensionFromMimeType } from "../src/lib/server/image-file";
 import { ImageInputNormalizationError, normalizeImageInputFile } from "../src/lib/server/image-input-normalizer";
 
 function asFile(buffer: Buffer, name: string, type: string) {
   return new File([new Uint8Array(buffer)], name, { type });
 }
 
-async function assertProviderReady(file: File, expectedFormat?: "jpeg" | "png" | "webp") {
+async function assertProviderReady(file: File) {
   assert.ok(file.size <= MAX_PROVIDER_IMAGE_BYTES, `${file.name} exceeds provider input limit`);
-  assert.ok(["image/jpeg", "image/png", "image/webp"].includes(file.type), `${file.name} has invalid MIME`);
+  assert.equal(file.type, "image/png", `${file.name} has invalid MIME`);
+  assert.ok(file.name.toLowerCase().endsWith(".png"), `${file.name} has invalid extension`);
 
   const metadata = await sharp(Buffer.from(await file.arrayBuffer())).metadata();
-  assert.ok(["jpeg", "png", "webp"].includes(metadata.format || ""), `${file.name} has invalid encoding`);
+  assert.equal(metadata.format, "png", `${file.name} has invalid encoding`);
   assert.equal(metadata.space, "srgb", `${file.name} is not sRGB`);
   assert.ok(metadata.channels === 3 || metadata.channels === 4, `${file.name} has invalid channel count`);
   assert.equal(metadata.depth, "uchar", `${file.name} has invalid bit depth`);
   assert.equal(metadata.pages ?? 1, 1, `${file.name} is still animated`);
-  if (expectedFormat) assert.equal(metadata.format, expectedFormat);
 }
 
 function createBmp(width: number, height: number) {
@@ -55,9 +57,12 @@ async function main() {
   });
 
   const jpeg = await source.clone().jpeg({ quality: 92 }).toBuffer();
+  assert.equal(detectBrowserImageMimeType(jpeg), "image/jpeg", "JPEG result MIME detection failed");
+  assert.equal(imageExtensionFromMimeType("application/octet-stream"), "png", "unknown MIME fallback changed");
   const jpegFile = asFile(jpeg, "valid.jpg", "image/jpeg");
-  const untouchedJpeg = await normalizeImageInputFile(jpegFile);
-  assert.equal(untouchedJpeg, jpegFile, "valid JPEG should remain byte-for-byte untouched");
+  const normalizedJpeg = await normalizeImageInputFile(jpegFile);
+  assert.notEqual(normalizedJpeg, jpegFile, "JPEG should be converted to the provider-safe PNG contract");
+  await assertProviderReady(normalizedJpeg);
 
   const rgba = await sharp({
     create: {
@@ -69,15 +74,19 @@ async function main() {
   })
     .png()
     .toBuffer();
+  assert.equal(detectBrowserImageMimeType(rgba), "image/png", "PNG result MIME detection failed");
   const pngFile = asFile(rgba, "transparent.png", "image/png");
   const untouchedPng = await normalizeImageInputFile(pngFile);
   assert.equal(untouchedPng, pngFile, "valid PNG should remain byte-for-byte untouched");
+  const compatibilityRetryPng = await normalizeImageInputFile(pngFile, { forceReencode: true });
+  assert.notEqual(compatibilityRetryPng, pngFile, "compatibility retry should force a fresh PNG encoding");
+  await assertProviderReady(compatibilityRetryPng);
 
   const mislabeled = await normalizeImageInputFile(asFile(jpeg, "camera.bin", "application/octet-stream"));
-  assert.equal(mislabeled.type, "image/jpeg");
-  assert.deepEqual(Buffer.from(await mislabeled.arrayBuffer()), jpeg, "MIME correction must not re-encode valid bytes");
+  await assertProviderReady(mislabeled);
 
   const conversions: Array<{ label: string; file: File }> = [
+    { label: "WebP", file: asFile(await source.clone().webp().toBuffer(), "camera.webp", "image/webp") },
     { label: "AVIF", file: asFile(await source.clone().avif().toBuffer(), "camera.avif", "image/avif") },
     { label: "TIFF", file: asFile(await source.clone().tiff().toBuffer(), "camera.tiff", "image/tiff") },
     { label: "GIF", file: asFile(await source.clone().gif().toBuffer(), "camera.gif", "image/gif") },
@@ -106,13 +115,21 @@ async function main() {
     }
   }
 
+  const heicPath = process.argv.find((argument) => argument.startsWith("--heic-file="))?.slice("--heic-file=".length);
+  if (heicPath) {
+    const heic = await readFile(heicPath);
+    const normalized = await normalizeImageInputFile(asFile(heic, "iphone-photo.heic", "image/heic"));
+    await assertProviderReady(normalized);
+    console.log(`[image-formats] real HEIC fixture OK: ${heic.length} bytes -> ${normalized.size} byte PNG`);
+  }
+
   await assert.rejects(
     () => normalizeImageInputFile(asFile(Buffer.from("not an image"), "broken.jpg", "image/jpeg")),
     (error: unknown) => error instanceof ImageInputNormalizationError
   );
 
   console.log(
-    "[image-formats] OK: direct JPEG/PNG preserved; AVIF/TIFF/GIF/BMP/CMYK/grayscale normalized before task creation"
+    "[image-formats] OK: standard PNG preserved; JPEG/WebP/AVIF/TIFF/GIF/BMP/CMYK/grayscale normalized to PNG before task creation"
   );
 }
 

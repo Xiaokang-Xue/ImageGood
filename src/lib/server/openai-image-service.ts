@@ -99,8 +99,23 @@ async function toUploadableImage(file: File) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  return toOpenAIFile(buffer, file.name || "input-image.png", {
-    type: file.type || "image/png"
+  const isPng =
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a;
+  if (!isPng || file.type !== "image/png") {
+    throw new Error("图片预处理异常：模型输入必须是标准 PNG，请重新上传后再试");
+  }
+
+  const filename = file.name.toLowerCase().endsWith(".png") ? file.name : "input-image.png";
+  return toOpenAIFile(buffer, filename, {
+    type: "image/png"
   });
 }
 

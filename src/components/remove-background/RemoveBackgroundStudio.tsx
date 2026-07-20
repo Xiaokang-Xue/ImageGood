@@ -387,6 +387,7 @@ export function RemoveBackgroundStudio() {
                 <SmartImage
                   src={resultUrl}
                   alt="智能抠图结果"
+                  priority
                   className="h-[560px] max-h-[68vh] w-full rounded-lg border-line bg-white/70"
                   imageClassName="object-contain"
                 />

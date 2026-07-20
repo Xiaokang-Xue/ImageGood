@@ -93,7 +93,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   const [template, setTemplate] = useState<ProductTemplate>(() => normalizeProductTemplate(initialTemplate));
   const [scene, setScene] = useState<ProductScene>("desk");
   const [style, setStyle] = useState<ProductStyle>("premium");
-  const [sellingPoints, setSellingPoints] = useState("轻盈质感、细腻光泽、适合日常通勤使用");
+  const [sellingPoints, setSellingPoints] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [ratio, setRatio] = useState<ProductRatio>("1:1");
   const [results, setResults] = useState<ProductImageResult[]>([]);
@@ -118,7 +118,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
         setTemplate(initialTemplate ? normalizeProductTemplate(initialTemplate) : normalizeProductTemplate(draft.template));
         setScene(scenes.some((item) => item.value === draft.scene) ? (draft.scene as ProductScene) : "desk");
         setStyle(styles.some((item) => item.value === draft.style) ? (draft.style as ProductStyle) : "premium");
-        setSellingPoints(typeof draft.sellingPoints === "string" ? draft.sellingPoints : "轻盈质感、细腻光泽、适合日常通勤使用");
+        setSellingPoints(typeof draft.sellingPoints === "string" ? draft.sellingPoints : "");
         setSelectedIndustry(typeof draft.selectedIndustry === "string" ? draft.selectedIndustry : null);
         setRatio(ratios.includes(draft.ratio as ProductRatio) ? (draft.ratio as ProductRatio) : "1:1");
         setResults(Array.isArray(draft.results) ? persistableProductResults(draft.results) : []);
@@ -226,7 +226,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
         return;
       }
       if (isImageCompatibilityError(requestError)) {
-        setError("图片已完成兼容性检查，但仍无法读取内容，请确认文件未损坏或更换图片后再试");
+        setError("图片已转换为标准 PNG，但模型仍无法读取内容，请确认文件未损坏或更换图片后再试");
         return;
       }
       setError(getImageErrorMessage(requestError));

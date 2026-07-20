@@ -3,23 +3,25 @@ import "server-only";
 import bmp from "bmp-js";
 import sharp, { type Metadata } from "sharp";
 import {
-  DIRECT_IMAGE_MIME_TYPES,
   MAX_PROVIDER_IMAGE_BYTES,
   MAX_SOURCE_IMAGE_BYTES,
+  PROVIDER_INPUT_IMAGE_FORMAT,
+  PROVIDER_INPUT_IMAGE_MIME_TYPE,
   formatImageByteLimit
 } from "@/config/image-upload";
 
 const PROVIDER_TARGET_BYTES = Math.floor(MAX_PROVIDER_IMAGE_BYTES * 0.96);
-const DIRECT_MIME_TYPES = new Set<string>(DIRECT_IMAGE_MIME_TYPES);
 const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs"]);
-const JPEG_QUALITIES = [96, 92, 88, 84, 78];
-const WEBP_QUALITIES = [96, 92, 88, 84, 78];
 
 type NormalizedFormat = "jpeg" | "png" | "webp";
 
 interface EncodedImage {
   buffer: Buffer;
-  format: NormalizedFormat;
+  format: typeof PROVIDER_INPUT_IMAGE_FORMAT;
+}
+
+interface NormalizeImageInputOptions {
+  forceReencode?: boolean;
 }
 
 export class ImageInputNormalizationError extends Error {
@@ -81,7 +83,7 @@ function isBmp(buffer: Buffer) {
 
 function isDirectProviderImage(metadata: Metadata, buffer: Buffer) {
   const format = metadata.format as NormalizedFormat | undefined;
-  if (!format || !["jpeg", "png", "webp"].includes(format)) return false;
+  if (format !== PROVIDER_INPUT_IMAGE_FORMAT) return false;
   if (buffer.length > MAX_PROVIDER_IMAGE_BYTES) return false;
   if (!metadata.width || !metadata.height) return false;
   if ((metadata.pages ?? 1) > 1) return false;
@@ -96,8 +98,9 @@ function needsFileMetadataCorrection(file: File, format: NormalizedFormat) {
   return file.type !== mimeForFormat(format) || !expectedExtensions(format).has(extensionOf(file.name));
 }
 
-function sharpPipeline(buffer: Buffer, width?: number, height?: number) {
+function sharpPipeline(buffer: Buffer, preserveAlpha: boolean, width?: number, height?: number) {
   let pipeline = sharp(buffer, { animated: false, failOn: "none" }).rotate().toColourspace("srgb");
+  if (!preserveAlpha) pipeline = pipeline.removeAlpha();
   if (width && height) {
     pipeline = pipeline.resize(width, height, {
       fit: "inside",
@@ -107,40 +110,21 @@ function sharpPipeline(buffer: Buffer, width?: number, height?: number) {
   return pipeline;
 }
 
-async function encodeAtSize(buffer: Buffer, hasAlpha: boolean, width?: number, height?: number) {
-  let smallest: EncodedImage | null = null;
+async function encodeAtSize(buffer: Buffer, preserveAlpha: boolean, width?: number, height?: number) {
+  const png = await sharpPipeline(buffer, preserveAlpha, width, height)
+    .png({ compressionLevel: 9, adaptiveFiltering: true, palette: false })
+    .toBuffer();
+  return { buffer: png, format: PROVIDER_INPUT_IMAGE_FORMAT } satisfies EncodedImage;
+}
 
-  const remember = (candidate: EncodedImage) => {
-    if (!smallest || candidate.buffer.length < smallest.buffer.length) smallest = candidate;
-    return candidate.buffer.length <= PROVIDER_TARGET_BYTES;
-  };
-
-  if (hasAlpha) {
-    const png = await sharpPipeline(buffer, width, height).png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
-    const candidate = { buffer: png, format: "png" as const };
-    if (remember(candidate)) return candidate;
-
-    for (const quality of WEBP_QUALITIES) {
-      const webp = await sharpPipeline(buffer, width, height)
-        .webp({ quality, alphaQuality: 100, effort: 4 })
-        .toBuffer();
-      const webpCandidate = { buffer: webp, format: "webp" as const };
-      if (remember(webpCandidate)) return webpCandidate;
-    }
-  } else {
-    for (const quality of JPEG_QUALITIES) {
-      const jpeg = await sharpPipeline(buffer, width, height)
-        .jpeg({ quality, chromaSubsampling: "4:4:4", mozjpeg: true })
-        .toBuffer();
-      const candidate = { buffer: jpeg, format: "jpeg" as const };
-      if (remember(candidate)) return candidate;
-    }
+async function hasMeaningfulAlpha(buffer: Buffer, metadata: Metadata) {
+  if (!metadata.hasAlpha) return false;
+  try {
+    const stats = await sharp(buffer, { animated: false, failOn: "none" }).stats();
+    return !stats.isOpaque;
+  } catch {
+    return true;
   }
-
-  if (!smallest) {
-    throw new ImageInputNormalizationError("IMAGE_CONVERSION_FAILED", "图片格式转换失败，请更换图片后再试");
-  }
-  return smallest;
 }
 
 async function convertToProviderImage(buffer: Buffer, metadata: Metadata) {
@@ -152,7 +136,8 @@ async function convertToProviderImage(buffer: Buffer, metadata: Metadata) {
 
   let width = originalWidth;
   let height = originalHeight;
-  let encoded = await encodeAtSize(buffer, Boolean(metadata.hasAlpha), width, height);
+  const preserveAlpha = await hasMeaningfulAlpha(buffer, metadata);
+  let encoded = await encodeAtSize(buffer, preserveAlpha, width, height);
 
   for (let attempt = 0; encoded.buffer.length > MAX_PROVIDER_IMAGE_BYTES && attempt < 6; attempt += 1) {
     const scale = Math.max(0.35, Math.min(0.94, Math.sqrt(PROVIDER_TARGET_BYTES / encoded.buffer.length)));
@@ -161,7 +146,7 @@ async function convertToProviderImage(buffer: Buffer, metadata: Metadata) {
     if (nextWidth === width && nextHeight === height) break;
     width = nextWidth;
     height = nextHeight;
-    encoded = await encodeAtSize(buffer, Boolean(metadata.hasAlpha), width, height);
+    encoded = await encodeAtSize(buffer, preserveAlpha, width, height);
   }
 
   if (encoded.buffer.length > MAX_PROVIDER_IMAGE_BYTES) {
@@ -179,11 +164,14 @@ async function decodeHeic(buffer: Buffer) {
     const { default: heicConvert } = await import("heic-convert");
     const converted = await heicConvert({
       buffer,
-      format: "JPEG",
-      quality: 0.98
+      format: "PNG"
     });
     return Buffer.from(converted);
-  } catch {
+  } catch (error) {
+    console.error("[image-input] HEIC decode failed", {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message.slice(0, 240) : "unknown HEIC decode error"
+    });
     throw new ImageInputNormalizationError("IMAGE_DECODE_FAILED", "无法读取 HEIC / HEIF 图片，请确认文件未损坏");
   }
 }
@@ -223,7 +211,8 @@ async function readMetadata(buffer: Buffer) {
   }
 }
 
-export async function normalizeImageInputFile(file: File) {
+export async function normalizeImageInputFile(file: File, options: NormalizeImageInputOptions = {}) {
+  const startedAt = Date.now();
   if (file.size <= 0) {
     throw new ImageInputNormalizationError("EMPTY_IMAGE", "图片文件为空，请重新选择图片");
   }
@@ -235,13 +224,13 @@ export async function normalizeImageInputFile(file: File) {
   }
 
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
-  let decodedByCompatibilityAdapter = false;
+  let compatibilityAdapter: "heic" | "bmp" | null = null;
   if (isHeicFamily(buffer, file)) {
     buffer = await decodeHeic(buffer);
-    decodedByCompatibilityAdapter = true;
+    compatibilityAdapter = "heic";
   } else if (isBmp(buffer)) {
     buffer = await decodeBmp(buffer);
-    decodedByCompatibilityAdapter = true;
+    compatibilityAdapter = "bmp";
   }
 
   const metadata = await readMetadata(buffer);
@@ -250,13 +239,23 @@ export async function normalizeImageInputFile(file: File) {
     throw new ImageInputNormalizationError("UNSUPPORTED_IMAGE_TYPE", "无法识别图片格式，请更换图片后再试");
   }
 
-  if (!decodedByCompatibilityAdapter && isDirectProviderImage(metadata, buffer)) {
-    if (DIRECT_MIME_TYPES.has(mimeForFormat(format)) && !needsFileMetadataCorrection(file, format)) {
+  if (!options.forceReencode && !compatibilityAdapter && isDirectProviderImage(metadata, buffer)) {
+    if (file.type === PROVIDER_INPUT_IMAGE_MIME_TYPE && !needsFileMetadataCorrection(file, format)) {
       return file;
     }
     return createFile(buffer, file.name, format, file.lastModified);
   }
 
   const encoded = await convertToProviderImage(buffer, metadata);
+  console.info("[image-input] normalized", {
+    sourceFormat: compatibilityAdapter ?? format,
+    sourceType: file.type || "unknown",
+    sourceBytes: file.size,
+    outputFormat: encoded.format,
+    outputBytes: encoded.buffer.length,
+    width: metadata.width ?? null,
+    height: metadata.height ?? null,
+    elapsedMs: Date.now() - startedAt
+  });
   return createFile(encoded.buffer, file.name, encoded.format, file.lastModified);
 }

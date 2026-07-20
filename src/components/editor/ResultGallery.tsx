@@ -55,6 +55,7 @@ export function ResultGallery({ results, loading, taskId, previewUrl, error, onS
             <SmartImage
               src={mainResult.url}
               alt={mainResult.label || "生成结果"}
+              priority
               className="h-[520px] w-full rounded-none border-0 bg-slate-50"
               imageClassName="object-contain p-4"
             />
