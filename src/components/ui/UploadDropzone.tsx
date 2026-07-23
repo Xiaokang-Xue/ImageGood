@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, UploadCloud } from "lucide-react";
 import { SmartImage } from "@/components/ui/SmartImage";
 import {
@@ -37,9 +37,16 @@ export function UploadDropzone({
   onImageSelected
 }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const ownedPreviewRef = useRef<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (ownedPreviewRef.current) URL.revokeObjectURL(ownedPreviewRef.current);
+    };
+  }, []);
 
   const readFile = async (file?: File) => {
     if (!file || !isPotentialImageFile(file)) {
@@ -52,7 +59,9 @@ export function UploadDropzone({
     setUploadError("");
     try {
       const uploadFile = await prepareImageFileForUpload(file);
+      if (ownedPreviewRef.current) URL.revokeObjectURL(ownedPreviewRef.current);
       const previewUrl = URL.createObjectURL(uploadFile);
+      ownedPreviewRef.current = previewUrl;
       onImageSelected(previewUrl, uploadFile);
     } catch (error) {
       setUploadError(
@@ -97,7 +106,11 @@ export function UploadDropzone({
         type="file"
         accept={IMAGE_FILE_INPUT_ACCEPT}
         className="hidden"
-        onChange={(event) => void readFile(event.target.files?.[0])}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          void readFile(file);
+        }}
       />
 
       {isProcessing ? (

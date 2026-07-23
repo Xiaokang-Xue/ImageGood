@@ -27,6 +27,8 @@ interface SmartImageProps {
   sizes?: string;
   width?: number;
   height?: number;
+  previewWidth?: number | false;
+  loadingLabel?: string;
 }
 
 const AUTO_RETRY_DELAYS = [350, 900, 1800];
@@ -41,6 +43,21 @@ function imageSourceForAttempt(src: string, attempt: number) {
   return `${source}${separator}image_attempt=${attempt}${hash}`;
 }
 
+function imagePreviewSource(src: string, width: number | false) {
+  if (
+    !width ||
+    (!src.startsWith("/api/storage/images/") && !src.startsWith("/api/task-images/"))
+  ) {
+    return src;
+  }
+
+  const hashIndex = src.indexOf("#");
+  const source = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
+  const hash = hashIndex >= 0 ? src.slice(hashIndex) : "";
+  const separator = source.includes("?") ? "&" : "?";
+  return `${source}${separator}image_preview=${Math.round(width)}${hash}`;
+}
+
 export function SmartImage({
   src,
   alt,
@@ -52,12 +69,15 @@ export function SmartImage({
   priority = false,
   sizes,
   width = 1200,
-  height = 900
+  height = 900,
+  previewWidth,
+  loadingLabel
 }: SmartImageProps) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failureCount, setFailureCount] = useState(0);
   const [requestVersion, setRequestVersion] = useState(0);
+  const [previewDisabled, setPreviewDisabled] = useState(false);
   const retryTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -69,6 +89,7 @@ export function SmartImage({
     setLoaded(false);
     setFailureCount(0);
     setRequestVersion(0);
+    setPreviewDisabled(false);
 
     return () => {
       if (retryTimerRef.current !== null) {
@@ -77,8 +98,19 @@ export function SmartImage({
     };
   }, [src]);
 
+  const effectivePreviewWidth = previewWidth === false ? false : previewWidth ?? (priority ? 1280 : 720);
+  const previewSrc = imagePreviewSource(src, effectivePreviewWidth);
+  const usingPreview = !previewDisabled && previewSrc !== src;
+
   const handleLoadError = () => {
     setLoaded(false);
+
+    if (usingPreview) {
+      setPreviewDisabled(true);
+      setFailureCount(0);
+      setRequestVersion((current) => current + 1);
+      return;
+    }
 
     if (failureCount >= AUTO_RETRY_DELAYS.length) {
       setFailed(true);
@@ -101,10 +133,11 @@ export function SmartImage({
     setFailed(false);
     setLoaded(false);
     setFailureCount(0);
+    setPreviewDisabled(false);
     setRequestVersion((current) => current + 1);
   };
 
-  const resolvedSrc = imageSourceForAttempt(src, requestVersion);
+  const resolvedSrc = imageSourceForAttempt(usingPreview ? previewSrc : src, requestVersion);
 
   return (
     <div
@@ -115,6 +148,7 @@ export function SmartImage({
         ratioClasses[ratio],
         className
       )}
+      aria-busy={!failed && !loaded}
     >
       {failed ? (
         <div className="flex h-full min-h-[inherit] w-full flex-col items-center justify-center px-5 text-center text-slate-500">
@@ -144,7 +178,14 @@ export function SmartImage({
       ) : (
         <>
           {!loaded ? (
-            <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-neutral-100 via-white to-neutral-200" aria-hidden="true" />
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-neutral-200" aria-hidden="true">
+              <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-neutral-200 via-neutral-100 to-neutral-300" />
+              {loadingLabel || priority ? (
+                <span className="relative rounded-full border border-white/80 bg-white/85 px-3 py-1.5 text-xs font-semibold text-neutral-500 shadow-sm backdrop-blur-sm">
+                  {loadingLabel || "正在加载预览…"}
+                </span>
+              ) : null}
+            </div>
           ) : null}
           <img
             key={requestVersion}
@@ -162,9 +203,17 @@ export function SmartImage({
             fetchPriority={priority ? "high" : "auto"}
             sizes={sizes}
             referrerPolicy="no-referrer"
-            onLoad={() => {
-              setLoaded(true);
-              setFailed(false);
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              const markLoaded = () => {
+                setLoaded(true);
+                setFailed(false);
+              };
+              if (typeof image.decode === "function") {
+                image.decode().catch(() => undefined).finally(markLoaded);
+              } else {
+                markLoaded();
+              }
             }}
             onError={handleLoadError}
           />

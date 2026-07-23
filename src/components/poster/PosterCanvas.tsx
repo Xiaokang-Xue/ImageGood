@@ -111,6 +111,9 @@ export function PosterCanvas({
               src={backgroundImage}
               alt="海报背景"
               priority
+              previewWidth={960}
+              sizes="(min-width: 1024px) 720px, 100vw"
+              loadingLabel="正在加载海报背景…"
               className="absolute inset-0 h-full w-full rounded-none border-0"
               imageClassName="object-cover"
               rounded={false}

@@ -131,6 +131,9 @@ export default function HistoryDetailPage() {
                     src={image}
                     alt={`生成结果 ${index + 1}`}
                     priority={index === 0}
+                    previewWidth={1600}
+                    sizes="(min-width: 1024px) 820px, 100vw"
+                    loadingLabel="正在加载生成结果…"
                     className="h-[720px] max-h-[72vh] min-h-[420px] w-full rounded-none border-0 bg-slate-50"
                     imageClassName="object-contain"
                   />

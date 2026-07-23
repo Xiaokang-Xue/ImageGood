@@ -39,6 +39,17 @@ type CosClient = {
     },
     callback: CosCallback<{ Body?: Buffer | string | Readable }>
   ) => void;
+  getObjectUrl: (
+    params: {
+      Bucket: string;
+      Region: string;
+      Key: string;
+      Sign: boolean;
+      Expires: number;
+      Query?: Record<string, string>;
+    },
+    callback: CosCallback<{ Url?: string }>
+  ) => string | void;
 };
 
 type CosConstructor = new (options: { SecretId: string; SecretKey: string }) => CosClient;
@@ -295,6 +306,42 @@ export async function getCosObjectBuffer(key: string) {
         }
       }
     );
+  });
+}
+
+export async function getCosObjectSignedUrl(key: string, query?: string) {
+  const config = getCosConfig();
+  const client = await getCosClient();
+  const normalizedKey = normalizeCosKey(key);
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const finish = (url?: string) => {
+      if (settled || !url) return;
+      settled = true;
+      resolve(url);
+    };
+
+    const returnedUrl = client.getObjectUrl(
+      {
+        Bucket: config.bucket,
+        Region: config.region,
+        Key: normalizedKey,
+        Sign: true,
+        Expires: 10 * 60,
+        Query: query ? { [query]: "" } : undefined
+      },
+      (error, data) => {
+        if (error) {
+          if (!settled) reject(error);
+          return;
+        }
+        finish(data?.Url);
+        if (!data?.Url && !settled) reject(new Error("COS 未返回可用的签名地址"));
+      }
+    );
+
+    if (typeof returnedUrl === "string") finish(returnedUrl);
   });
 }
 

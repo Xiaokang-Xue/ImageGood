@@ -16,8 +16,6 @@ import {
   apiClient,
   downloadImage,
   getImageErrorMessage,
-  imageUrlToUploadFile,
-  ImageApiClientError,
   isAbortError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
@@ -42,43 +40,36 @@ const backgroundOptions = [
 
 type BackgroundMode = (typeof backgroundOptions)[number]["value"];
 
-async function createRemoveBackgroundTask(input: {
-  image?: File | null;
-  imageUrl?: string;
-  size: string;
-  quality: string;
-}) {
-  const image = input.image ?? (input.imageUrl ? await imageUrlToUploadFile(input.imageUrl, "remove-bg-input") : null);
-  const formData = new FormData();
-
-  if (image) {
-    formData.append("image", image);
+async function decodeCanvasImage(blob: Blob) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(blob);
+      return {
+        source: bitmap as CanvasImageSource,
+        width: bitmap.width,
+        height: bitmap.height,
+        cleanup: () => bitmap.close()
+      };
+    } catch {
+      // Older Safari builds may expose createImageBitmap but reject valid PNG blobs.
+    }
   }
-  formData.append("size", input.size);
-  formData.append("quality", input.quality);
 
-  const response = await fetch("/api/images/remove-background", {
-    method: "POST",
-    body: formData
+  const objectUrl = URL.createObjectURL(blob);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = objectUrl;
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("当前浏览器无法读取抠图结果"));
   });
-  const payload = (await response.json().catch(() => null)) as
-    | { taskId?: string }
-    | { error?: { code?: string; message?: string } }
-    | null;
 
-  if (!response.ok) {
-    const error = payload && "error" in payload ? payload.error : null;
-    throw new ImageApiClientError(error?.code || "REQUEST_FAILED", error?.message || `请求失败：${response.status}`, {
-      actionUrl: error && "actionUrl" in error ? String(error.actionUrl || "") : undefined,
-      orderId: error && "orderId" in error ? String(error.orderId || "") : undefined
-    });
-  }
-
-  if (!payload || !("taskId" in payload) || !payload.taskId) {
-    throw new ImageApiClientError("TASK_CREATE_FAILED", "创建抠图任务失败，请稍后重试");
-  }
-
-  return { taskId: payload.taskId };
+  return {
+    source: image as CanvasImageSource,
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+    cleanup: () => URL.revokeObjectURL(objectUrl)
+  };
 }
 
 export function RemoveBackgroundStudio() {
@@ -128,7 +119,7 @@ export function RemoveBackgroundStudio() {
     pollingController.current = controller;
 
     try {
-      const response = await createRemoveBackgroundTask({
+      const response = await apiClient.removeBackground({
         image: imageFile ?? undefined,
         imageUrl: imageFile ? undefined : imageUrl,
         size: "1024x1024",
@@ -212,24 +203,28 @@ export function RemoveBackgroundStudio() {
       }
 
       const blob = await response.blob();
-      const image = await createImageBitmap(blob);
-      const canvas = document.createElement("canvas");
-      canvas.width = image.width;
-      canvas.height = image.height;
+      const image = await decodeCanvasImage(blob);
+      let outputBlob: Blob;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
 
-      const context = canvas.getContext("2d", { alpha: false });
-      if (!context) {
-        throw new Error("当前浏览器无法合成背景图片");
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) {
+          throw new Error("当前浏览器无法合成背景图片");
+        }
+
+        context.fillStyle = selectedBackgroundColor;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image.source, 0, 0);
+
+        outputBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("背景图片导出失败"))), "image/png");
+        });
+      } finally {
+        image.cleanup();
       }
-
-      context.fillStyle = selectedBackgroundColor;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0);
-      image.close();
-
-      const outputBlob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("背景图片导出失败"))), "image/png");
-      });
       const objectUrl = URL.createObjectURL(outputBlob);
       await downloadImage(objectUrl, "imagegood-remove-bg-with-background.png");
       URL.revokeObjectURL(objectUrl);
@@ -388,6 +383,9 @@ export function RemoveBackgroundStudio() {
                   src={resultUrl}
                   alt="智能抠图结果"
                   priority
+                  previewWidth={1280}
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  loadingLabel="正在加载抠图结果…"
                   className="h-[560px] max-h-[68vh] w-full rounded-lg border-line bg-white/70"
                   imageClassName="object-contain"
                 />

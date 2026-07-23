@@ -376,7 +376,7 @@ export function SiteHeader() {
             aria-label="关闭菜单"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 right-0 flex w-[84vw] max-w-[320px] flex-col border-l border-neutral-300 bg-white shadow-2xl sm:max-w-[340px]">
+          <aside className="absolute inset-y-0 right-0 flex w-[84vw] max-w-[320px] flex-col overscroll-contain border-l border-neutral-300 bg-white shadow-2xl sm:max-w-[340px]">
             <div className="scrollbar-soft flex-1 overflow-y-auto px-4 py-5">
               <Link
                 href="/"
@@ -454,7 +454,7 @@ export function SiteHeader() {
               </div>
             </div>
 
-            <div className="border-t border-neutral-200 bg-white p-4">
+            <div className="border-t border-neutral-200 bg-white px-4 pt-4" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
               <Link href={trialHref} onClick={() => setMobileOpen(false)}>
                 <Button className="w-full">
                   开始创作

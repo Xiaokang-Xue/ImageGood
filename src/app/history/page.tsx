@@ -190,7 +190,7 @@ export default function HistoryPage() {
       ) : (
         <>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {tasks.map((task) => {
+            {tasks.map((task, index) => {
             const resultImage = task.resultImages?.[0] || task.resultImageUrl || "";
             const image = resultImage || task.inputImageUrl || "";
             return (
@@ -211,7 +211,14 @@ export default function HistoryPage() {
                   ) : null}
                 </div>
                 {image ? (
-                  <SmartImage src={image} alt={typeLabels[task.type]} className="h-56 w-full rounded-none border-0" />
+                  <SmartImage
+                    src={image}
+                    alt={typeLabels[task.type]}
+                    priority={index < 3}
+                    previewWidth={640}
+                    sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                    className="h-56 w-full rounded-none border-0"
+                  />
                 ) : (
                   <div className="flex h-56 items-center justify-center bg-slate-100 text-sm font-semibold text-muted">
                     {statusLabels[task.status]}

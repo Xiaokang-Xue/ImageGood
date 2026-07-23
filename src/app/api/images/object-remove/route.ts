@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     assertContactVerified(user);
 
     const formData = await request.formData();
+    const requestId = getFormString(formData, "requestId");
     const image = await getRequiredImageFile(formData);
     const prompt = getFormString(formData, "prompt");
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     }
 
     const data = await runObjectRemoveTask({
+      requestId,
       userId: user.id,
       image,
       prompt,

@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     }
 
     const data = await runTextToImageTask({
+      requestId: body.requestId,
       userId: user.id,
       prompt,
       style: normalizeTextStyle(body.style),

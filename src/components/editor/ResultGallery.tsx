@@ -56,6 +56,9 @@ export function ResultGallery({ results, loading, taskId, previewUrl, error, onS
               src={mainResult.url}
               alt={mainResult.label || "生成结果"}
               priority
+              previewWidth={1280}
+              sizes="(min-width: 1280px) 760px, 100vw"
+              loadingLabel="正在加载生成结果…"
               className="h-[520px] w-full rounded-none border-0 bg-slate-50"
               imageClassName="object-contain p-4"
             />

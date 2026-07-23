@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { ActiveImageTaskMonitor } from "@/components/tasks/ActiveImageTaskMonitor";
 
 export const metadata: Metadata = {
   title: "ImageGood - AI 图片创作平台",
@@ -11,6 +12,13 @@ export const metadata: Metadata = {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: "/icon.svg"
   }
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff"
 };
 
 export default function RootLayout({
@@ -23,6 +31,7 @@ export default function RootLayout({
       <body>
         <SiteHeader />
         <PageViewTracker />
+        <ActiveImageTaskMonitor />
         {children}
       </body>
     </html>

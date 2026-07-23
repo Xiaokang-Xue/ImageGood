@@ -1,6 +1,12 @@
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
-import { buildTaskObjectKey, isCosStorageEnabled, uploadBufferToCos } from "@/lib/server/cos-storage";
+import {
+  buildTaskObjectKey,
+  cosObjectUrl,
+  getCosObjectBuffer,
+  isCosStorageEnabled,
+  uploadBufferToCos
+} from "@/lib/server/cos-storage";
 import { detectBrowserImageMimeType, imageExtensionFromMimeType } from "@/lib/server/image-file";
 import type { ImageOutputFormat } from "@/types/image";
 
@@ -233,6 +239,35 @@ export async function saveResultImage(imageUrl: string, userId: string, taskId: 
 export async function normalizeResultImages(imageUrls: string[], userId: string, taskId: string) {
   const saved = await Promise.all(imageUrls.map((url, index) => saveResultImage(url, userId, taskId, index + 1)));
   return saved.filter(Boolean);
+}
+
+export async function findSavedTaskResult(userId: string, taskId: string) {
+  const filenames = ["result.png", "result.webp", "result.jpg", "result.jpeg"];
+
+  if (isCosStorageEnabled()) {
+    for (const filename of filenames) {
+      const key = buildTaskObjectKey({ userId, taskId, filename });
+      try {
+        const buffer = await getCosObjectBuffer(key);
+        if (detectBrowserImageMimeType(buffer)) return cosObjectUrl(key);
+      } catch {
+        // The next supported output extension may exist.
+      }
+    }
+    return null;
+  }
+
+  for (const filename of filenames) {
+    const relativePath = `/generated/${safePathSegment(userId)}/${safePathSegment(taskId)}/${filename}`;
+    try {
+      const buffer = await readFile(path.join(process.cwd(), "public", relativePath.slice(1)));
+      if (detectBrowserImageMimeType(buffer)) return relativePath;
+    } catch {
+      // The next supported output extension may exist.
+    }
+  }
+
+  return null;
 }
 
 export async function cleanupLocalTaskDirectoryAfterUpload(taskId: string) {

@@ -55,7 +55,13 @@ export function PosterVariants({ results, activeId, loading, taskId, error, onRe
                 )}
               >
                 <button type="button" className="relative block w-full text-left" onClick={() => onSelect(result, index)}>
-                  <SmartImage src={result.url} alt={result.title} className="h-44 w-full rounded-none border-0" />
+                  <SmartImage
+                    src={result.url}
+                    alt={result.title}
+                    previewWidth={560}
+                    sizes="(min-width: 1024px) 25vw, 50vw"
+                    className="h-44 w-full rounded-none border-0"
+                  />
                   {active ? (
                     <span className="absolute right-2 top-2 rounded-full bg-studio-600 p-1 text-white">
                       <CheckCircle2 className="h-4 w-4" />

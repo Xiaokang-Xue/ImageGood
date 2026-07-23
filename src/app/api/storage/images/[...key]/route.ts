@@ -1,14 +1,15 @@
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getImageTaskById } from "@/lib/db";
-import { getCosObjectBuffer, isCosStorageEnabled, parseTaskInfoFromCosKey } from "@/lib/server/cos-storage";
+import { getCosObjectBuffer, getCosObjectSignedUrl, isCosStorageEnabled, parseTaskInfoFromCosKey } from "@/lib/server/cos-storage";
 import { detectBrowserImageMimeType, imageMimeTypeFromExtension } from "@/lib/server/image-file";
+import { cosImagePreviewQuery, parseImagePreviewWidth } from "@/lib/server/image-preview";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   {
     params
   }: {
@@ -40,6 +41,23 @@ export async function GET(
   const task = await getImageTaskById(taskInfo.taskId);
   if (!task || task.userId !== taskInfo.userId || (task.userId !== user.id && user.role !== "admin")) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "无权访问该图片" } }, { status: 403 });
+  }
+
+  const previewWidth = parseImagePreviewWidth(request.nextUrl.searchParams.get("image_preview"));
+  if (previewWidth) {
+    try {
+      const signedUrl = await getCosObjectSignedUrl(taskInfo.key, cosImagePreviewQuery(previewWidth));
+      const response = NextResponse.redirect(signedUrl, 307);
+      response.headers.set("Cache-Control", "private, max-age=240");
+      response.headers.set("Vary", "Cookie");
+      return response;
+    } catch (error) {
+      console.warn("[storage-image] failed to create preview URL, falling back to original image", {
+        taskId: taskInfo.taskId,
+        filename: taskInfo.filename,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 
   try {

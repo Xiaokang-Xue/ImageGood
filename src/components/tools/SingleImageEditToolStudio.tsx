@@ -16,7 +16,6 @@ import {
   apiClient,
   downloadImage,
   getImageErrorMessage,
-  ImageApiClientError,
   isAbortError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
@@ -45,37 +44,6 @@ interface SingleImageEditToolStudioProps {
   promptPlaceholder?: string;
   promptRequired?: boolean;
   relatedTools?: Array<{ label: string; href: string }>;
-}
-
-async function createToolTask(endpoint: string, input: { image: File; prompt: string }) {
-  const formData = new FormData();
-  formData.append("image", input.image);
-  formData.append("prompt", input.prompt);
-  formData.append("size", "1024x1024");
-  formData.append("quality", "auto");
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    body: formData
-  });
-  const payload = (await response.json().catch(() => null)) as
-    | { taskId?: string }
-    | { error?: { code?: string; message?: string; actionUrl?: string; orderId?: string } }
-    | null;
-
-  if (!response.ok) {
-    const error = payload && "error" in payload ? payload.error : null;
-    throw new ImageApiClientError(error?.code || "REQUEST_FAILED", error?.message || `请求失败：${response.status}`, {
-      actionUrl: error?.actionUrl,
-      orderId: error?.orderId
-    });
-  }
-
-  if (!payload || !("taskId" in payload) || !payload.taskId) {
-    throw new ImageApiClientError("TASK_CREATE_FAILED", "创建图片任务失败，请稍后重试");
-  }
-
-  return { taskId: payload.taskId };
 }
 
 export function SingleImageEditToolStudio({
@@ -147,9 +115,10 @@ export function SingleImageEditToolStudio({
     pollingController.current = controller;
 
     try {
-      const response = await createToolTask(endpoint, {
+      const response = await apiClient.createImageToolTask(endpoint, {
         image: imageFile,
-        prompt: prompt.trim()
+        prompt: prompt.trim(),
+        returnPath: loginRedirect
       });
       setTaskId(response.taskId);
 
@@ -312,6 +281,9 @@ export function SingleImageEditToolStudio({
                 src={resultUrl}
                 alt={resultAlt}
                 priority
+                previewWidth={1280}
+                sizes="(min-width: 1280px) 760px, 100vw"
+                loadingLabel="正在加载处理结果…"
                 className="h-[620px] max-h-[70vh] w-full rounded-lg border-line bg-white"
                 imageClassName="object-contain"
               />

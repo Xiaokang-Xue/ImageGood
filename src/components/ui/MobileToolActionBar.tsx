@@ -24,7 +24,7 @@ export function MobileToolActionBar({
 }: MobileToolActionBarProps) {
   return (
     <>
-      <div className="h-24 md:hidden" aria-hidden="true" />
+      <div className="h-28 md:hidden" aria-hidden="true" />
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white/95 px-4 pt-3 shadow-[0_-12px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl md:hidden">
         <div
           className="mx-auto flex max-w-lg items-center gap-3"

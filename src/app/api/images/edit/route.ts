@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     assertContactVerified(user);
 
     const formData = await request.formData();
+    const requestId = getFormString(formData, "requestId");
     const image = await getRequiredImageFile(formData);
     const prompt = getFormString(formData, "prompt");
     const tool = normalizeEditTool(getFormString(formData, "tool", "custom"));
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     const outputFormat = normalizeOutputFormat(getFormString(formData, "outputFormat", "png"));
 
     const data = await runEditTask({
+      requestId,
       userId: user.id,
       image,
       prompt,

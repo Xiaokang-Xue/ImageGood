@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     const ratio = normalize(body.ratio, ratios, "3:4");
 
     const data = await runPosterTask({
+      requestId: body.requestId,
       userId: user.id,
       title,
       subtitle,

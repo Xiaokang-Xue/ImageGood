@@ -3,6 +3,7 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getImageTaskById } from "@/lib/db";
 import { detectBrowserImageMimeType, imageMimeTypeFromExtension } from "@/lib/server/image-file";
+import { createImagePreview, parseImagePreviewWidth } from "@/lib/server/image-preview";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ function getCodexWorkDir() {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   {
     params
   }: {
@@ -64,10 +65,14 @@ export async function GET(
       return NextResponse.json({ error: { code: "INVALID_IMAGE", message: "图片文件不可用" } }, { status: 404 });
     }
 
-    return new NextResponse(new Uint8Array(buffer), {
+    const previewWidth = parseImagePreviewWidth(request.nextUrl.searchParams.get("image_preview"));
+    const responseBuffer = previewWidth ? await createImagePreview(buffer, previewWidth) : buffer;
+    const responseMimeType = previewWidth ? "image/webp" : mimeType;
+
+    return new NextResponse(new Uint8Array(responseBuffer), {
       headers: {
-        "Content-Type": mimeType,
-        "Content-Length": String(buffer.length),
+        "Content-Type": responseMimeType,
+        "Content-Length": String(responseBuffer.length),
         "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "Cache-Control": "private, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff",

@@ -35,7 +35,6 @@ function AlipayReturnContent() {
   const [loading, setLoading] = useState(true);
   const [mockPaying, setMockPaying] = useState(false);
   const [error, setError] = useState("");
-  const [sourceSurveySubmitted, setSourceSurveySubmitted] = useState(false);
   const paidEventSent = useRef(false);
 
   const loadOrder = useCallback(
@@ -54,7 +53,6 @@ function AlipayReturnContent() {
           ? await apiClient.getPaymentOrder(orderId)
           : await apiClient.getPaymentOrderByOutTradeNo(outTradeNo);
         setOrder(response);
-        setSourceSurveySubmitted(Boolean(response.sourceSurveySubmitted));
 
         if (response.status === "paid" && !paidEventSent.current) {
           paidEventSent.current = true;
@@ -72,10 +70,6 @@ function AlipayReturnContent() {
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
-
-  useEffect(() => {
-    setSourceSurveySubmitted(Boolean(order?.sourceSurveySubmitted));
-  }, [order?.orderId, order?.sourceSurveySubmitted]);
 
   useEffect(() => {
     if (!order || order.status !== "pending") return undefined;
@@ -171,21 +165,15 @@ function AlipayReturnContent() {
               amountCents={order.amountCents}
               paymentProvider={order.paymentProvider}
               initialSubmitted={Boolean(order.sourceSurveySubmitted)}
-              onSubmittedChange={setSourceSurveySubmitted}
             />
           </div>
         ) : null}
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {isPaid && sourceSurveySubmitted ? (
+          {isPaid ? (
             <Link href="/editor">
               <Button>继续生成图片</Button>
             </Link>
-          ) : null}
-          {isPaid && !sourceSurveySubmitted ? (
-            <Button type="button" disabled>
-              请选择来源渠道后继续生成图片
-            </Button>
           ) : null}
           {isClosed ? (
             <Link href="/pricing">

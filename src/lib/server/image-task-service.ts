@@ -15,8 +15,12 @@ import {
 import { getImageProviderService } from "@/lib/server/image-provider";
 import { normalizeImageInputFile } from "@/lib/server/image-input-normalizer";
 import { logImageTaskEvent, type ImageTaskLogContext } from "@/lib/server/image-task-observability";
-import { cleanupLocalTaskDirectoryAfterUpload, normalizeResultImages, saveUploadFile } from "@/lib/server/image-storage";
-import { assertPaymentSourceSurveyCompleted } from "@/lib/server/payment-source-survey";
+import {
+  cleanupLocalTaskDirectoryAfterUpload,
+  findSavedTaskResult,
+  normalizeResultImages,
+  saveUploadFile
+} from "@/lib/server/image-storage";
 import type {
   EditTool,
   ImageOutputFormat,
@@ -50,6 +54,7 @@ function userFacingImageError(error: unknown) {
 }
 
 function createTask(input: {
+  requestId?: string;
   userId: string;
   type: ImageTaskType;
   prompt: string;
@@ -58,7 +63,7 @@ function createTask(input: {
 }) {
   const now = nowIso();
   return {
-    id: randomUUID(),
+    id: normalizeTaskRequestId(input.requestId) || randomUUID(),
     userId: input.userId,
     type: input.type,
     prompt: input.prompt,
@@ -75,10 +80,23 @@ function createTask(input: {
   };
 }
 
-async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
-  await assertPaymentSourceSurveyCompleted(task.userId);
+function normalizeTaskRequestId(value?: string) {
+  const normalized = value?.trim() || "";
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(normalized)
+    ? normalized
+    : "";
+}
 
-  await withDb((db) => {
+async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
+  const result = await withDb((db) => {
+    const existingTask = db.imageTasks.find((item) => item.id === task.id);
+    if (existingTask) {
+      if (existingTask.userId !== task.userId || existingTask.type !== task.type) {
+        throw new Error("TASK_REQUEST_ID_CONFLICT");
+      }
+      return { task: existingTask, created: false as const };
+    }
+
     const user = db.users.find((item) => item.id === task.userId);
     if (!user || user.credits <= 0) {
       throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
@@ -96,7 +114,10 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
     }
 
     db.imageTasks.push(task);
+    return { task, created: true as const };
   });
+
+  if (!result.created) return result;
 
   logImageTaskEvent("task.created", {
     taskId: task.id,
@@ -106,6 +127,8 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
     status: task.status,
     stage: "queue"
   });
+
+  return result;
 }
 
 async function updateTask(taskId: string, patch: Partial<ImageTaskRecord>) {
@@ -269,12 +292,62 @@ async function saveTaskInput(task: ImageTaskRecord, image: File) {
   });
 }
 
+function isTransientProviderError(error: unknown) {
+  const value = error as { status?: number; code?: string; cause?: { code?: string } } | null;
+  const status = Number(value?.status || 0);
+  const code = String(value?.code || value?.cause?.code || "").toUpperCase();
+  const message = (error instanceof Error ? error.message : String(error || "")).toLowerCase();
+
+  if ([408, 425, 429, 500, 502, 503, 504].includes(status)) return true;
+  if (["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "EAI_AGAIN", "UND_ERR_SOCKET"].includes(code)) return true;
+  return [
+    "connection error",
+    "connection reset",
+    "fetch failed",
+    "network error",
+    "socket hang up",
+    "stream disconnected",
+    "temporarily unavailable",
+    "timed out",
+    "timeout"
+  ].some((keyword) => message.includes(keyword));
+}
+
+async function runProviderWithRetry<T>(task: ImageTaskRecord, operation: string, run: () => Promise<T>) {
+  const maxAttempts = 2;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= maxAttempts || !isTransientProviderError(error)) throw error;
+
+      logImageTaskEvent(
+        "provider.retry_scheduled",
+        {
+          taskId: task.id,
+          userId: task.userId,
+          taskType: task.type,
+          provider: task.provider,
+          stage: "provider",
+          operation,
+          error
+        },
+        "warn"
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  }
+
+  throw new Error("IMAGE_PROVIDER_RETRY_EXHAUSTED");
+}
+
 async function runProviderStep<T>(task: ImageTaskRecord, operation: string, run: () => Promise<T>) {
   return observeTaskStep({
     task,
     stage: "provider",
     operation,
-    run,
+    run: () => runProviderWithRetry(task, operation, run),
     successFields: () => ({ outputImageCount: 1 })
   });
 }
@@ -394,9 +467,20 @@ async function completeTask(task: ImageTaskRecord, generatedUrl: string) {
   return result;
 }
 
-async function recoverTaskResultIfPresent(taskId: string) {
+const taskRecoveryAttemptAt = new Map<string, number>();
+
+async function recoverTaskResultIfPresent(taskId: string, options?: { polling?: boolean }) {
   const task = await getImageTaskById(taskId);
-  if (!task || task.provider !== "codex") return null;
+  if (!task) return null;
+
+  if (options?.polling) {
+    const now = Date.now();
+    const minimumAgeMs = task.provider === "codex" ? 5000 : task.status === "failed" ? 5000 : 120_000;
+    const lastAttemptAt = taskRecoveryAttemptAt.get(task.id) || 0;
+    const taskAgeMs = now - new Date(task.updatedAt).getTime();
+    if (taskAgeMs < minimumAgeMs || now - lastAttemptAt < minimumAgeMs) return null;
+    taskRecoveryAttemptAt.set(task.id, now);
+  }
 
   const startedAt = Date.now();
   logImageTaskEvent("recovery.started", {
@@ -407,7 +491,12 @@ async function recoverTaskResultIfPresent(taskId: string) {
     stage: "recovery"
   });
 
-  const recovered = (await queryCodexTaskResult(task.id)) || (await recoverCodexTaskResult(task.id));
+  const savedResult = await findSavedTaskResult(task.userId, task.id);
+  const recovered = savedResult
+    ? { url: savedResult }
+    : task.provider === "codex"
+      ? (await queryCodexTaskResult(task.id)) || (await recoverCodexTaskResult(task.id))
+      : null;
   if (!recovered) {
     logImageTaskEvent(
       "recovery.not_found",
@@ -425,6 +514,7 @@ async function recoverTaskResultIfPresent(taskId: string) {
   }
 
   const result = await completeTask(task, recovered.url);
+  taskRecoveryAttemptAt.delete(task.id);
   logImageTaskEvent("recovery.succeeded", {
     taskId: task.id,
     userId: task.userId,
@@ -501,6 +591,7 @@ function startResponse(task: ImageTaskRecord) {
 }
 
 export async function runEditTask(input: {
+  requestId?: string;
   userId: string;
   image: File;
   prompt?: string;
@@ -512,6 +603,7 @@ export async function runEditTask(input: {
   const provider = getImageProviderService();
   const prompt = buildEditPrompt(input.tool, input.prompt);
   const task = createTask({
+    requestId: input.requestId,
     userId: input.userId,
     type: "edit",
     prompt,
@@ -519,7 +611,8 @@ export async function runEditTask(input: {
     provider: provider.name
   });
 
-  await insertTaskWithCreditCheck(task);
+  const inserted = await insertTaskWithCreditCheck(task);
+  if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
@@ -541,6 +634,7 @@ export async function runEditTask(input: {
 }
 
 export async function runProductTask(input: {
+  requestId?: string;
   userId: string;
   image: File;
   template: ProductTemplate;
@@ -553,6 +647,7 @@ export async function runProductTask(input: {
   const provider = getImageProviderService();
   const prompt = buildProductPrompt(input);
   const task = createTask({
+    requestId: input.requestId,
     userId: input.userId,
     type: "product",
     prompt,
@@ -560,7 +655,8 @@ export async function runProductTask(input: {
     provider: provider.name
   });
 
-  await insertTaskWithCreditCheck(task);
+  const inserted = await insertTaskWithCreditCheck(task);
+  if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
@@ -582,6 +678,7 @@ export async function runProductTask(input: {
 }
 
 export async function runPosterTask(input: {
+  requestId?: string;
   userId: string;
   title: string;
   subtitle: string;
@@ -593,6 +690,7 @@ export async function runPosterTask(input: {
   const provider = getImageProviderService();
   const prompt = buildPosterPrompt(input);
   const task = createTask({
+    requestId: input.requestId,
     userId: input.userId,
     type: "poster",
     prompt,
@@ -600,7 +698,8 @@ export async function runPosterTask(input: {
     provider: provider.name
   });
 
-  await insertTaskWithCreditCheck(task);
+  const inserted = await insertTaskWithCreditCheck(task);
+  if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
     const generated = await runProviderStep(task, "generate_poster", () =>
@@ -619,6 +718,7 @@ export async function runPosterTask(input: {
 }
 
 export async function runTextToImageTask(input: {
+  requestId?: string;
   userId: string;
   prompt: string;
   style?: TextToImageStyle;
@@ -632,6 +732,7 @@ export async function runTextToImageTask(input: {
     style: input.style
   });
   const task = createTask({
+    requestId: input.requestId,
     userId: input.userId,
     type: "text_to_image",
     prompt,
@@ -639,7 +740,8 @@ export async function runTextToImageTask(input: {
     provider: provider.name
   });
 
-  await insertTaskWithCreditCheck(task);
+  const inserted = await insertTaskWithCreditCheck(task);
+  if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
     const generated = await runProviderStep(task, "generate_text_to_image", () =>
@@ -658,6 +760,7 @@ export async function runTextToImageTask(input: {
 }
 
 export async function runRemoveBackgroundTask(input: {
+  requestId?: string;
   userId: string;
   image: File;
   size: ImageSize;
@@ -667,6 +770,7 @@ export async function runRemoveBackgroundTask(input: {
   const provider = getImageProviderService();
   const prompt = buildRemoveBackgroundPrompt(input.prompt);
   const task = createTask({
+    requestId: input.requestId,
     userId: input.userId,
     type: "remove_background",
     prompt,
@@ -674,7 +778,8 @@ export async function runRemoveBackgroundTask(input: {
     provider: provider.name
   });
 
-  await insertTaskWithCreditCheck(task);
+  const inserted = await insertTaskWithCreditCheck(task);
+  if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
@@ -695,6 +800,7 @@ export async function runRemoveBackgroundTask(input: {
 }
 
 async function runPromptedImageEditTask(input: {
+  requestId?: string;
   userId: string;
   image: File;
   prompt: string;
@@ -706,6 +812,7 @@ async function runPromptedImageEditTask(input: {
 }) {
   const provider = getImageProviderService();
   const task = createTask({
+    requestId: input.requestId,
     userId: input.userId,
     type: input.type,
     prompt: input.prompt,
@@ -713,7 +820,8 @@ async function runPromptedImageEditTask(input: {
     provider: provider.name
   });
 
-  await insertTaskWithCreditCheck(task);
+  const inserted = await insertTaskWithCreditCheck(task);
+  if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
     await saveTaskInput(task, input.image);
@@ -735,6 +843,7 @@ async function runPromptedImageEditTask(input: {
 }
 
 export async function runImageEnhanceTask(input: {
+  requestId?: string;
   userId: string;
   image: File;
   prompt?: string;
@@ -742,6 +851,7 @@ export async function runImageEnhanceTask(input: {
   quality: ImageQuality;
 }) {
   return runPromptedImageEditTask({
+    requestId: input.requestId,
     userId: input.userId,
     image: input.image,
     prompt: buildImageEnhancePrompt(input.prompt),
@@ -754,6 +864,7 @@ export async function runImageEnhanceTask(input: {
 }
 
 export async function runObjectRemoveTask(input: {
+  requestId?: string;
   userId: string;
   image: File;
   prompt?: string;
@@ -761,6 +872,7 @@ export async function runObjectRemoveTask(input: {
   quality: ImageQuality;
 }) {
   return runPromptedImageEditTask({
+    requestId: input.requestId,
     userId: input.userId,
     image: input.image,
     prompt: buildObjectRemovePrompt(input.prompt),
@@ -782,7 +894,7 @@ export async function getUserTask(userId: string, taskId: string) {
 
   if (ownedTask.status !== "succeeded" || !ownedTask.resultImages?.length) {
     try {
-      await recoverTaskResultIfPresent(ownedTask.id);
+      await recoverTaskResultIfPresent(ownedTask.id, { polling: true });
     } catch (error) {
       logImageTaskEvent(
         "recovery.poll_failed",

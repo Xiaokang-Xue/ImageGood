@@ -25,7 +25,13 @@ import type {
   PaymentOrderResponse
 } from "@/types/billing";
 import type { AdminAnalyticsResponse, AnalyticsFunnelRange } from "@/types/analytics";
-import type { DeleteImageTaskResponse, DeleteImageTasksResponse, ImageTaskDetailResponse, ImageTaskListResponse } from "@/types/task";
+import type {
+  DeleteImageTaskResponse,
+  DeleteImageTasksResponse,
+  ImageTaskDetailResponse,
+  ImageTaskListResponse,
+  ImageTaskRecord
+} from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
 import { prepareImageFileForUpload } from "@/lib/client-image-normalizer";
@@ -50,6 +56,60 @@ export class ImageApiClientError extends Error {
     this.actionUrl = options?.actionUrl;
     this.orderId = options?.orderId;
   }
+}
+
+export interface TrackedImageTask {
+  id: string;
+  returnPath: string;
+  createdAt: number;
+}
+
+const ACTIVE_IMAGE_TASKS_KEY = "imagegood:active-image-tasks:v1";
+const ACTIVE_IMAGE_TASK_TTL_MS = 24 * 60 * 60 * 1000;
+
+function createImageTaskRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+export function getTrackedImageTasks() {
+  if (typeof window === "undefined") return [] as TrackedImageTask[];
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ACTIVE_IMAGE_TASKS_KEY) || "[]") as TrackedImageTask[];
+    const cutoff = Date.now() - ACTIVE_IMAGE_TASK_TTL_MS;
+    return Array.isArray(parsed)
+      ? parsed.filter((task) => task && typeof task.id === "string" && Number(task.createdAt) >= cutoff).slice(-10)
+      : [];
+  } catch {
+    return [] as TrackedImageTask[];
+  }
+}
+
+function writeTrackedImageTasks(tasks: TrackedImageTask[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ACTIVE_IMAGE_TASKS_KEY, JSON.stringify(tasks.slice(-10)));
+    window.dispatchEvent(new Event("imagegood-active-tasks-updated"));
+  } catch {
+    // Task persistence is a reliability enhancement; storage restrictions must not block generation.
+  }
+}
+
+export function trackImageTask(task: TrackedImageTask) {
+  const tasks = getTrackedImageTasks().filter((item) => item.id !== task.id);
+  writeTrackedImageTasks([...tasks, task]);
+}
+
+export function forgetTrackedImageTask(taskId: string) {
+  writeTrackedImageTasks(getTrackedImageTasks().filter((task) => task.id !== taskId));
 }
 
 function normalizeImageMime(type: string) {
@@ -211,13 +271,93 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return parseResponse<T>(response);
 }
 
-async function postForm<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(path, {
-    method: "POST",
-    body: formData
-  });
+function isTransientHttpStatus(status: number) {
+  return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
 
-  return parseResponse<T>(response);
+function taskStartResponse<T>(task: ImageTaskRecord) {
+  return {
+    ok: true,
+    taskId: task.id,
+    status: task.status,
+    mode: task.provider === "mock" ? "mock" : "real",
+    provider: task.provider ?? undefined,
+    results: []
+  } as T;
+}
+
+async function recoverCreatedTask<T>(taskId: string) {
+  try {
+    const response = await requestJson<ImageTaskDetailResponse>(`/api/tasks/${taskId}`);
+    return taskStartResponse<T>(response.task);
+  } catch {
+    return null;
+  }
+}
+
+async function createTrackedTaskRequest<T>(input: {
+  taskId: string;
+  returnPath: string;
+  request: () => Promise<Response>;
+}) {
+  trackImageTask({ id: input.taskId, returnPath: input.returnPath, createdAt: Date.now() });
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await input.request();
+      if (response.ok) return parseResponse<T>(response);
+
+      if (!isTransientHttpStatus(response.status)) {
+        forgetTrackedImageTask(input.taskId);
+        return parseResponse<T>(response);
+      }
+
+      const recovered = await recoverCreatedTask<T>(input.taskId);
+      if (recovered) return recovered;
+      lastError = new ImageApiClientError("TASK_CREATE_TEMPORARY_FAILURE", "网络暂时不稳定，正在确认任务状态");
+    } catch (error) {
+      lastError = error;
+      const recovered = await recoverCreatedTask<T>(input.taskId);
+      if (recovered) return recovered;
+    }
+
+    if (attempt < 2) await wait(800 * attempt);
+  }
+
+  for (let check = 0; check < 3; check += 1) {
+    await wait(1000);
+    const recovered = await recoverCreatedTask<T>(input.taskId);
+    if (recovered) return recovered;
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new ImageApiClientError("TASK_CREATE_NETWORK_ERROR", "网络连接中断，系统会继续确认任务状态，请稍后在历史记录中查看");
+}
+
+async function postTrackedTaskForm<T>(path: string, formData: FormData, returnPath: string) {
+  const taskId = createImageTaskRequestId();
+  formData.set("requestId", taskId);
+  return createTrackedTaskRequest<T>({
+    taskId,
+    returnPath,
+    request: () => fetch(path, { method: "POST", body: formData })
+  });
+}
+
+async function postTrackedTaskJson<T>(path: string, payload: Record<string, unknown>, returnPath: string) {
+  const taskId = createImageTaskRequestId();
+  return createTrackedTaskRequest<T>({
+    taskId,
+    returnPath,
+    request: () =>
+      fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, requestId: taskId })
+      })
+  });
 }
 
 export function getImageErrorMessage(error: unknown) {
@@ -279,27 +419,36 @@ function wait(ms: number, signal?: AbortSignal) {
 }
 
 export async function downloadImage(url: string, filename = `ai-image-result-${Date.now()}.png`) {
-  const anchor = document.createElement("a");
-  anchor.download = filename;
+  const isIosSafari =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  const triggerDownload = (href: string) => {
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = filename;
+    anchor.rel = "noopener noreferrer";
+    if (isIosSafari) anchor.target = "_blank";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
 
   if (url.startsWith("data:")) {
-    anchor.href = url;
-    anchor.click();
+    triggerDownload(url);
     return;
   }
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
-    anchor.href = objectUrl;
-    anchor.click();
-    URL.revokeObjectURL(objectUrl);
+    triggerDownload(objectUrl);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
   } catch {
-    anchor.href = url;
-    anchor.target = "_blank";
-    anchor.rel = "noreferrer";
-    anchor.click();
+    triggerDownload(url);
   }
 }
 
@@ -510,6 +659,7 @@ export const apiClient = {
     const intervalMs = options?.intervalMs ?? 2000;
     const timeoutMs = options?.timeoutMs ?? 60 * 60 * 1000;
     const startedAt = Date.now();
+    let consecutiveReadFailures = 0;
 
     while (Date.now() - startedAt <= timeoutMs) {
       if (options?.signal?.aborted) {
@@ -517,11 +667,29 @@ export const apiClient = {
         error.name = "AbortError";
         throw error;
       }
-      const response = await apiClient.getTask(id);
-      if (response.task.status === "succeeded" || response.task.status === "failed") {
-        return response.task;
+      try {
+        const response = await apiClient.getTask(id);
+        consecutiveReadFailures = 0;
+        if (response.task.status === "succeeded" || response.task.status === "failed") {
+          forgetTrackedImageTask(id);
+          return response.task;
+        }
+      } catch (error) {
+        if (isAbortError(error) || isUnauthorizedError(error)) throw error;
+
+        const isRecentlyCreatedNotFound =
+          error instanceof ImageApiClientError &&
+          error.code === "TASK_NOT_FOUND" &&
+          Date.now() - startedAt < 30_000;
+        const isTransientReadError =
+          !(error instanceof ImageApiClientError) ||
+          ["REQUEST_FAILED", "TASK_READ_FAILED", "TASK_CREATE_TEMPORARY_FAILURE"].includes(error.code);
+
+        if (!isRecentlyCreatedNotFound && !isTransientReadError) throw error;
+        consecutiveReadFailures += 1;
       }
-      await wait(intervalMs, options?.signal);
+      const retryDelay = Math.min(10_000, intervalMs * Math.max(1, Math.min(consecutiveReadFailures, 5)));
+      await wait(retryDelay, options?.signal);
     }
 
     throw new ImageApiClientError("TASK_POLL_TIMEOUT", "图片生成时间较长，请稍后在历史记录中查看结果");
@@ -538,7 +706,7 @@ export const apiClient = {
     formData.append("quality", payload.quality ?? "auto");
     formData.append("outputFormat", payload.outputFormat ?? "png");
 
-    return postForm<EditImageResponse>("/api/images/edit", formData);
+    return postTrackedTaskForm<EditImageResponse>("/api/images/edit", formData, "/editor");
   },
 
   async createProductImages(payload: ProductImageRequest) {
@@ -552,21 +720,19 @@ export const apiClient = {
     formData.append("sellingPoints", payload.sellingPoints);
     formData.append("ratio", payload.ratio);
 
-    return postForm<ProductImageResponse>("/api/images/product", formData);
+    return postTrackedTaskForm<ProductImageResponse>("/api/images/product", formData, "/product");
   },
 
   createPosterImages(payload: PosterImageRequest) {
-    return requestJson<PosterImageResponse>("/api/images/poster", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+    return postTrackedTaskJson<PosterImageResponse>("/api/images/poster", payload as unknown as Record<string, unknown>, "/poster");
   },
 
   createTextToImage(payload: TextToImageRequest) {
-    return requestJson<TextToImageResponse>("/api/images/text-to-image", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+    return postTrackedTaskJson<TextToImageResponse>(
+      "/api/images/text-to-image",
+      payload as unknown as Record<string, unknown>,
+      "/text-to-image"
+    );
   },
 
   async removeBackground(payload: RemoveBackgroundRequest) {
@@ -577,7 +743,16 @@ export const apiClient = {
     formData.append("size", typeof payload.size === "string" ? payload.size : "1024x1024");
     formData.append("quality", payload.quality ?? "auto");
 
-    return postForm<RemoveBackgroundResponse>("/api/images/remove-background", formData);
+    return postTrackedTaskForm<RemoveBackgroundResponse>("/api/images/remove-background", formData, "/remove-background");
+  },
+
+  createImageToolTask(endpoint: string, payload: { image: File; prompt: string; returnPath: string }) {
+    const formData = new FormData();
+    formData.append("image", payload.image);
+    formData.append("prompt", payload.prompt);
+    formData.append("size", "1024x1024");
+    formData.append("quality", "auto");
+    return postTrackedTaskForm<EditImageResponse>(endpoint, formData, payload.returnPath);
   },
 
   listTemplates() {

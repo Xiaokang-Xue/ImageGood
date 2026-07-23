@@ -14,9 +14,11 @@ export async function POST(request: Request) {
     assertContactVerified(user);
 
     const formData = await request.formData();
+    const requestId = getFormString(formData, "requestId");
     const image = await getRequiredImageFile(formData);
 
     const data = await runImageEnhanceTask({
+      requestId,
       userId: user.id,
       image,
       prompt: getFormString(formData, "prompt"),

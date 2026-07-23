@@ -26,6 +26,7 @@ export type PosterLayerKey = "title" | "subtitle" | "decoration" | "background";
 export type PosterLayerVisibility = Record<PosterLayerKey, boolean>;
 
 export interface EditImageRequest {
+  requestId?: string;
   image?: File;
   imageUrl?: string;
   prompt?: string;
@@ -61,6 +62,7 @@ export interface EditImageResponse {
 }
 
 export interface ProductImageRequest {
+  requestId?: string;
   image?: File;
   imageUrl?: string;
   template: ProductTemplate;
@@ -88,6 +90,7 @@ export interface ProductImageResponse {
 }
 
 export interface PosterImageRequest {
+  requestId?: string;
   title: string;
   subtitle: string;
   usage: PosterUsage;
@@ -112,6 +115,7 @@ export interface PosterImageResponse {
 }
 
 export interface TextToImageRequest {
+  requestId?: string;
   prompt: string;
   style?: TextToImageStyle;
   size?: ImageSize | string;
@@ -137,6 +141,7 @@ export interface TextToImageResponse {
 }
 
 export interface RemoveBackgroundRequest {
+  requestId?: string;
   image?: File;
   imageUrl?: string;
   size?: ImageSize | string;

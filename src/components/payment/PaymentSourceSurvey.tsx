@@ -113,7 +113,7 @@ export function PaymentSourceSurvey({
     <Card className="p-5">
       <p className="text-sm font-bold text-ink">感谢你支持 ImageGood。</p>
       <h2 className="mt-2 text-lg font-bold text-ink">您了解到 ImageGood 的渠道是？</h2>
-      <p className="mt-2 text-sm leading-6 text-muted">请选择一个渠道，提交后即可继续生成图片。</p>
+      <p className="mt-2 text-sm leading-6 text-muted">选填。你的反馈会帮助我们改进产品，不影响继续使用。</p>
       {error ? <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</p> : null}
       <div className="mt-4 flex flex-wrap gap-2">
         {SOURCE_OPTIONS.map((option) => (
