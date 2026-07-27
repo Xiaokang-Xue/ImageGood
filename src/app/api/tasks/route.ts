@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
 import { deleteUserTasks, listUserTasks } from "@/lib/server/image-task-service";
 import { getCurrentUser } from "@/lib/session";
+import type { ImageTaskStatus, ImageTaskTimeRange, ImageTaskType } from "@/types/task";
 
 export const runtime = "nodejs";
+
+const taskTypes = new Set<ImageTaskType>([
+  "edit",
+  "product",
+  "poster",
+  "text_to_image",
+  "remove_background",
+  "image_enhance",
+  "object_remove"
+]);
+const taskStatuses = new Set<ImageTaskStatus>(["pending", "processing", "succeeded", "failed"]);
+const timeRanges = new Set<ImageTaskTimeRange>(["all", "today", "7d", "30d"]);
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -17,14 +30,32 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const page = Number(url.searchParams.get("page") || "1");
   const limit = Number(url.searchParams.get("limit") || "12");
-  const result = await listUserTasks(user.id, { page, limit });
+  const rawType = url.searchParams.get("type");
+  const rawStatus = url.searchParams.get("status");
+  const rawTimeRange = url.searchParams.get("timeRange");
+  const type = rawType && taskTypes.has(rawType as ImageTaskType) ? (rawType as ImageTaskType) : "all";
+  const status =
+    rawStatus && taskStatuses.has(rawStatus as ImageTaskStatus) ? (rawStatus as ImageTaskStatus) : "all";
+  const timeRange =
+    rawTimeRange && timeRanges.has(rawTimeRange as ImageTaskTimeRange)
+      ? (rawTimeRange as ImageTaskTimeRange)
+      : "all";
+  const result = await listUserTasks(user.id, {
+    page,
+    limit,
+    type,
+    status,
+    timeRange,
+    favorite: url.searchParams.get("favorite") === "1"
+  });
   return NextResponse.json(
     {
       ok: true,
       ...result,
       tasks: result.tasks.map((task) => ({
         ...task,
-        prompt: task.prompt.slice(0, 500)
+        prompt: task.prompt.slice(0, 500),
+        resultImages: task.resultImages?.slice(0, 1) ?? []
       }))
     },
     {

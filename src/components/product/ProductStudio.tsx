@@ -10,6 +10,7 @@ import { ProductResultGrid } from "@/components/product/ProductResultGrid";
 import { ProductTemplateSelector } from "@/components/product/ProductTemplateSelector";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { InputAssist } from "@/components/ui/InputAssist";
 import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/api-client";
 import { isImageCompatibilityError } from "@/lib/client-image-normalizer";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
+import { appendPromptFragment, productSellingPointSuggestions } from "@/lib/input-assist";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
@@ -296,8 +298,8 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
           <UploadDropzone
             value={imageUrl}
             compact
-            title="上传商品图"
-            subtitle="建议使用主体清晰、背景简洁的产品照片"
+            title="上传原图"
+            subtitle=""
             className="min-h-[420px]"
             onImageSelected={(url, file) => {
               setImageUrl(url);
@@ -351,6 +353,12 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
             />
           </label>
 
+          <InputAssist
+            title="常用商品要求"
+            items={productSellingPointSuggestions}
+            onSelect={(item) => setSellingPoints((current) => appendPromptFragment(current, item.value))}
+          />
+
           <div className="mt-5">
             <p className="text-sm font-semibold text-slate-700">图片比例</p>
             <div className="mt-3 grid grid-cols-4 gap-2">
@@ -400,7 +408,12 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
               }`}
               onClick={() => {
                 setSelectedIndustry(item);
-                setSellingPoints(industrySellingPointPresets[item] ?? `${item}商品，突出质感、卖点和使用场景`);
+                setSellingPoints((current) =>
+                  appendPromptFragment(
+                    current,
+                    industrySellingPointPresets[item] ?? `${item}商品，突出质感、卖点和使用场景`
+                  )
+                );
               }}
             >
               {item}

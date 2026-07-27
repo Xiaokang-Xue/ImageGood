@@ -8,17 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { apiClient, downloadImage, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
+import {
+  getHistoryTaskTitle,
+  historyTaskStatusLabels,
+  historyTaskTypeLabels
+} from "@/lib/history-task";
 import type { ImageTaskRecord } from "@/types/task";
-
-const typeLabels: Record<ImageTaskRecord["type"], string> = {
-  edit: "智能修图",
-  product: "商品图生成",
-  poster: "封面海报生成",
-  text_to_image: "文生图",
-  remove_background: "智能抠图",
-  image_enhance: "图片增强",
-  object_remove: "去杂物"
-};
 
 export default function HistoryDetailPage() {
   const params = useParams<{ id: string }>();
@@ -101,8 +96,8 @@ export default function HistoryDetailPage() {
     <main className="mx-auto max-w-[1200px] px-5 py-10">
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <p className="text-sm font-semibold text-studio-600">{typeLabels[task.type]}</p>
-          <h1 className="mt-2 text-3xl font-bold text-ink">生成结果详情</h1>
+          <p className="text-sm font-semibold text-studio-600">{historyTaskTypeLabels[task.type]}</p>
+          <h1 className="mt-2 text-3xl font-bold text-ink">{getHistoryTaskTitle(task)}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="ghost" loading={deleting} disabled={!canDelete} onClick={handleDelete}>
@@ -155,7 +150,7 @@ export default function HistoryDetailPage() {
 
         <Card className="p-5">
           <h2 className="text-xl font-bold text-ink">任务信息</h2>
-          <Info label="状态" value={task.status === "succeeded" ? "已完成" : task.status === "failed" ? "生成失败" : "处理中"} />
+          <Info label="状态" value={historyTaskStatusLabels[task.status]} />
           <Info label="创建时间" value={new Date(task.createdAt).toLocaleString("zh-CN")} />
           <Info label="生成需求" value={task.prompt} />
           {task.errorMessage ? <Info label="失败原因" value={task.errorMessage} /> : null}

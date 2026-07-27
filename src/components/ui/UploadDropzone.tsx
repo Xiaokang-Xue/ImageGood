@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, UploadCloud } from "lucide-react";
 import { SmartImage } from "@/components/ui/SmartImage";
-import {
-  IMAGE_FILE_INPUT_ACCEPT,
-  IMAGE_UPLOAD_FORMAT_DESCRIPTION,
-  MAX_SOURCE_IMAGE_BYTES,
-  formatImageByteLimit
-} from "@/config/image-upload";
+import { IMAGE_FILE_INPUT_ACCEPT } from "@/config/image-upload";
 import {
   ImageNormalizationError,
   isPotentialImageFile,
@@ -22,7 +17,6 @@ interface UploadDropzoneProps {
   title?: string;
   subtitle?: string;
   compact?: boolean;
-  showFormatDetails?: boolean;
   className?: string;
   onImageSelected: (imageUrl: string, file: File) => void;
 }
@@ -32,7 +26,6 @@ export function UploadDropzone({
   title = "上传图片",
   subtitle = "点击选择图片，系统会在生成前完成格式兼容处理",
   compact = false,
-  showFormatDetails = true,
   className,
   onImageSelected
 }: UploadDropzoneProps) {
@@ -128,14 +121,6 @@ export function UploadDropzone({
           </div>
           <p className="text-lg font-semibold text-ink">{title}</p>
           {subtitle ? <p className="mt-2 max-w-sm text-sm leading-6 text-muted">{subtitle}</p> : null}
-          {showFormatDetails ? (
-            <p className="mt-2 max-w-md text-xs leading-5 text-neutral-500">
-              {IMAGE_UPLOAD_FORMAT_DESCRIPTION}，最大 {formatImageByteLimit(MAX_SOURCE_IMAGE_BYTES)}
-            </p>
-          ) : null}
-          <div className="mt-5 hidden rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-500 sm:block">
-            拖到这里即可开始
-          </div>
         </div>
       )}
 

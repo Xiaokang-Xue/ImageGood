@@ -29,8 +29,10 @@ import type {
   DeleteImageTaskResponse,
   DeleteImageTasksResponse,
   ImageTaskDetailResponse,
+  ImageTaskListOptions,
   ImageTaskListResponse,
-  ImageTaskRecord
+  ImageTaskRecord,
+  UpdateImageTaskResponse
 } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
@@ -629,16 +631,27 @@ export const apiClient = {
     });
   },
 
-  listTasks(options?: { page?: number; limit?: number }) {
+  listTasks(options?: ImageTaskListOptions) {
     const params = new URLSearchParams();
     if (options?.page) params.set("page", String(options.page));
     if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.type && options.type !== "all") params.set("type", options.type);
+    if (options?.status && options.status !== "all") params.set("status", options.status);
+    if (options?.timeRange && options.timeRange !== "all") params.set("timeRange", options.timeRange);
+    if (options?.favorite) params.set("favorite", "1");
     const query = params.toString();
     return requestJson<ImageTaskListResponse>(`/api/tasks${query ? `?${query}` : ""}`);
   },
 
   getTask(id: string) {
     return requestJson<ImageTaskDetailResponse>(`/api/tasks/${id}`);
+  },
+
+  updateTask(id: string, payload: { title?: string | null; isFavorite?: boolean }) {
+    return requestJson<UpdateImageTaskResponse>(`/api/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
   },
 
   deleteTask(id: string) {

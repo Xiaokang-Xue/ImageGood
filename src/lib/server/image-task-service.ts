@@ -1,6 +1,12 @@
 import { randomUUID } from "crypto";
 import { BillingError } from "@/lib/billing";
-import { getDbSnapshot, getImageTaskById, getUserImageTaskPage, withDb } from "@/lib/db";
+import {
+  getDbSnapshot,
+  getImageTaskById,
+  getUserImageTaskPage,
+  withDb,
+  type UserImageTaskPageOptions
+} from "@/lib/db";
 import { queryCodexTaskResult, recoverCodexTaskResult } from "@/lib/server/codex-image-provider";
 import { isCosStorageEnabled } from "@/lib/server/cos-storage";
 import {
@@ -884,8 +890,8 @@ export async function runObjectRemoveTask(input: {
   });
 }
 
-export async function listUserTasks(userId: string, options?: { page?: number; limit?: number }) {
-  return getUserImageTaskPage(userId, options?.page, options?.limit);
+export async function listUserTasks(userId: string, options?: UserImageTaskPageOptions) {
+  return getUserImageTaskPage(userId, options);
 }
 
 export async function getUserTask(userId: string, taskId: string) {
@@ -913,6 +919,20 @@ export async function getUserTask(userId: string, taskId: string) {
 
   const latestTask = await getImageTaskById(taskId);
   return latestTask?.userId === userId ? latestTask : null;
+}
+
+export async function updateUserTaskMetadata(
+  userId: string,
+  taskId: string,
+  input: { title?: string | null; isFavorite?: boolean }
+) {
+  return withDb((db) => {
+    const task = db.imageTasks.find((item) => item.userId === userId && item.id === taskId);
+    if (!task) return null;
+    if (input.title !== undefined) task.title = input.title;
+    if (input.isFavorite !== undefined) task.isFavorite = input.isFavorite;
+    return task;
+  });
 }
 
 function isDeletableTask(task: ImageTaskRecord) {

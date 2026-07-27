@@ -22,6 +22,7 @@ import {
   isUnauthorizedError
 } from "@/lib/api-client";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
+import { HISTORY_TEXT_PROMPT_KEY } from "@/lib/history-task";
 import { cn } from "@/lib/utils";
 import type { TextToImageStyle } from "@/types/image";
 
@@ -55,6 +56,17 @@ export function TextToImageStudio() {
 
   useEffect(() => {
     return () => pollingController.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const reusedPrompt = window.sessionStorage.getItem(HISTORY_TEXT_PROMPT_KEY);
+      if (!reusedPrompt) return;
+      window.sessionStorage.removeItem(HISTORY_TEXT_PROMPT_KEY);
+      setPrompt((current) => current || reusedPrompt);
+    } catch {
+      // Session storage may be unavailable in strict privacy modes.
+    }
   }, []);
 
   const handleGenerate = async () => {

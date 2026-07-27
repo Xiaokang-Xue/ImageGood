@@ -9,6 +9,7 @@ export type ImageTaskType =
   | "image_enhance"
   | "object_remove";
 export type ImageTaskStatus = "pending" | "processing" | "succeeded" | "failed";
+export type ImageTaskTimeRange = "all" | "today" | "7d" | "30d";
 export type ImageTaskTool =
   | EditTool
   | "product"
@@ -23,6 +24,8 @@ export interface ImageTaskRecord {
   userId: string;
   type: ImageTaskType;
   prompt: string;
+  title?: string | null;
+  isFavorite?: boolean;
   tool?: ImageTaskTool | null;
   status: ImageTaskStatus;
   provider?: ImageProvider | null;
@@ -47,6 +50,20 @@ export interface ImageTaskListResponse {
     succeeded: number;
     latestCreatedAt: string | null;
   };
+}
+
+export interface ImageTaskListOptions {
+  page?: number;
+  limit?: number;
+  type?: ImageTaskType | "all";
+  status?: ImageTaskStatus | "all";
+  timeRange?: ImageTaskTimeRange;
+  favorite?: boolean;
+}
+
+export interface UpdateImageTaskResponse {
+  ok: boolean;
+  task: ImageTaskRecord;
 }
 
 export interface ImageTaskDetailResponse {

@@ -3,6 +3,8 @@
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { InputAssist } from "@/components/ui/InputAssist";
+import { appendPromptFragment, editPromptSuggestions } from "@/lib/input-assist";
 
 interface PromptPanelProps {
   prompt: string;
@@ -34,6 +36,12 @@ export function PromptPanel({
           className="mt-2 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-sm leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
         />
       </label>
+
+      <InputAssist
+        title="常用约束"
+        items={editPromptSuggestions}
+        onSelect={(item) => onPromptChange(appendPromptFragment(prompt, item.value))}
+      />
 
       <Button className="mt-6 hidden w-full md:inline-flex" size="lg" loading={loading} onClick={onGenerate}>
         {loading ? "生成中..." : "生成结果"}

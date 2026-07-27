@@ -4,7 +4,12 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { AnalyticsDailySummaryRecord, AnalyticsEventRecord } from "@/types/analytics";
 import type { AdminOrderRecord, CreditTransactionRecord, OrderRecord, OrderStatus, PaymentProvider } from "@/types/billing";
-import type { ImageTaskRecord } from "@/types/task";
+import type {
+  ImageTaskRecord,
+  ImageTaskStatus,
+  ImageTaskTimeRange,
+  ImageTaskType
+} from "@/types/task";
 
 const ANALYTICS_EVENT_TYPES = new Set(["page_view", "purchase_click", "acquisition_channel"]);
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -364,6 +369,8 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
     imageTasks: Array.isArray(data.imageTasks)
       ? data.imageTasks.map((task) => ({
           ...task,
+          title: typeof task.title === "string" ? task.title : null,
+          isFavorite: Boolean(task.isFavorite),
           resultImages: Array.isArray(task.resultImages) ? task.resultImages : [],
           creditCharged: Boolean(task.creditCharged)
         }))
@@ -844,15 +851,55 @@ export interface UserImageTaskPage {
   };
 }
 
-export async function getUserImageTaskPage(userId: string, page = 1, limit = 12): Promise<UserImageTaskPage> {
+export interface UserImageTaskPageOptions {
+  page?: number;
+  limit?: number;
+  type?: ImageTaskType | "all";
+  status?: ImageTaskStatus | "all";
+  timeRange?: ImageTaskTimeRange;
+  favorite?: boolean;
+}
+
+function getTaskRangeStart(range: ImageTaskTimeRange | undefined) {
+  if (!range || range === "all") return null;
+  const now = new Date();
+  if (range === "today") {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric"
+    }).formatToParts(now);
+    const getPart = (type: "year" | "month" | "day") =>
+      Number(parts.find((part) => part.type === type)?.value || "0");
+    return new Date(Date.UTC(getPart("year"), getPart("month") - 1, getPart("day")) - 8 * 60 * 60 * 1000).toISOString();
+  }
+  const days = range === "7d" ? 7 : 30;
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export async function getUserImageTaskPage(
+  userId: string,
+  options: UserImageTaskPageOptions = {}
+): Promise<UserImageTaskPage> {
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 12;
   const safePage = Math.max(1, Math.trunc(page));
   const safeLimit = Math.min(20, Math.max(1, Math.trunc(limit)));
   const offset = (safePage - 1) * safeLimit;
+  const rangeStart = getTaskRangeStart(options.timeRange);
 
   if (!isMysqlDatabaseUrl()) {
     const db = await readFileDb();
     const allTasks = db.imageTasks
-      .filter((task) => task.userId === userId)
+      .filter(
+        (task) =>
+          task.userId === userId &&
+          (!options.type || options.type === "all" || task.type === options.type) &&
+          (!options.status || options.status === "all" || task.status === options.status) &&
+          (!rangeStart || task.createdAt >= rangeStart) &&
+          (!options.favorite || task.isFavorite === true)
+      )
       .sort((a, b) => {
         const createdDifference = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         return createdDifference || b.id.localeCompare(a.id);
@@ -876,15 +923,35 @@ export async function getUserImageTaskPage(userId: string, page = 1, limit = 12)
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const whereClauses = [
+    "collection = 'imageTasks'",
+    "JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?"
+  ];
+  const whereValues: Array<string | number> = [userId];
+  if (options.type && options.type !== "all") {
+    whereClauses.push("JSON_UNQUOTE(JSON_EXTRACT(record, '$.type')) = ?");
+    whereValues.push(options.type);
+  }
+  if (options.status && options.status !== "all") {
+    whereClauses.push("JSON_UNQUOTE(JSON_EXTRACT(record, '$.status')) = ?");
+    whereValues.push(options.status);
+  }
+  if (rangeStart) {
+    whereClauses.push("JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt')) >= ?");
+    whereValues.push(rangeStart);
+  }
+  if (options.favorite) {
+    whereClauses.push("COALESCE(JSON_UNQUOTE(JSON_EXTRACT(record, '$.isFavorite')), 'false') = 'true'");
+  }
+  const whereSql = whereClauses.join("\n         AND ");
   const [taskResult, countResult] = await Promise.all([
     pool.query(
       `SELECT record
        FROM imagegood_records
-       WHERE collection = 'imageTasks'
-         AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?
+       WHERE ${whereSql}
        ORDER BY JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt')) DESC, id DESC
        LIMIT ? OFFSET ?`,
-      [userId, safeLimit, offset]
+      [...whereValues, safeLimit, offset]
     ),
     pool.query(
       `SELECT
@@ -897,9 +964,8 @@ export async function getUserImageTaskPage(userId: string, page = 1, limit = 12)
          ) AS succeeded,
          MAX(JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt'))) AS latest_created_at
        FROM imagegood_records
-       WHERE collection = 'imageTasks'
-         AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?`,
-      [userId]
+       WHERE ${whereSql}`,
+      whereValues
     )
   ]);
 

@@ -280,8 +280,8 @@ export function RemoveBackgroundStudio() {
 
           <UploadDropzone
             value={imageUrl}
-            title="上传图片"
-            subtitle="支持手机照片和常见图片格式，系统会自动处理不兼容格式"
+            title="上传原图"
+            subtitle=""
             className="min-h-[420px]"
             onImageSelected={(previewUrl, file) => {
               if (imageUrl.startsWith("blob:")) {

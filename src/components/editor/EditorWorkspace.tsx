@@ -296,7 +296,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
             value={inputPreview}
             compact
             title="上传原图"
-            subtitle="拖拽或点击替换当前图片；继续修改时会使用生成结果作为输入"
+            subtitle=""
             className="min-h-[360px]"
             onImageSelected={(imageUrl, file) => setUploadedImage(imageUrl, file)}
           />

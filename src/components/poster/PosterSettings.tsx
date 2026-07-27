@@ -3,9 +3,11 @@
 import { WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { InputAssist } from "@/components/ui/InputAssist";
+import { posterCopyPresets } from "@/lib/input-assist";
 import { posterStyleLabels } from "@/lib/studio-content";
 import { cn } from "@/lib/utils";
-import type { PosterRatio, PosterStyle } from "@/types/image";
+import type { PosterRatio, PosterStyle, PosterUsage } from "@/types/image";
 
 const styles: PosterStyle[] = ["clean", "premium", "cute", "tech", "handdrawn"];
 const ratios: PosterRatio[] = ["3:4", "1:1", "16:9", "9:16", "4:5"];
@@ -19,12 +21,14 @@ const palettes = [
 interface PosterSettingsProps {
   title: string;
   subtitle: string;
+  usage: PosterUsage;
   style: PosterStyle;
   ratio: PosterRatio;
   paletteIndex: number;
   loading?: boolean;
   onTitleChange: (value: string) => void;
   onSubtitleChange: (value: string) => void;
+  onApplyCopyPreset: (title: string, subtitle: string) => void;
   onStyleChange: (value: PosterStyle) => void;
   onRatioChange: (value: PosterRatio) => void;
   onPaletteChange: (value: number) => void;
@@ -36,17 +40,26 @@ export { palettes };
 export function PosterSettings({
   title,
   subtitle,
+  usage,
   style,
   ratio,
   paletteIndex,
   loading,
   onTitleChange,
   onSubtitleChange,
+  onApplyCopyPreset,
   onStyleChange,
   onRatioChange,
   onPaletteChange,
   onGenerate
 }: PosterSettingsProps) {
+  const copyPresets = posterCopyPresets[usage];
+  const copySuggestions = copyPresets.map((preset) => ({
+    label: preset.label,
+    value: preset.title,
+    description: preset.subtitle
+  }));
+
   return (
     <Card className="p-5">
       <div className="mb-5">
@@ -74,6 +87,16 @@ export function PosterSettings({
           className="mt-2 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
         />
       </label>
+
+      <InputAssist
+        title="常用内容"
+        items={copySuggestions}
+        mode="cards"
+        onSelect={(item) => {
+          const preset = copyPresets.find((candidate) => candidate.title === item.value);
+          if (preset) onApplyCopyPreset(preset.title, preset.subtitle);
+        }}
+      />
 
       <div className="mt-5">
         <p className="text-sm font-semibold text-slate-700">风格选择</p>

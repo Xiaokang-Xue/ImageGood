@@ -2,33 +2,72 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { Download, ExternalLink, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  Heart,
+  Pencil,
+  RotateCcw,
+  SlidersHorizontal,
+  Trash2
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
-import { apiClient, downloadImage, getImageErrorMessage } from "@/lib/api-client";
-import type { ImageTaskRecord } from "@/types/task";
+import {
+  apiClient,
+  downloadImage,
+  getImageErrorMessage,
+  isUnauthorizedError
+} from "@/lib/api-client";
+import {
+  getHistoryTaskEditorTool,
+  getHistoryTaskResult,
+  getHistoryTaskTitle,
+  HISTORY_TEXT_PROMPT_KEY,
+  historyTaskStatusLabels,
+  historyTaskTypeLabels
+} from "@/lib/history-task";
+import { useStudioStore } from "@/lib/studio-store";
+import { cn } from "@/lib/utils";
+import type {
+  ImageTaskRecord,
+  ImageTaskStatus,
+  ImageTaskTimeRange,
+  ImageTaskType
+} from "@/types/task";
 
-const typeLabels: Record<ImageTaskRecord["type"], string> = {
-  edit: "智能修图",
-  product: "商品图生成",
-  poster: "封面海报生成",
-  text_to_image: "文生图",
-  remove_background: "智能抠图",
-  image_enhance: "图片增强",
-  object_remove: "去杂物"
+type TaskFilters = {
+  type: ImageTaskType | "all";
+  status: ImageTaskStatus | "all";
+  timeRange: ImageTaskTimeRange;
+  favorite: boolean;
 };
 
-const statusLabels: Record<ImageTaskRecord["status"], string> = {
-  pending: "等待处理",
-  processing: "处理中",
-  succeeded: "已完成",
-  failed: "生成失败"
+const initialFilters: TaskFilters = {
+  type: "all",
+  status: "all",
+  timeRange: "all",
+  favorite: false
 };
+
+const toolLinks = [
+  { label: "AI 修图", href: "/editor" },
+  { label: "文生图", href: "/text-to-image" },
+  { label: "智能抠图", href: "/remove-background" },
+  { label: "图片增强", href: "/image-enhancer" },
+  { label: "去杂物", href: "/object-remover" },
+  { label: "商品图", href: "/product" },
+  { label: "封面海报", href: "/poster" }
+];
 
 export default function HistoryPage() {
   const router = useRouter();
+  const setUploadedImage = useStudioStore((state) => state.setUploadedImage);
+  const setPrompt = useStudioStore((state) => state.setPrompt);
+  const setSelectedTool = useStudioStore((state) => state.setSelectedTool);
   const [tasks, setTasks] = useState<ImageTaskRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -36,49 +75,90 @@ export default function HistoryPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [filters, setFilters] = useState<TaskFilters>(initialFilters);
+  const [renamingId, setRenamingId] = useState("");
+  const [renameValue, setRenameValue] = useState("");
+  const [savingId, setSavingId] = useState("");
+  const requestSequence = useRef(0);
 
   useEffect(() => {
+    const sequence = ++requestSequence.current;
+    setLoading(true);
+    setLoadingMore(false);
+    setError("");
+    setMessage("");
     apiClient
-      .listTasks({ page: 1, limit: 12 })
+      .listTasks({ page: 1, limit: 12, ...filters })
       .then((response) => {
+        if (sequence !== requestSequence.current) return;
         setTasks(response.tasks);
         setPage(response.page);
+        setTotal(response.total);
         setHasMore(response.hasMore);
-        setSelectedIds((ids) => ids.filter((id) => response.tasks.some((task) => task.id === id)));
+        setSelectedIds([]);
       })
-      .catch(() => router.push("/login?redirect=/history"))
-      .finally(() => setLoading(false));
-  }, [router]);
+      .catch((requestError) => {
+        if (sequence !== requestSequence.current) return;
+        if (isUnauthorizedError(requestError)) {
+          router.push("/login?redirect=/history");
+          return;
+        }
+        setError(getImageErrorMessage(requestError));
+      })
+      .finally(() => {
+        if (sequence === requestSequence.current) setLoading(false);
+      });
+  }, [filters, router]);
 
-  const deletableTasks = useMemo(() => tasks.filter((task) => task.status === "succeeded" || task.status === "failed"), [tasks]);
+  const deletableTasks = useMemo(
+    () => tasks.filter((task) => task.status === "succeeded" || task.status === "failed"),
+    [tasks]
+  );
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const allDeletableSelected = deletableTasks.length > 0 && deletableTasks.every((task) => selectedSet.has(task.id));
+  const allDeletableSelected =
+    deletableTasks.length > 0 && deletableTasks.every((task) => selectedSet.has(task.id));
+  const hasActiveFilters =
+    filters.type !== "all" ||
+    filters.status !== "all" ||
+    filters.timeRange !== "all" ||
+    filters.favorite;
 
   const loadMore = async () => {
     if (!hasMore || loadingMore) return;
+    const sequence = requestSequence.current;
     setLoadingMore(true);
     setError("");
     try {
-      const response = await apiClient.listTasks({ page: page + 1, limit: 12 });
+      const response = await apiClient.listTasks({ page: page + 1, limit: 12, ...filters });
+      if (sequence !== requestSequence.current) return;
       setTasks((items) => {
         const existingIds = new Set(items.map((task) => task.id));
         return [...items, ...response.tasks.filter((task) => !existingIds.has(task.id))];
       });
       setPage(response.page);
+      setTotal(response.total);
       setHasMore(response.hasMore);
     } catch (requestError) {
+      if (sequence !== requestSequence.current) return;
       setError(getImageErrorMessage(requestError));
     } finally {
-      setLoadingMore(false);
+      if (sequence === requestSequence.current) setLoadingMore(false);
     }
+  };
+
+  const updateFilter = <Key extends keyof TaskFilters>(key: Key, value: TaskFilters[Key]) => {
+    setFilters((current) => ({ ...current, [key]: value }));
   };
 
   const toggleSelected = (taskId: string) => {
     setMessage("");
     setError("");
-    setSelectedIds((ids) => (ids.includes(taskId) ? ids.filter((id) => id !== taskId) : [...ids, taskId]));
+    setSelectedIds((ids) =>
+      ids.includes(taskId) ? ids.filter((id) => id !== taskId) : [...ids, taskId]
+    );
   };
 
   const toggleSelectAll = () => {
@@ -91,6 +171,7 @@ export default function HistoryPage() {
     const deletedSet = new Set(ids);
     setTasks((items) => items.filter((task) => !deletedSet.has(task.id)));
     setSelectedIds((selected) => selected.filter((id) => !deletedSet.has(id)));
+    setTotal((value) => Math.max(0, value - ids.length));
   };
 
   const handleDeleteOne = async (task: ImageTaskRecord) => {
@@ -99,7 +180,6 @@ export default function HistoryPage() {
       return;
     }
     if (!window.confirm("确定删除这条历史记录吗？删除后列表中将不再显示。")) return;
-
     setDeleting(true);
     setMessage("");
     setError("");
@@ -117,18 +197,17 @@ export default function HistoryPage() {
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     if (!window.confirm(`确定删除选中的 ${selectedIds.length} 条历史记录吗？`)) return;
-
     setDeleting(true);
     setMessage("");
     setError("");
     try {
       const response = await apiClient.deleteTasks(selectedIds);
       removeDeletedTasks(response.deletedIds);
-      if (response.skippedIds.length > 0) {
-        setMessage(`已删除 ${response.deletedIds.length} 条，${response.skippedIds.length} 条生成中的记录未删除。`);
-      } else {
-        setMessage(`已删除 ${response.deletedIds.length} 条历史记录。`);
-      }
+      setMessage(
+        response.skippedIds.length > 0
+          ? `已删除 ${response.deletedIds.length} 条，${response.skippedIds.length} 条生成中的记录未删除。`
+          : `已删除 ${response.deletedIds.length} 条历史记录。`
+      );
     } catch (requestError) {
       setError(getImageErrorMessage(requestError));
     } finally {
@@ -136,16 +215,91 @@ export default function HistoryPage() {
     }
   };
 
+  const handleFavorite = async (task: ImageTaskRecord) => {
+    const nextFavorite = !task.isFavorite;
+    setSavingId(task.id);
+    setError("");
+    try {
+      const response = await apiClient.updateTask(task.id, { isFavorite: nextFavorite });
+      setTasks((items) =>
+        filters.favorite && !response.task.isFavorite
+          ? items.filter((item) => item.id !== task.id)
+          : items.map((item) => (item.id === task.id ? response.task : item))
+      );
+      if (filters.favorite && !response.task.isFavorite) setTotal((value) => Math.max(0, value - 1));
+      setMessage(response.task.isFavorite ? "已收藏该任务" : "已取消收藏");
+    } catch (requestError) {
+      setError(getImageErrorMessage(requestError));
+    } finally {
+      setSavingId("");
+    }
+  };
+
+  const startRename = (task: ImageTaskRecord) => {
+    setRenamingId(task.id);
+    setRenameValue(getHistoryTaskTitle(task));
+    setMessage("");
+    setError("");
+  };
+
+  const saveRename = async (task: ImageTaskRecord) => {
+    const title = renameValue.trim();
+    if (!title) {
+      setError("请输入任务名称");
+      return;
+    }
+    setSavingId(task.id);
+    setError("");
+    try {
+      const response = await apiClient.updateTask(task.id, { title });
+      setTasks((items) => items.map((item) => (item.id === task.id ? response.task : item)));
+      setRenamingId("");
+      setMessage("任务名称已保存");
+    } catch (requestError) {
+      setError(getImageErrorMessage(requestError));
+    } finally {
+      setSavingId("");
+    }
+  };
+
+  const reusePrompt = async (task: ImageTaskRecord) => {
+    try {
+      await navigator.clipboard.writeText(task.prompt);
+      setMessage("提示词已复制，可粘贴到任意图片工具继续使用");
+    } catch {
+      setError("浏览器未允许复制，请在任务详情中手动复制提示词");
+    }
+  };
+
+  const openEditorWithTask = (task: ImageTaskRecord, mode: "continue" | "rerun") => {
+    if (mode === "rerun" && task.type === "text_to_image") {
+      window.sessionStorage.setItem(HISTORY_TEXT_PROMPT_KEY, task.prompt);
+      router.push("/text-to-image");
+      return;
+    }
+    const resultImage = getHistoryTaskResult(task);
+    const sourceImage = mode === "continue" ? resultImage || task.inputImageUrl : task.inputImageUrl || resultImage;
+    if (!sourceImage) {
+      setError("该任务没有可复用的输入图片");
+      return;
+    }
+    setUploadedImage(sourceImage, null);
+    setPrompt(task.prompt);
+    setSelectedTool(getHistoryTaskEditorTool(task));
+    router.push("/editor");
+  };
+
   return (
     <main className="mx-auto max-w-[1440px] px-5 py-10 lg:px-8">
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <p className="text-sm font-semibold text-studio-600">历史记录</p>
-          <h1 className="mt-2 text-3xl font-bold text-ink">查看已生成的图片任务</h1>
+          <h1 className="mt-2 text-3xl font-bold text-ink">管理你的图片任务</h1>
+          <p className="mt-2 text-sm text-muted">共 {total} 条记录，按创建时间从近到远排列。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {tasks.length > 0 ? (
-            <Button variant="outline" onClick={toggleSelectAll} disabled={deletableTasks.length === 0 || deleting}>
+            <Button variant="outline" onClick={toggleSelectAll} disabled={!deletableTasks.length || deleting}>
               {allDeletableSelected ? "取消全选" : "选择全部"}
             </Button>
           ) : null}
@@ -155,10 +309,80 @@ export default function HistoryPage() {
               删除选中 {selectedIds.length}
             </Button>
           ) : null}
-          <Link href="/editor">
-            <Button>继续生成图片</Button>
-          </Link>
         </div>
+      </div>
+
+      <Card className="mb-6 p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <SlidersHorizontal className="h-4 w-4" />
+          筛选任务
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.1fr_1fr_1fr_auto]">
+          <FilterSelect
+            label="任务类型"
+            value={filters.type}
+            onChange={(value) => updateFilter("type", value as TaskFilters["type"])}
+            options={[
+              ["all", "全部类型"],
+              ...Object.entries(historyTaskTypeLabels)
+            ]}
+          />
+          <FilterSelect
+            label="生成状态"
+            value={filters.status}
+            onChange={(value) => updateFilter("status", value as TaskFilters["status"])}
+            options={[
+              ["all", "全部状态"],
+              ...Object.entries(historyTaskStatusLabels)
+            ]}
+          />
+          <FilterSelect
+            label="创建时间"
+            value={filters.timeRange}
+            onChange={(value) => updateFilter("timeRange", value as ImageTaskTimeRange)}
+            options={[
+              ["all", "全部时间"],
+              ["today", "今天"],
+              ["7d", "近 7 天"],
+              ["30d", "近 30 天"]
+            ]}
+          />
+          <button
+            type="button"
+            className={cn(
+              "mt-6 flex h-11 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition",
+              filters.favorite
+                ? "border-neutral-900 bg-neutral-950 text-white"
+                : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-500"
+            )}
+            onClick={() => updateFilter("favorite", !filters.favorite)}
+          >
+            <Heart className={cn("h-4 w-4", filters.favorite && "fill-current")} />
+            仅看收藏
+          </button>
+        </div>
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            className="mt-3 text-xs font-semibold text-neutral-500 underline-offset-4 hover:text-neutral-900 hover:underline"
+            onClick={() => setFilters(initialFilters)}
+          >
+            清除筛选
+          </button>
+        ) : null}
+      </Card>
+
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+        <span className="shrink-0 py-2 text-xs font-semibold text-muted">进入其他工具</span>
+        {toolLinks.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="shrink-0 rounded-full border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-neutral-500 hover:bg-neutral-50"
+          >
+            {item.label}
+          </Link>
+        ))}
       </div>
 
       {message ? (
@@ -166,7 +390,6 @@ export default function HistoryPage() {
           {message}
         </div>
       ) : null}
-
       {error ? (
         <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
           {error}
@@ -176,94 +399,167 @@ export default function HistoryPage() {
       {loading ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map((item) => (
-            <Card key={item} className="h-[360px] animate-pulse p-5" />
+            <Card key={item} className="h-[440px] animate-pulse p-5" />
           ))}
         </div>
       ) : tasks.length === 0 ? (
         <Card className="p-8 text-center">
-          <h2 className="text-xl font-bold text-ink">还没有生成记录</h2>
-          <p className="mt-2 text-sm text-muted">完成一次图片生成后，结果会自动保存到这里。</p>
-          <Link href="/editor" className="mt-5 inline-block">
-            <Button>开始生成</Button>
-          </Link>
+          <h2 className="text-xl font-bold text-ink">{hasActiveFilters ? "没有符合条件的任务" : "还没有生成记录"}</h2>
+          <p className="mt-2 text-sm text-muted">
+            {hasActiveFilters ? "调整筛选条件后再试。" : "完成一次图片生成后，结果会自动保存到这里。"}
+          </p>
+          {hasActiveFilters ? (
+            <Button className="mt-5" variant="outline" onClick={() => setFilters(initialFilters)}>
+              清除筛选
+            </Button>
+          ) : (
+            <Link href="/editor" className="mt-5 inline-block">
+              <Button>开始生成</Button>
+            </Link>
+          )}
         </Card>
       ) : (
         <>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {tasks.map((task, index) => {
-            const resultImage = task.resultImages?.[0] || task.resultImageUrl || "";
-            const image = resultImage || task.inputImageUrl || "";
-            return (
-              <Card key={task.id} className="overflow-hidden">
-                <div className="flex items-center justify-between border-b border-line bg-white px-4 py-3">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-studio-600"
-                      checked={selectedSet.has(task.id)}
-                      disabled={task.status !== "succeeded" && task.status !== "failed"}
-                      onChange={() => toggleSelected(task.id)}
+              const resultImage = getHistoryTaskResult(task);
+              const image = resultImage || task.inputImageUrl || "";
+              const canDelete = task.status === "succeeded" || task.status === "failed";
+              return (
+                <Card key={task.id} className="overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-line bg-white px-4 py-3">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-studio-600"
+                        checked={selectedSet.has(task.id)}
+                        disabled={!canDelete}
+                        onChange={() => toggleSelected(task.id)}
+                      />
+                      选择
+                    </label>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md p-2 transition hover:bg-neutral-100",
+                        task.isFavorite ? "text-rose-600" : "text-neutral-400 hover:text-neutral-900"
+                      )}
+                      aria-label={task.isFavorite ? "取消收藏" : "收藏任务"}
+                      disabled={savingId === task.id}
+                      onClick={() => void handleFavorite(task)}
+                    >
+                      <Heart className={cn("h-5 w-5", task.isFavorite && "fill-current")} />
+                    </button>
+                  </div>
+                  {image ? (
+                    <SmartImage
+                      src={image}
+                      alt={getHistoryTaskTitle(task)}
+                      priority={index < 3}
+                      previewWidth={640}
+                      sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                      className="h-56 w-full rounded-none border-0"
                     />
-                    选择
-                  </label>
-                  {task.status !== "succeeded" && task.status !== "failed" ? (
-                    <span className="text-xs font-semibold text-muted">处理中不可删除</span>
-                  ) : null}
-                </div>
-                {image ? (
-                  <SmartImage
-                    src={image}
-                    alt={typeLabels[task.type]}
-                    priority={index < 3}
-                    previewWidth={640}
-                    sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
-                    className="h-56 w-full rounded-none border-0"
-                  />
-                ) : (
-                  <div className="flex h-56 items-center justify-center bg-slate-100 text-sm font-semibold text-muted">
-                    {statusLabels[task.status]}
-                  </div>
-                )}
-                <div className="p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-studio-600">{typeLabels[task.type]}</p>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                      {statusLabels[task.status]}
-                    </span>
-                  </div>
-                  <p className="mt-3 line-clamp-2 min-h-[48px] text-sm leading-6 text-slate-600">{task.prompt}</p>
-                  {task.errorMessage ? <p className="mt-3 text-sm font-semibold text-rose-600">{task.errorMessage}</p> : null}
-                  <p className="mt-3 text-xs text-muted">{new Date(task.createdAt).toLocaleString("zh-CN")}</p>
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <Link href={`/history/${task.id}`}>
-                      <Button variant="outline" size="sm" className="w-full">
-                        <ExternalLink className="h-4 w-4" />
-                        查看结果
+                  ) : (
+                    <div className="flex h-56 items-center justify-center bg-slate-100 text-sm font-semibold text-muted">
+                      {historyTaskStatusLabels[task.status]}
+                    </div>
+                  )}
+                  <div className="p-5">
+                    {renamingId === task.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          value={renameValue}
+                          maxLength={60}
+                          autoFocus
+                          className="h-10 min-w-0 flex-1 rounded-lg border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-900"
+                          onChange={(event) => setRenameValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void saveRename(task);
+                            if (event.key === "Escape") setRenamingId("");
+                          }}
+                        />
+                        <Button size="sm" loading={savingId === task.id} onClick={() => void saveRename(task)}>
+                          保存
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-base font-bold text-ink">{getHistoryTaskTitle(task)}</h2>
+                          <p className="mt-1 text-xs font-semibold text-studio-600">{historyTaskTypeLabels[task.type]}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-md p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
+                          aria-label="重命名任务"
+                          onClick={() => startRename(task)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                        {historyTaskStatusLabels[task.status]}
+                      </span>
+                      <time className="text-xs text-muted">
+                        {new Date(task.createdAt).toLocaleString("zh-CN", { hour12: false })}
+                      </time>
+                    </div>
+                    <p className="mt-3 line-clamp-2 min-h-[48px] text-sm leading-6 text-slate-600">{task.prompt}</p>
+                    {task.errorMessage ? (
+                      <p className="mt-3 line-clamp-2 text-sm font-semibold text-rose-600">{task.errorMessage}</p>
+                    ) : null}
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <Link href={`/history/${task.id}`}>
+                        <Button variant="outline" size="sm" className="w-full">
+                          <ExternalLink className="h-4 w-4" />
+                          查看
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="dark"
+                        size="sm"
+                        disabled={!resultImage}
+                        onClick={() => openEditorWithTask(task, "continue")}
+                      >
+                        继续编辑
                       </Button>
-                    </Link>
-                    <Button
-                      variant="dark"
-                      size="sm"
-                      disabled={!resultImage}
-                      onClick={() => resultImage && downloadImage(resultImage)}
-                    >
-                      <Download className="h-4 w-4" />
-                      下载图片
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={deleting || (task.status !== "succeeded" && task.status !== "failed")}
-                      onClick={() => handleDeleteOne(task)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      删除
-                    </Button>
+                      <Button variant="outline" size="sm" onClick={() => openEditorWithTask(task, "rerun")}>
+                        <RotateCcw className="h-4 w-4" />
+                        重新生成
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => void reusePrompt(task)}>
+                        <Copy className="h-4 w-4" />
+                        复用提示词
+                      </Button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!resultImage}
+                        onClick={() => resultImage && downloadImage(resultImage)}
+                      >
+                        <Download className="h-4 w-4" />
+                        下载
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={deleting || !canDelete}
+                        onClick={() => void handleDeleteOne(task)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        删除
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            );
-          })}
+                </Card>
+              );
+            })}
           </div>
           {hasMore ? (
             <div className="mt-8 flex justify-center">
@@ -275,5 +571,34 @@ export default function HistoryPage() {
         </>
       )}
     </main>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-neutral-500">{label}</span>
+      <select
+        value={value}
+        className="mt-1.5 h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm font-semibold text-neutral-700 outline-none transition focus:border-neutral-900"
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -9,6 +9,7 @@ import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel, type GenerationLoadingTaskType } from "@/components/ui/GenerationLoadingPanel";
+import { InputAssist } from "@/components/ui/InputAssist";
 import { MobileToolActionBar } from "@/components/ui/MobileToolActionBar";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
@@ -23,6 +24,7 @@ import {
   isUnauthorizedError
 } from "@/lib/api-client";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
+import { appendPromptFragment, type InputSuggestion } from "@/lib/input-assist";
 
 interface SingleImageEditToolStudioProps {
   endpoint: string;
@@ -30,8 +32,6 @@ interface SingleImageEditToolStudioProps {
   eyebrow: string;
   title: string;
   subtitle: string;
-  uploadTitle: string;
-  uploadSubtitle: string;
   buttonLabel: string;
   processingTitle: string;
   emptyResultTitle: string;
@@ -43,6 +43,7 @@ interface SingleImageEditToolStudioProps {
   promptLabel?: string;
   promptPlaceholder?: string;
   promptRequired?: boolean;
+  promptSuggestions?: InputSuggestion[];
   relatedTools?: Array<{ label: string; href: string }>;
 }
 
@@ -52,8 +53,6 @@ export function SingleImageEditToolStudio({
   eyebrow,
   title,
   subtitle,
-  uploadTitle,
-  uploadSubtitle,
   buttonLabel,
   emptyResultTitle,
   emptyResultDescription,
@@ -64,6 +63,7 @@ export function SingleImageEditToolStudio({
   promptLabel,
   promptPlaceholder,
   promptRequired = false,
+  promptSuggestions = [],
   relatedTools = []
 }: SingleImageEditToolStudioProps) {
   const router = useRouter();
@@ -210,15 +210,15 @@ export function SingleImageEditToolStudio({
               <Sparkles className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-xl font-bold text-ink">{uploadTitle}</h2>
+              <h2 className="text-xl font-bold text-ink">上传原图</h2>
               <p className="mt-1 text-sm text-muted">上传图片并设置本次处理需求。</p>
             </div>
           </div>
 
           <UploadDropzone
             value={imageUrl}
-            title={uploadTitle}
-            subtitle={uploadSubtitle}
+            title="上传原图"
+            subtitle=""
             className="min-h-[360px]"
             onImageSelected={(previewUrl, file) => {
               if (imageUrl.startsWith("blob:")) {
@@ -244,6 +244,13 @@ export function SingleImageEditToolStudio({
                 placeholder={promptPlaceholder}
                 className="mt-2 min-h-[116px] w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-sm leading-6 text-ink outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
               />
+              {promptSuggestions.length > 0 ? (
+                <InputAssist
+                  title="常见处理"
+                  items={promptSuggestions}
+                  onSelect={(item) => setPrompt((current) => appendPromptFragment(current, item.value))}
+                />
+              ) : null}
             </div>
           ) : null}
 

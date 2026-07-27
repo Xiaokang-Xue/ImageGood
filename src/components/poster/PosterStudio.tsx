@@ -327,12 +327,17 @@ export function PosterStudio({ initialUsage, initialStyle, initialRatio }: Poste
           <PosterSettings
             title={title}
             subtitle={subtitle}
+            usage={usage}
             style={style}
             ratio={ratio}
             paletteIndex={paletteIndex}
             loading={loading}
             onTitleChange={setTitle}
             onSubtitleChange={setSubtitle}
+            onApplyCopyPreset={(nextTitle, nextSubtitle) => {
+              setTitle(nextTitle);
+              setSubtitle(nextSubtitle);
+            }}
             onStyleChange={setStyle}
             onRatioChange={setRatio}
             onPaletteChange={setPaletteIndex}
