@@ -19,6 +19,10 @@ import {
   buildTextToImagePrompt
 } from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
+import {
+  availableCredits,
+  consumeOneAvailableCredit
+} from "@/lib/server/credit-ledger";
 import { normalizeImageInputFile } from "@/lib/server/image-input-normalizer";
 import { logImageTaskEvent, type ImageTaskLogContext } from "@/lib/server/image-task-observability";
 import {
@@ -104,7 +108,7 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
     }
 
     const user = db.users.find((item) => item.id === task.userId);
-    if (!user || user.credits <= 0) {
+    if (!user || availableCredits(user) <= 0) {
       throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
     }
 
@@ -115,7 +119,7 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
         (item.status === "pending" || item.status === "processing")
     ).length;
 
-    if (user.credits - activeUnchargedTasks <= 0) {
+    if (availableCredits(user) - activeUnchargedTasks <= 0) {
       throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请等待正在生成的任务完成，或购买积分后继续生成", 402);
     }
 
@@ -197,9 +201,14 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
       db.creditTransactions.some((transaction) => transaction.type === "consume" && transaction.taskId === task.id);
 
     const creditChargedNow = !alreadyCharged;
+    let latestCredits = availableCredits(user);
 
     if (creditChargedNow) {
-      user.credits -= 1;
+      const consumed = consumeOneAvailableCredit(user);
+      if (!consumed) {
+        throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+      }
+      latestCredits = consumed.balanceAfter;
       user.updatedAt = now;
       task.creditCharged = true;
       db.creditTransactions.push({
@@ -209,7 +218,7 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
         orderId: null,
         type: "consume",
         amount: -1,
-        balanceAfter: user.credits,
+        balanceAfter: consumed.balanceAfter,
         reason: creditReasonForTask(task.type),
         createdAt: now
       });
@@ -219,7 +228,7 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
 
     return {
       task,
-      latestCredits: user.credits,
+      latestCredits,
       creditChargedNow,
       creditsConsumed: creditChargedNow ? 1 : 0
     };

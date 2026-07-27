@@ -3,6 +3,7 @@ import type { CreditPackage } from "@/types/billing";
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {
     id: "first_purchase",
+    kind: "credit_pack",
     name: "首购体验包",
     priceCents: 990,
     credits: 8,
@@ -15,6 +16,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
   },
   {
     id: "starter",
+    kind: "credit_pack",
     name: "入门包",
     priceCents: 1990,
     credits: 18,
@@ -25,9 +27,10 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
   },
   {
     id: "standard",
+    kind: "credit_pack",
     name: "标准包",
-    priceCents: 3990,
-    credits: 45,
+    priceCents: 4990,
+    credits: 50,
     subtitle: "日常推荐",
     description: "适合日常修图、商品图处理和封面生成",
     buttonLabel: "选择标准包",
@@ -35,9 +38,10 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
   },
   {
     id: "pro",
+    kind: "credit_pack",
     name: "创作者包",
-    priceCents: 7990,
-    credits: 100,
+    priceCents: 6990,
+    credits: 90,
     subtitle: "推荐选择",
     description: "适合持续创作，积分更多更自由",
     buttonLabel: "推荐购买",
@@ -46,6 +50,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
   },
   {
     id: "business",
+    kind: "credit_pack",
     name: "专业包",
     priceCents: 14900,
     credits: 220,
@@ -53,11 +58,41 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     description: "适合高频生成、商品图和内容创作",
     buttonLabel: "开通专业包",
     badgeLabel: "最划算"
+  },
+  {
+    id: "creator_monthly",
+    kind: "membership",
+    name: "创作月卡",
+    priceCents: 5990,
+    credits: 80,
+    subtitle: "一个月灵感续航",
+    description: "一次开通，获得 80 会员积分，适合稳定创作",
+    buttonLabel: "开启月度创作",
+    badgeLabel: "灵活之选",
+    validityMonths: 1,
+    validityLabel: "有效期 1 个月",
+    creditsLabel: "80 会员积分"
+  },
+  {
+    id: "creator_yearly",
+    kind: "membership",
+    name: "创作年卡",
+    priceCents: 59900,
+    credits: 960,
+    subtitle: "全年创作通行证",
+    description: "一次到账 960 会员积分，适合长期持续创作",
+    buttonLabel: "开启全年创作",
+    badgeLabel: "年度推荐",
+    recommended: true,
+    validityMonths: 12,
+    validityLabel: "有效期 1 年",
+    creditsLabel: "960 会员积分"
   }
 ];
 
 const PAYMENT_TEST_PACKAGE: CreditPackage = {
   id: "wechat_test",
+  kind: "credit_pack",
   name: "支付测试包",
   priceCents: 1,
   credits: 1,

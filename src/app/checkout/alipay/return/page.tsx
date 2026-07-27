@@ -151,7 +151,10 @@ function AlipayReturnContent() {
             <div className="mt-6 grid gap-3 text-sm text-muted sm:grid-cols-2">
               <Info label="套餐" value={order.packageName} />
               <Info label="支付金额" value={`¥${(order.amountCents / 100).toFixed(2)}`} />
-              <Info label="积分" value={`${order.credits} 积分`} />
+              <Info
+                label={order.packageKind === "membership" ? "会员积分" : "积分"}
+                value={`${order.credits} 积分`}
+              />
               <Info label="商户订单号" value={order.outTradeNo} />
             </div>
           </div>

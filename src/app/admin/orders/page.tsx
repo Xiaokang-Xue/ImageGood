@@ -208,7 +208,10 @@ export default function AdminOrdersPage() {
                       {statusLabels[order.status]}
                     </span>
                   </div>
-                  <h2 className="mt-1 text-xl font-bold text-ink">{formatCny(order.amountCents)} / {order.credits} 积分</h2>
+                  <h2 className="mt-1 text-xl font-bold text-ink">
+                    {formatCny(order.amountCents)} / {order.credits}
+                    {order.packageKind === "membership" ? " 会员积分" : " 积分"}
+                  </h2>
                   <div className="mt-3 grid gap-1 text-sm text-muted">
                     <p>订单 ID：{order.id}</p>
                     <p>用户账号：{order.userEmail}</p>
@@ -218,6 +221,9 @@ export default function AdminOrdersPage() {
                     <p>平台交易号：{order.transactionId || "未返回"}</p>
                     <p>创建时间：{new Date(order.createdAt).toLocaleString("zh-CN")}</p>
                     <p>支付时间：{order.paidAt ? new Date(order.paidAt).toLocaleString("zh-CN") : "未支付"}</p>
+                    {order.packageKind === "membership" ? (
+                      <p>有效周期：{order.validityMonths === 12 ? "1 年" : "1 个月"}，到期清零</p>
+                    ) : null}
                   </div>
                 </div>
                 <Button

@@ -9,6 +9,11 @@ import {
   getUserCreditTransactions,
   withDb
 } from "@/lib/db";
+import {
+  availableCredits,
+  consumeOneAvailableCredit,
+  grantOrderCredits
+} from "@/lib/server/credit-ledger";
 import type {
   AdminOrderRecord,
   CreditPackageId,
@@ -35,7 +40,8 @@ function nowIso() {
 }
 
 export async function getCreditBalance(userId: string) {
-  return (await getDbUserById(userId))?.credits ?? 0;
+  const user = await getDbUserById(userId);
+  return user ? availableCredits(user) : 0;
 }
 
 export async function assertHasCredits(userId: string) {
@@ -49,23 +55,26 @@ export async function assertHasCredits(userId: string) {
 export async function consumeCredit(userId: string, reason = "图片生成") {
   return withDb((db) => {
     const user = db.users.find((item) => item.id === userId);
-    if (!user || user.credits <= 0) {
+    if (!user) {
       throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
     }
 
-    user.credits -= 1;
+    const consumed = consumeOneAvailableCredit(user);
+    if (!consumed) {
+      throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+    }
     user.updatedAt = nowIso();
     db.creditTransactions.push({
       id: randomUUID(),
       userId,
       type: "consume",
       amount: -1,
-      balanceAfter: user.credits,
+      balanceAfter: consumed.balanceAfter,
       reason,
       createdAt: nowIso()
     });
 
-    return user.credits;
+    return consumed.balanceAfter;
   });
 }
 
@@ -83,9 +92,11 @@ export async function createOrder(userId: string, packageId: CreditPackageId) {
     id: randomUUID(),
     userId,
     packageId: packageItem.id,
+    packageKind: packageItem.kind,
     packageName: packageItem.name,
     amountCents: packageItem.priceCents,
     credits: packageItem.credits,
+    validityMonths: packageItem.validityMonths ?? null,
     status: "pending",
     paymentProvider: "manual",
     paymentMethod: "manual",
@@ -171,7 +182,7 @@ export async function confirmOrderPaid(orderId: string) {
     }
 
     const now = nowIso();
-    user.credits += order.credits;
+    const grant = grantOrderCredits(user, order, now);
     user.updatedAt = now;
     order.status = "paid";
     order.paidAt = now;
@@ -183,12 +194,15 @@ export async function confirmOrderPaid(orderId: string) {
       orderId: order.id,
       type: "purchase",
       amount: order.credits,
-      balanceAfter: user.credits,
-      reason: `购买积分包：${order.packageName}`,
+      balanceAfter: grant.balanceAfter,
+      reason:
+        order.packageKind === "membership"
+          ? `开通会员：${order.packageName}，积分到期自动清零`
+          : `购买积分包：${order.packageName}`,
       createdAt: now
     };
     db.creditTransactions.push(transaction);
 
-    return { order, latestCredits: user.credits };
+    return { order, latestCredits: grant.balanceAfter };
   });
 }

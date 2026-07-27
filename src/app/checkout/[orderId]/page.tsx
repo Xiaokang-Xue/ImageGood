@@ -126,13 +126,18 @@ export default function CheckoutPage() {
   const isPending = order.status === "pending";
   const isClosed = order.status === "failed" || order.status === "expired" || order.status === "cancelled";
   const isAlipay = order.paymentProvider === "alipay";
+  const isMembership = order.packageKind === "membership";
 
   return (
     <main className="mx-auto max-w-[1000px] px-5 py-10">
       <div className="mb-6">
         <p className="text-sm font-semibold text-studio-600">{isAlipay ? "支付宝支付" : "微信支付"}</p>
-        <h1 className="mt-2 text-3xl font-bold text-ink">{isAlipay ? "购买积分" : "扫码购买积分"}</h1>
-        <p className="mt-3 text-sm text-muted">支付成功后，积分会自动到账。</p>
+        <h1 className="mt-2 text-3xl font-bold text-ink">
+          {isMembership ? "开通创作会员" : isAlipay ? "购买积分" : "扫码购买积分"}
+        </h1>
+        <p className="mt-3 text-sm text-muted">
+          支付成功后，{isMembership ? "会员积分" : "积分"}会自动到账。
+        </p>
       </div>
 
       {error ? (
@@ -147,8 +152,14 @@ export default function CheckoutPage() {
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Info label="套餐" value={order.packageName} />
             <Info label="支付金额" value={formatCny(order.amountCents)} />
-            <Info label="购买积分" value={`${order.credits} 积分`} />
+            <Info label={isMembership ? "会员积分" : "购买积分"} value={`${order.credits} 积分`} />
             <Info label="订单状态" value={statusLabels[order.status]} />
+            {isMembership ? (
+              <Info
+                label="有效期"
+                value={order.validityMonths === 12 ? "1 年，到期清零" : "1 个月，到期清零"}
+              />
+            ) : null}
           </div>
 
           <div className="mt-6 rounded-lg border border-line bg-slate-50 p-4">
@@ -156,7 +167,9 @@ export default function CheckoutPage() {
               <div className="flex items-start gap-3 text-emerald-700">
                 <CheckCircle2 className="mt-0.5 h-5 w-5" />
                 <div>
-                  <p className="text-sm font-bold">支付成功，积分已到账</p>
+                  <p className="text-sm font-bold">
+                    支付成功，{isMembership ? "会员积分" : "积分"}已到账
+                  </p>
                   <p className="mt-1 text-sm">当前剩余积分：{order.currentCredits}</p>
                 </div>
               </div>

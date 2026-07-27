@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createHmac, randomBytes, randomUUID } from "crypto";
 import { findSessionUserByTokenHash, withDb } from "@/lib/db";
 import type { PublicUser } from "@/types/user";
+import { getActiveMembershipCredits, getAvailableCreditBalance } from "@/lib/credit-balance";
 
 export const SESSION_COOKIE = "ai_image_session";
 const SESSION_DAYS = 30;
@@ -28,6 +29,9 @@ function publicUser(user: {
   name: string;
   avatar?: string | null;
   credits?: number;
+  membershipCredits?: number;
+  membershipExpiresAt?: string | null;
+  membershipPlan?: string | null;
   role?: "user" | "admin";
   emailVerified?: boolean;
   emailVerifiedAt?: string | null;
@@ -38,13 +42,19 @@ function publicUser(user: {
 }): PublicUser {
   const emailVerified = Boolean(user.emailVerified);
   const phoneVerified = Boolean(user.phoneVerified);
+  const creditAccount = { ...user, credits: user.credits ?? 0 };
+  const membershipCredits = getActiveMembershipCredits(creditAccount);
   return {
     id: user.id,
     email: user.email ?? null,
     phone: user.phone ?? null,
     name: user.name,
     avatar: user.avatar ?? null,
-    credits: user.credits ?? 0,
+    credits: getAvailableCreditBalance(creditAccount),
+    permanentCredits: user.credits ?? 0,
+    membershipCredits,
+    membershipExpiresAt: membershipCredits > 0 ? user.membershipExpiresAt ?? null : null,
+    membershipPlan: membershipCredits > 0 ? user.membershipPlan ?? null : null,
     role: user.role ?? "user",
     emailVerified,
     emailVerifiedAt: user.emailVerifiedAt ?? null,

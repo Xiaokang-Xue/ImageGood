@@ -13,6 +13,7 @@ import {
 import { AlipayProvider, alipayAmountToCents, parseAlipayNotify } from "@/lib/server/payment/alipay-provider";
 import { MockPaymentProvider } from "@/lib/server/payment/mock-payment-provider";
 import { WechatPayProvider, parseWechatPaymentNotify } from "@/lib/server/payment/wechat-pay-provider";
+import { availableCredits, grantOrderCredits } from "@/lib/server/credit-ledger";
 import type { CreditPackage, CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
 import type {
   PaymentProvider,
@@ -173,9 +174,11 @@ function createPendingOrder(userId: string, packageItem: CreditPackage, provider
     id: randomUUID(),
     userId,
     packageId: packageItem.id,
+    packageKind: packageItem.kind,
     packageName: packageItem.name,
     amountCents: packageItem.priceCents,
     credits: packageItem.credits,
+    validityMonths: packageItem.validityMonths ?? null,
     status: "pending",
     paymentProvider: providerName,
     paymentMethod: providerName === "alipay" ? "page" : "native",
@@ -250,7 +253,7 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
   try {
     const payment = await provider.createPayment({
       order,
-      description: `ImageGood 积分包 - ${order.packageName}`,
+      description: `ImageGood ${order.packageKind === "membership" ? "会员" : "积分包"} - ${order.packageName}`,
       notifyUrl: providerName === "alipay" ? getAlipayNotifyUrl() : getWechatNotifyUrl(),
       returnUrl: providerName === "alipay" ? getAlipayReturnUrl(order.id) : undefined
     });
@@ -334,10 +337,12 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     packageName: order.packageName,
     amountCents: order.amountCents,
     credits: order.credits,
+    packageKind: order.packageKind ?? "credit_pack",
+    validityMonths: order.validityMonths ?? null,
     codeUrl: order.codeUrl ?? null,
     paymentUrl: order.paymentUrl ?? null,
     paidAt: order.paidAt ?? null,
-    currentCredits: owner?.credits ?? 0,
+    currentCredits: owner ? availableCredits(owner) : 0,
     paymentProvider: order.paymentProvider,
     paymentMethod: order.paymentMethod,
     outTradeNo: order.outTradeNo,
@@ -406,7 +411,7 @@ export async function markOrderPaid(input: {
     if (order.status === "paid") {
       assertSuccessfulPayment(order, input);
       const user = db.users.find((item) => item.id === order.userId);
-      return { order, latestCredits: user?.credits ?? 0, alreadyPaid: true };
+      return { order, latestCredits: user ? availableCredits(user) : 0, alreadyPaid: true };
     }
 
     try {
@@ -425,7 +430,7 @@ export async function markOrderPaid(input: {
     }
 
     const now = input.paidAt || nowIso();
-    user.credits += order.credits;
+    const grant = grantOrderCredits(user, order, now);
     user.updatedAt = now;
     order.status = "paid";
     order.transactionId = input.transactionId ?? order.transactionId ?? null;
@@ -439,12 +444,15 @@ export async function markOrderPaid(input: {
       orderId: order.id,
       type: input.transactionType ?? "purchase",
       amount: order.credits,
-      balanceAfter: user.credits,
-      reason: input.reason ?? `购买积分包：${order.packageName}`,
+      balanceAfter: grant.balanceAfter,
+      reason:
+        order.packageKind === "membership"
+          ? `${input.reason?.replace("购买积分包", "开通会员") ?? "开通会员"}：${order.packageName}，会员积分到期自动清零`
+          : input.reason ?? `购买积分包：${order.packageName}`,
       createdAt: now
     });
 
-    return { order, latestCredits: user.credits, alreadyPaid: false };
+    return { order, latestCredits: grant.balanceAfter, alreadyPaid: false };
   });
 
   if (failedError) {

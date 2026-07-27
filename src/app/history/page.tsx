@@ -53,16 +53,6 @@ const initialFilters: TaskFilters = {
   favorite: false
 };
 
-const toolLinks = [
-  { label: "AI 修图", href: "/editor" },
-  { label: "文生图", href: "/text-to-image" },
-  { label: "智能抠图", href: "/remove-background" },
-  { label: "图片增强", href: "/image-enhancer" },
-  { label: "去杂物", href: "/object-remover" },
-  { label: "商品图", href: "/product" },
-  { label: "封面海报", href: "/poster" }
-];
-
 export default function HistoryPage() {
   const router = useRouter();
   const setUploadedImage = useStudioStore((state) => state.setUploadedImage);
@@ -371,19 +361,6 @@ export default function HistoryPage() {
           </button>
         ) : null}
       </Card>
-
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        <span className="shrink-0 py-2 text-xs font-semibold text-muted">进入其他工具</span>
-        {toolLinks.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="shrink-0 rounded-full border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-neutral-500 hover:bg-neutral-50"
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
 
       {message ? (
         <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">

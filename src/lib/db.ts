@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { AnalyticsDailySummaryRecord, AnalyticsEventRecord } from "@/types/analytics";
 import type { AdminOrderRecord, CreditTransactionRecord, OrderRecord, OrderStatus, PaymentProvider } from "@/types/billing";
+import { clearExpiredMembershipCredits } from "@/lib/credit-balance";
 import type {
   ImageTaskRecord,
   ImageTaskStatus,
@@ -22,6 +23,9 @@ export interface DbUser {
   name: string;
   avatar?: string | null;
   credits: number;
+  membershipCredits?: number;
+  membershipExpiresAt?: string | null;
+  membershipPlan?: string | null;
   role: "user" | "admin";
   emailVerified: boolean;
   emailVerifiedAt?: string | null;
@@ -298,17 +302,25 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
 
   return {
     users: Array.isArray(data.users)
-      ? data.users.map((user) => ({
-          ...user,
-          credits: typeof user.credits === "number" ? user.credits : 0,
-          role: user.role === "admin" ? "admin" : "user",
-          emailVerified: Boolean(user.emailVerified),
-          emailVerifiedAt: user.emailVerifiedAt ?? null,
-          phone: user.phone ?? null,
-          phoneVerified: Boolean(user.phoneVerified),
-          phoneVerifiedAt: user.phoneVerifiedAt ?? null,
-          lastLoginAt: user.lastLoginAt ?? null
-        }))
+      ? data.users.map((user) => {
+          const normalizedUser = {
+            ...user,
+            credits: typeof user.credits === "number" ? user.credits : 0,
+            membershipCredits:
+              typeof user.membershipCredits === "number" ? Math.max(0, Math.trunc(user.membershipCredits)) : 0,
+            membershipExpiresAt: user.membershipExpiresAt ?? null,
+            membershipPlan: user.membershipPlan ?? null,
+            role: user.role === "admin" ? ("admin" as const) : ("user" as const),
+            emailVerified: Boolean(user.emailVerified),
+            emailVerifiedAt: user.emailVerifiedAt ?? null,
+            phone: user.phone ?? null,
+            phoneVerified: Boolean(user.phoneVerified),
+            phoneVerifiedAt: user.phoneVerifiedAt ?? null,
+            lastLoginAt: user.lastLoginAt ?? null
+          };
+          clearExpiredMembershipCredits(normalizedUser);
+          return normalizedUser;
+        })
       : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     emailVerificationTokens: Array.isArray(data.emailVerificationTokens) ? data.emailVerificationTokens : [],
@@ -341,6 +353,9 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
 
           return {
             ...order,
+            packageKind: order.packageKind === "membership" ? "membership" : "credit_pack",
+            validityMonths:
+              typeof order.validityMonths === "number" ? Math.max(1, Math.trunc(order.validityMonths)) : null,
             amountCents,
             status: ["pending", "paid", "cancelled", "expired", "failed"].includes(order.status)
               ? order.status

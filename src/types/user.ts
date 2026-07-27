@@ -5,6 +5,10 @@ export interface PublicUser {
   name: string;
   avatar?: string | null;
   credits: number;
+  permanentCredits?: number;
+  membershipCredits?: number;
+  membershipExpiresAt?: string | null;
+  membershipPlan?: string | null;
   role: "user" | "admin";
   emailVerified: boolean;
   emailVerifiedAt?: string | null;

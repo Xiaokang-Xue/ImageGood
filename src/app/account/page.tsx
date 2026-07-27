@@ -279,8 +279,20 @@ export default function AccountPage() {
             {verificationError ? <p className="mt-3 text-sm font-semibold text-rose-700">{verificationError}</p> : null}
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            <InfoBlock label="当前积分余额" value={`${user.credits} 积分`} />
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <InfoBlock label="可用积分总额" value={`${user.credits} 积分`} />
+            <InfoBlock
+              label="会员积分"
+              value={
+                user.membershipCredits
+                  ? `${user.membershipPlan ? `${user.membershipPlan} · ` : ""}${user.membershipCredits} 积分 · ${
+                      user.membershipExpiresAt
+                        ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期`
+                        : "限时有效"
+                    }`
+                  : "暂无有效会员积分"
+              }
+            />
             <InfoBlock label="注册时间" value={new Date(user.createdAt).toLocaleDateString("zh-CN")} />
             <InfoBlock label="累计生成次数" value={`${taskSummary.succeeded} 次`} />
           </div>
@@ -352,7 +364,7 @@ export default function AccountPage() {
           <h2 className="text-xl font-bold text-ink">快捷操作</h2>
           <div className="mt-5 grid gap-3">
             <Link href="/pricing">
-              <Button className="w-full">购买积分</Button>
+              <Button className="w-full">购买积分或创作卡</Button>
             </Link>
             <Link href="/history">
               <Button variant="outline" className="w-full">查看历史记录</Button>

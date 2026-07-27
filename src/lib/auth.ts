@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/email-service";
 import { sendSmsCode, SmsSendError } from "@/lib/server/sms/aliyun-sms-service";
 import type { PublicUser } from "@/types/user";
+import { getActiveMembershipCredits, getAvailableCreditBalance } from "@/lib/credit-balance";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
@@ -79,13 +80,18 @@ function createRawToken() {
 function toPublicUser(user: DbUser): PublicUser {
   const emailVerified = Boolean(user.emailVerified);
   const phoneVerified = Boolean(user.phoneVerified);
+  const membershipCredits = getActiveMembershipCredits(user);
   return {
     id: user.id,
     email: user.email ?? null,
     phone: user.phone ?? null,
     name: user.name,
     avatar: user.avatar ?? null,
-    credits: user.credits ?? 0,
+    credits: getAvailableCreditBalance(user),
+    permanentCredits: user.credits ?? 0,
+    membershipCredits,
+    membershipExpiresAt: membershipCredits > 0 ? user.membershipExpiresAt ?? null : null,
+    membershipPlan: membershipCredits > 0 ? user.membershipPlan ?? null : null,
     role: user.role ?? "user",
     emailVerified,
     emailVerifiedAt: user.emailVerifiedAt ?? null,
