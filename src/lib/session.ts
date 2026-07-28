@@ -3,7 +3,11 @@ import { cookies } from "next/headers";
 import { createHmac, randomBytes, randomUUID } from "crypto";
 import { findSessionUserByTokenHash, withDb } from "@/lib/db";
 import type { PublicUser } from "@/types/user";
-import { getActiveMembershipCredits, getAvailableCreditBalance } from "@/lib/credit-balance";
+import {
+  getActiveMembershipCredits,
+  getAvailableCreditBalance,
+  hasActiveMembership
+} from "@/lib/credit-balance";
 
 export const SESSION_COOKIE = "ai_image_session";
 const SESSION_DAYS = 30;
@@ -32,6 +36,10 @@ function publicUser(user: {
   membershipCredits?: number;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
+  membershipLifetime?: boolean;
+  membershipNextRefreshAt?: string | null;
+  membershipCreditsPerPeriod?: number;
+  membershipPeriodDays?: number;
   role?: "user" | "admin";
   emailVerified?: boolean;
   emailVerifiedAt?: string | null;
@@ -44,6 +52,7 @@ function publicUser(user: {
   const phoneVerified = Boolean(user.phoneVerified);
   const creditAccount = { ...user, credits: user.credits ?? 0 };
   const membershipCredits = getActiveMembershipCredits(creditAccount);
+  const activeMembership = hasActiveMembership(creditAccount);
   return {
     id: user.id,
     email: user.email ?? null,
@@ -53,8 +62,10 @@ function publicUser(user: {
     credits: getAvailableCreditBalance(creditAccount),
     permanentCredits: user.credits ?? 0,
     membershipCredits,
-    membershipExpiresAt: membershipCredits > 0 ? user.membershipExpiresAt ?? null : null,
-    membershipPlan: membershipCredits > 0 ? user.membershipPlan ?? null : null,
+    membershipExpiresAt: activeMembership ? creditAccount.membershipExpiresAt ?? null : null,
+    membershipPlan: activeMembership ? creditAccount.membershipPlan ?? null : null,
+    membershipLifetime: activeMembership && Boolean(creditAccount.membershipLifetime),
+    membershipNextRefreshAt: activeMembership ? creditAccount.membershipNextRefreshAt ?? null : null,
     role: user.role ?? "user",
     emailVerified,
     emailVerifiedAt: user.emailVerifiedAt ?? null,

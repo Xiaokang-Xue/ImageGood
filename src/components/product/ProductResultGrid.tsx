@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { downloadImage } from "@/lib/api-client";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import type { ProductImageResult } from "@/types/image";
 
 interface ProductResultGridProps {
@@ -71,7 +72,7 @@ export function ProductResultGrid({ results, loading, taskId, previewUrl, error,
                     onClick={() => downloadImage(result.url)}
                   >
                     <Download className="h-4 w-4" />
-                    下载
+                    {trialDownloadLabel(result.url, "下载")}
                   </button>
                   <Button variant="dark" size="sm" onClick={() => onEdit(result)}>
                     <PenLine className="h-4 w-4" />

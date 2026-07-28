@@ -8,10 +8,10 @@ export function PricingCallout() {
       <div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 px-6 py-10 text-white sm:px-10 lg:flex lg:items-center lg:justify-between lg:px-12">
           <div className="max-w-2xl">
-            <p className="text-sm font-medium text-neutral-400">按需购买积分</p>
+            <p className="text-sm font-medium text-neutral-400">创作会员与积分包</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">从一次真实创作开始</h2>
             <p className="mt-3 text-sm leading-6 text-neutral-300 sm:text-base">
-              新用户注册可获得免费体验积分。每次成功生成消耗 1 积分，生成失败不扣积分。
+              新用户可免费生成一次带水印作品，购买任意套餐后即可下载无水印结果。生成失败不扣积分。
             </p>
             <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-neutral-400">
               {["微信与支付宝支付", "支付成功自动到账", "积分适用于全部图片工具"].map((item) => (
@@ -25,7 +25,7 @@ export function PricingCallout() {
 
           <Link href="/pricing" className="mt-8 inline-block shrink-0 lg:mt-0">
             <Button variant="secondary" size="lg" className="w-full border-white bg-white text-neutral-950 hover:bg-neutral-100 sm:w-auto">
-              查看积分价格
+              查看创作方案
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>

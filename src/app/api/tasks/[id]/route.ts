@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { hasPaidOrderForUser } from "@/lib/db";
 import {
   deleteUserTask,
   getUserTask,
   updateUserTaskMetadata
 } from "@/lib/server/image-task-service";
+import { toPublicImageTask } from "@/lib/server/image-task-access";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -28,7 +30,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       );
     }
 
-    return NextResponse.json({ ok: true, task });
+    const hasPaidOrder = await hasPaidOrderForUser(user.id);
+    return NextResponse.json({ ok: true, task: toPublicImageTask(task, hasPaidOrder) });
   } catch (error) {
     console.error("[tasks] failed to read task", {
       taskId: params.id,
@@ -127,7 +130,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         { status: 404 }
       );
     }
-    return NextResponse.json({ ok: true, task });
+    const hasPaidOrder = await hasPaidOrderForUser(user.id);
+    return NextResponse.json({ ok: true, task: toPublicImageTask(task, hasPaidOrder) });
   } catch (error) {
     console.error("[tasks] failed to update task metadata", {
       taskId: params.id,

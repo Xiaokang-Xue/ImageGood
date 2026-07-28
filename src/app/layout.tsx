@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 import { SiteHeader } from "@/components/layout/SiteHeader";
-import { ActiveImageTaskMonitor } from "@/components/tasks/ActiveImageTaskMonitor";
+import { LazyActiveImageTaskMonitor } from "@/components/tasks/LazyActiveImageTaskMonitor";
 
 export const metadata: Metadata = {
   title: "ImageGood - AI 图片创作平台",
@@ -31,7 +31,7 @@ export default function RootLayout({
       <body>
         <SiteHeader />
         <PageViewTracker />
-        <ActiveImageTaskMonitor />
+        <LazyActiveImageTaskMonitor />
         {children}
       </body>
     </html>

@@ -31,6 +31,13 @@ function formatCny(amountCents: number) {
   return `¥${(amountCents / 100).toFixed(2)}`;
 }
 
+function membershipValidity(order: AdminOrderRecord) {
+  if (order.membershipLifetime) return "长期有效";
+  if (order.validityDays === 180) return "180 天";
+  if (order.validityDays === 365 || order.validityMonths === 12) return "1 年";
+  return order.validityDays ? `${order.validityDays} 天` : "30 天";
+}
+
 const PAGE_SIZE = 10;
 
 export default function AdminOrdersPage() {
@@ -222,7 +229,10 @@ export default function AdminOrdersPage() {
                     <p>创建时间：{new Date(order.createdAt).toLocaleString("zh-CN")}</p>
                     <p>支付时间：{order.paidAt ? new Date(order.paidAt).toLocaleString("zh-CN") : "未支付"}</p>
                     {order.packageKind === "membership" ? (
-                      <p>有效周期：{order.validityMonths === 12 ? "1 年" : "1 个月"}，到期清零</p>
+                      <p>
+                        会员周期：{membershipValidity(order)} · 每 {order.periodDays ?? 30} 天发放{" "}
+                        {order.creditsPerPeriod ?? order.credits} 积分
+                      </p>
                     ) : null}
                   </div>
                 </div>

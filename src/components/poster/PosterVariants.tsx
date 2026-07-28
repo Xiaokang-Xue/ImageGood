@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { downloadImage } from "@/lib/api-client";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import { cn } from "@/lib/utils";
 import type { PosterImageResult } from "@/types/image";
 
@@ -79,7 +80,8 @@ export function PosterVariants({ results, activeId, loading, taskId, error, onRe
                   <button
                     type="button"
                     className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line text-slate-600 transition hover:border-studio-200 hover:bg-studio-50 hover:text-studio-700"
-                    aria-label={`下载${result.title}`}
+                    aria-label={`${trialDownloadLabel(result.url)}：${result.title}`}
+                    title={trialDownloadLabel(result.url)}
                     onClick={() => downloadImage(result.url)}
                   >
                     <Download className="h-4 w-4" />

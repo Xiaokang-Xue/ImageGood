@@ -179,6 +179,10 @@ function createPendingOrder(userId: string, packageItem: CreditPackage, provider
     amountCents: packageItem.priceCents,
     credits: packageItem.credits,
     validityMonths: packageItem.validityMonths ?? null,
+    validityDays: packageItem.validityDays ?? null,
+    membershipLifetime: Boolean(packageItem.membershipLifetime),
+    periodDays: packageItem.periodDays ?? null,
+    creditsPerPeriod: packageItem.creditsPerPeriod ?? null,
     status: "pending",
     paymentProvider: providerName,
     paymentMethod: providerName === "alipay" ? "page" : "native",
@@ -339,6 +343,10 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     credits: order.credits,
     packageKind: order.packageKind ?? "credit_pack",
     validityMonths: order.validityMonths ?? null,
+    validityDays: order.validityDays ?? null,
+    membershipLifetime: Boolean(order.membershipLifetime),
+    periodDays: order.periodDays ?? null,
+    creditsPerPeriod: order.creditsPerPeriod ?? null,
     codeUrl: order.codeUrl ?? null,
     paymentUrl: order.paymentUrl ?? null,
     paidAt: order.paidAt ?? null,
@@ -447,7 +455,7 @@ export async function markOrderPaid(input: {
       balanceAfter: grant.balanceAfter,
       reason:
         order.packageKind === "membership"
-          ? `${input.reason?.replace("购买积分包", "开通会员") ?? "开通会员"}：${order.packageName}，会员积分到期自动清零`
+          ? `${input.reason?.replace("购买积分包", "开通会员") ?? "开通会员"}：${order.packageName}，会员积分按周期刷新`
           : input.reason ?? `购买积分包：${order.packageName}`,
       createdAt: now
     });

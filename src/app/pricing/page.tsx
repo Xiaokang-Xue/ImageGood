@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -16,6 +15,7 @@ import {
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { CREDIT_PACKAGES } from "@/config/billing-plans";
 import {
   apiClient,
   getImageErrorMessage,
@@ -37,21 +37,18 @@ function formatPackagePrice(priceCents: number) {
 
 export default function PricingPage() {
   const router = useRouter();
-  const [packages, setPackages] = useState<CreditPackage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingPackage, setLoadingPackage] = useState<CreditPackageId | null>(null);
-  const [category, setCategory] = useState<CreditPackageKind>("credit_pack");
-  const [selectedPackageId, setSelectedPackageId] = useState<CreditPackageId>("standard");
+  const [category, setCategory] = useState<CreditPackageKind>("membership");
+  const [selectedPackageId, setSelectedPackageId] = useState<CreditPackageId>("creator_yearly");
   const [paymentPlan, setPaymentPlan] = useState<CreditPackage | null>(null);
   const [paymentError, setPaymentError] = useState("");
-  const [error, setError] = useState("");
+  const [purchaseNotice, setPurchaseNotice] = useState("");
 
   useEffect(() => {
-    apiClient
-      .listBillingPackages()
-      .then((response) => setPackages(response.packages))
-      .catch(() => setError("套餐暂时无法加载，请稍后重试"))
-      .finally(() => setLoading(false));
+    const notice = window.sessionStorage.getItem("imagegood:pricing-notice");
+    if (!notice) return;
+    window.sessionStorage.removeItem("imagegood:pricing-notice");
+    setPurchaseNotice(notice);
   }, []);
 
   useEffect(() => {
@@ -72,15 +69,15 @@ export default function PricingPage() {
   }, [paymentPlan]);
 
   const visiblePackages = useMemo(
-    () => packages.filter((item) => item.kind === category),
-    [category, packages]
+    () => CREDIT_PACKAGES.filter((item) => item.kind === category),
+    [category]
   );
   const selectedPackage =
     visiblePackages.find((item) => item.id === selectedPackageId) ?? visiblePackages[0] ?? null;
 
   const changeCategory = (nextCategory: CreditPackageKind) => {
     setCategory(nextCategory);
-    const nextPlans = packages.filter((item) => item.kind === nextCategory);
+    const nextPlans = CREDIT_PACKAGES.filter((item) => item.kind === nextCategory);
     const preferred =
       nextPlans.find((item) => item.recommended) ??
       nextPlans.find((item) => item.id === "standard") ??
@@ -140,52 +137,36 @@ export default function PricingPage() {
           </h1>
         </header>
 
-        {error ? (
-          <div className="mb-5 flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 sm:flex-row sm:items-center sm:justify-between">
-            <span>{error}</span>
-            {error.includes("验证") ? (
-              <Link href="/account" className="underline">
-                前往账户中心
-              </Link>
-            ) : null}
+        {purchaseNotice ? (
+          <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-bold">解锁无水印图片</p>
+              <p className="mt-1 leading-5 text-amber-800">{purchaseNotice}</p>
+            </div>
           </div>
         ) : null}
 
         <div className="sticky top-16 z-20 -mx-2 mb-5 bg-page/95 px-2 py-2 backdrop-blur md:static md:mx-0 md:bg-transparent md:p-0">
           <div className="mx-auto grid max-w-[280px] grid-cols-2 rounded-lg border border-neutral-300 bg-white p-1 shadow-sm">
             <CategoryButton
-              active={category === "credit_pack"}
-              icon={<Zap className="h-4 w-4" />}
-              title="灵活积分"
-              onClick={() => changeCategory("credit_pack")}
-            />
-            <CategoryButton
               active={category === "membership"}
               icon={<CalendarDays className="h-4 w-4" />}
               title="创作会员"
               onClick={() => changeCategory("membership")}
             />
+            <CategoryButton
+              active={category === "credit_pack"}
+              icon={<Zap className="h-4 w-4" />}
+              title="积分包"
+              onClick={() => changeCategory("credit_pack")}
+            />
           </div>
         </div>
 
-        {loading ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3].map((item) => (
-              <Card key={item} className="h-[330px] animate-pulse p-5" />
-            ))}
-          </div>
-        ) : null}
-
-        {!loading && packages.length === 0 ? (
-          <Card className="p-8 text-center">
-            <h2 className="text-lg font-bold text-ink">套餐暂时不可用</h2>
-            <p className="mt-2 text-sm text-muted">服务暂时不可用，请稍后重试。</p>
-          </Card>
-        ) : null}
-
-        {!loading && visiblePackages.length > 0 ? (
+        {visiblePackages.length > 0 ? (
           <>
-            <div className="-mx-1 mb-4 flex snap-x gap-3 overflow-x-auto px-1 pb-2 md:hidden">
+            <div className="mb-4 overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm md:hidden">
               {visiblePackages.map((item) => (
                 <MobilePlanOption
                   key={item.id}
@@ -210,7 +191,7 @@ export default function PricingPage() {
               className={cn(
                 "hidden gap-4 md:grid",
                 category === "membership"
-                  ? "mx-auto max-w-3xl md:grid-cols-2"
+                  ? "md:grid-cols-2 xl:grid-cols-4"
                   : "md:grid-cols-2 xl:grid-cols-5"
               )}
             >
@@ -230,7 +211,7 @@ export default function PricingPage() {
         <div className="mt-6 grid gap-2 rounded-xl border border-neutral-300 bg-neutral-50 p-4 text-xs leading-5 text-neutral-600 sm:grid-cols-3 md:text-sm">
           <TrustItem text="生成失败不扣积分" />
           <TrustItem text="微信、支付宝均支持" />
-          <TrustItem text="会员不自动续费，到期未使用积分清零" />
+          <TrustItem text="会员一次购买，不自动续费" />
         </div>
       </div>
 
@@ -298,14 +279,14 @@ function PlanCard({
           ¥{formatPackagePrice(plan.priceCents)}
         </span>
         {isMembership ? (
-          <span className="pb-1 text-xs font-semibold text-neutral-500">
-            / {plan.validityMonths === 12 ? "年" : "月"}
-          </span>
+          <span className="pb-1 text-xs font-semibold text-neutral-500">一次开通</span>
         ) : null}
       </div>
-      <p className="mt-2 text-xl font-bold text-neutral-900">
-        {plan.creditsLabel ?? `${plan.credits} 积分`}
-      </p>
+      {!isMembership ? (
+        <p className="mt-2 text-xl font-bold text-neutral-900">
+          {plan.creditsLabel ?? `${plan.credits} 积分`}
+        </p>
+      ) : null}
       {plan.description ? (
         <p className="mt-3 min-h-[40px] text-sm leading-5 text-neutral-600">{plan.description}</p>
       ) : null}
@@ -313,9 +294,8 @@ function PlanCard({
       <div className="mt-4 grid gap-2 text-xs text-neutral-600">
         {isMembership ? (
           <>
-            <Feature text={plan.validityLabel ?? "限时有效"} />
-            <Feature text="购买后一次到账，不自动续费" />
-            <Feature text="有效期结束后未使用积分清零" />
+            <Feature text="全部图片工具通用" />
+            <Feature text={plan.membershipLifetime ? "会员权益长期有效" : plan.validityLabel ?? "会员权益有效"} />
           </>
         ) : (
           <>
@@ -334,6 +314,12 @@ function PlanCard({
       >
         {plan.buttonLabel ?? "立即购买"}
       </Button>
+      {isMembership ? (
+        <p className="mt-3 text-[10px] leading-4 text-neutral-400">
+          50 会员积分 / 30 天，积分每 30 天刷新，周期内未使用额度不结转；
+          {plan.membershipLifetime ? "权益长期有效" : "到期后停止发放"}，不自动续费。
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -377,34 +363,36 @@ function MobilePlanOption({
     <button
       type="button"
       className={cn(
-        "relative min-h-[94px] w-[154px] shrink-0 snap-start overflow-hidden rounded-xl border p-3 text-left shadow-sm transition",
+        "group flex min-h-[58px] w-full items-center gap-3 border-b border-neutral-200 px-4 py-3 text-left transition last:border-b-0",
         active
-          ? "border-neutral-950 bg-neutral-950 text-white ring-1 ring-neutral-950"
-          : "border-neutral-300 bg-white text-neutral-900 hover:border-neutral-500"
+          ? "bg-neutral-100 text-neutral-950 shadow-[inset_3px_0_0_#0a0a0a]"
+          : "bg-white text-neutral-900 hover:bg-neutral-50"
       )}
       onClick={onClick}
     >
-      <span className="flex items-start justify-between gap-2">
-        <span className="text-sm font-bold">{plan.name}</span>
+      <span
+        className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+          active ? "border-neutral-950 bg-neutral-950" : "border-neutral-400 bg-white"
+        )}
+        aria-hidden="true"
+      >
+        <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-white" : "bg-transparent")} />
+      </span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate text-sm font-bold">{plan.name}</span>
         {plan.recommended ? (
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-bold",
-              active ? "bg-white text-neutral-950" : "bg-neutral-950 text-white"
+              "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+              active ? "bg-neutral-950 text-white" : "bg-neutral-100 text-neutral-700"
             )}
           >
             推荐
           </span>
-        ) : plan.badgeLabel ? (
-          <span className={cn("text-[10px] font-semibold", active ? "text-neutral-300" : "text-neutral-500")}>
-            {plan.badgeLabel}
-          </span>
         ) : null}
       </span>
-      <span className="mt-3 block text-xl font-bold">¥{formatPackagePrice(plan.priceCents)}</span>
-      <span className={cn("mt-1 block text-xs font-semibold", active ? "text-neutral-300" : "text-neutral-500")}>
-        {plan.creditsLabel ?? `${plan.credits} 积分`}
-      </span>
+      <span className="shrink-0 text-base font-bold">¥{formatPackagePrice(plan.priceCents)}</span>
     </button>
   );
 }
@@ -455,10 +443,12 @@ function PaymentSelector({
         <div className="mt-4 flex items-end justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-neutral-900">
-              {plan.creditsLabel ?? `${plan.credits} 积分`}
+              {plan.kind === "membership" ? "一次开通" : plan.creditsLabel ?? `${plan.credits} 积分`}
             </p>
             <p className="mt-1 text-xs text-neutral-500">
-              {plan.kind === "membership" ? plan.validityLabel : "永久有效"}
+              {plan.kind === "membership"
+                ? plan.validityLabel ?? "会员权益有效"
+                : "永久有效"}
             </p>
           </div>
           <p className="text-2xl font-bold text-neutral-950">¥{formatPackagePrice(plan.priceCents)}</p>
@@ -485,6 +475,13 @@ function PaymentSelector({
         {error ? (
           <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
             {error}
+          </p>
+        ) : null}
+
+        {plan.kind === "membership" ? (
+          <p className="mt-4 text-[10px] leading-4 text-neutral-400">
+            50 会员积分 / 30 天，积分每 30 天刷新，周期内未使用额度不结转；
+            {plan.membershipLifetime ? "权益长期有效" : "到期后停止发放"}，不自动续费。
           </p>
         ) : null}
 

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { GenerationErrorPanel, GenerationLoadingPanel } from "@/components/ui/GenerationLoadingPanel";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { downloadImage } from "@/lib/api-client";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import type { EditImageResult } from "@/types/image";
 
 interface ResultGalleryProps {
@@ -72,7 +73,7 @@ export function ResultGallery({ results, loading, taskId, previewUrl, error, onS
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => downloadImage(mainResult.url)}>
                 <Download className="h-4 w-4" />
-                下载图片
+                {trialDownloadLabel(mainResult.url)}
               </Button>
               <Button variant="outline" size="sm" onClick={() => (onContinueEdit ?? onSelect)(mainResult)}>
                 <PenLine className="h-4 w-4" />

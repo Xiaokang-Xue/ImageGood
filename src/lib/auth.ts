@@ -11,7 +11,11 @@ import {
 } from "@/lib/server/email-service";
 import { sendSmsCode, SmsSendError } from "@/lib/server/sms/aliyun-sms-service";
 import type { PublicUser } from "@/types/user";
-import { getActiveMembershipCredits, getAvailableCreditBalance } from "@/lib/credit-balance";
+import {
+  getActiveMembershipCredits,
+  getAvailableCreditBalance,
+  hasActiveMembership
+} from "@/lib/credit-balance";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
@@ -81,6 +85,7 @@ function toPublicUser(user: DbUser): PublicUser {
   const emailVerified = Boolean(user.emailVerified);
   const phoneVerified = Boolean(user.phoneVerified);
   const membershipCredits = getActiveMembershipCredits(user);
+  const activeMembership = hasActiveMembership(user);
   return {
     id: user.id,
     email: user.email ?? null,
@@ -90,8 +95,10 @@ function toPublicUser(user: DbUser): PublicUser {
     credits: getAvailableCreditBalance(user),
     permanentCredits: user.credits ?? 0,
     membershipCredits,
-    membershipExpiresAt: membershipCredits > 0 ? user.membershipExpiresAt ?? null : null,
-    membershipPlan: membershipCredits > 0 ? user.membershipPlan ?? null : null,
+    membershipExpiresAt: activeMembership ? user.membershipExpiresAt ?? null : null,
+    membershipPlan: activeMembership ? user.membershipPlan ?? null : null,
+    membershipLifetime: activeMembership && Boolean(user.membershipLifetime),
+    membershipNextRefreshAt: activeMembership ? user.membershipNextRefreshAt ?? null : null,
     role: user.role ?? "user",
     emailVerified,
     emailVerifiedAt: user.emailVerifiedAt ?? null,

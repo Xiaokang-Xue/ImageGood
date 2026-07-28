@@ -22,6 +22,7 @@ import {
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { requiresPaidImageDownload, trialDownloadLabel } from "@/lib/trial-image";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 
 const transparentPreviewStyle = {
@@ -404,11 +405,11 @@ export function RemoveBackgroundStudio() {
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Button className="flex-1" variant="dark" onClick={() => downloadImage(resultUrl, "imagegood-remove-bg.png")}>
                   <Download className="h-4 w-4" />
-                  透明 PNG
+                  {trialDownloadLabel(resultUrl, "透明 PNG")}
                 </Button>
                 <Button className="flex-1" variant="outline" loading={downloadingBackground} onClick={downloadWithBackground}>
                   <Download className="h-4 w-4" />
-                  带背景图片
+                  {requiresPaidImageDownload(resultUrl) ? "带水印背景图" : "带背景图片"}
                 </Button>
                 <Link href="/history" className="flex-1">
                   <Button className="w-full" variant="secondary">

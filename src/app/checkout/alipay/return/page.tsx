@@ -35,7 +35,12 @@ function AlipayReturnContent() {
   const [loading, setLoading] = useState(true);
   const [mockPaying, setMockPaying] = useState(false);
   const [error, setError] = useState("");
+  const [unlockTaskId, setUnlockTaskId] = useState("");
   const paidEventSent = useRef(false);
+
+  useEffect(() => {
+    setUnlockTaskId(window.sessionStorage.getItem("imagegood:unlock-task-id") || "");
+  }, []);
 
   const loadOrder = useCallback(
     async (silent = false) => {
@@ -153,7 +158,11 @@ function AlipayReturnContent() {
               <Info label="支付金额" value={`¥${(order.amountCents / 100).toFixed(2)}`} />
               <Info
                 label={order.packageKind === "membership" ? "会员积分" : "积分"}
-                value={`${order.credits} 积分`}
+                value={
+                  order.packageKind === "membership"
+                    ? `${order.creditsPerPeriod ?? order.credits} 积分 / ${order.periodDays ?? 30} 天`
+                    : `${order.credits} 积分`
+                }
               />
               <Info label="商户订单号" value={order.outTradeNo} />
             </div>
@@ -174,9 +183,18 @@ function AlipayReturnContent() {
 
         <div className="mt-6 flex flex-wrap gap-3">
           {isPaid ? (
-            <Link href="/editor">
-              <Button>继续生成图片</Button>
-            </Link>
+            unlockTaskId ? (
+              <Link
+                href={`/history/${encodeURIComponent(unlockTaskId)}`}
+                onClick={() => window.sessionStorage.removeItem("imagegood:unlock-task-id")}
+              >
+                <Button>查看无水印结果</Button>
+              </Link>
+            ) : (
+              <Link href="/editor">
+                <Button>继续生成图片</Button>
+              </Link>
+            )
           ) : null}
           {isClosed ? (
             <Link href="/pricing">

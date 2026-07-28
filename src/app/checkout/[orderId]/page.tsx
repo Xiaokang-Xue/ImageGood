@@ -23,6 +23,13 @@ function formatCny(amountCents: number) {
   return `¥${(amountCents / 100).toFixed(2)}`;
 }
 
+function membershipValidity(order: PaymentOrderResponse) {
+  if (order.membershipLifetime) return "长期有效";
+  if (order.validityDays === 180) return "180 天";
+  if (order.validityDays === 365 || order.validityMonths === 12) return "1 年";
+  return order.validityDays ? `${order.validityDays} 天` : "30 天";
+}
+
 export default function CheckoutPage() {
   const params = useParams<{ orderId: string }>();
   const router = useRouter();
@@ -30,7 +37,12 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [mockPaying, setMockPaying] = useState(false);
   const [error, setError] = useState("");
+  const [unlockTaskId, setUnlockTaskId] = useState("");
   const paidEventSent = useRef(false);
+
+  useEffect(() => {
+    setUnlockTaskId(window.sessionStorage.getItem("imagegood:unlock-task-id") || "");
+  }, []);
 
   const loadOrder = useCallback(
     async (silent = false) => {
@@ -152,13 +164,17 @@ export default function CheckoutPage() {
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Info label="套餐" value={order.packageName} />
             <Info label="支付金额" value={formatCny(order.amountCents)} />
-            <Info label={isMembership ? "会员积分" : "购买积分"} value={`${order.credits} 积分`} />
+            <Info
+              label={isMembership ? "会员积分" : "购买积分"}
+              value={
+                isMembership
+                  ? `${order.creditsPerPeriod ?? order.credits} 积分 / ${order.periodDays ?? 30} 天`
+                  : `${order.credits} 积分`
+              }
+            />
             <Info label="订单状态" value={statusLabels[order.status]} />
             {isMembership ? (
-              <Info
-                label="有效期"
-                value={order.validityMonths === 12 ? "1 年，到期清零" : "1 个月，到期清零"}
-              />
+              <Info label="会员有效期" value={membershipValidity(order)} />
             ) : null}
           </div>
 
@@ -194,9 +210,18 @@ export default function CheckoutPage() {
 
           <div className="mt-6 flex flex-wrap gap-3">
           {isPaid ? (
-            <Link href="/editor">
-              <Button>继续生成图片</Button>
-            </Link>
+            unlockTaskId ? (
+              <Link
+                href={`/history/${encodeURIComponent(unlockTaskId)}`}
+                onClick={() => window.sessionStorage.removeItem("imagegood:unlock-task-id")}
+              >
+                <Button>查看无水印结果</Button>
+              </Link>
+            ) : (
+              <Link href="/editor">
+                <Button>继续生成图片</Button>
+              </Link>
+            )
           ) : null}
             {isClosed ? (
               <Link href="/pricing">

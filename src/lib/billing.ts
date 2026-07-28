@@ -97,6 +97,10 @@ export async function createOrder(userId: string, packageId: CreditPackageId) {
     amountCents: packageItem.priceCents,
     credits: packageItem.credits,
     validityMonths: packageItem.validityMonths ?? null,
+    validityDays: packageItem.validityDays ?? null,
+    membershipLifetime: Boolean(packageItem.membershipLifetime),
+    periodDays: packageItem.periodDays ?? null,
+    creditsPerPeriod: packageItem.creditsPerPeriod ?? null,
     status: "pending",
     paymentProvider: "manual",
     paymentMethod: "manual",
@@ -197,7 +201,7 @@ export async function confirmOrderPaid(orderId: string) {
       balanceAfter: grant.balanceAfter,
       reason:
         order.packageKind === "membership"
-          ? `开通会员：${order.packageName}，积分到期自动清零`
+          ? `开通会员：${order.packageName}，会员积分按周期刷新`
           : `购买积分包：${order.packageName}`,
       createdAt: now
     };

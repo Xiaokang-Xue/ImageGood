@@ -37,6 +37,7 @@ import type {
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
 import { prepareImageFileForUpload } from "@/lib/client-image-normalizer";
+import { parseTrialImageUrl } from "@/lib/trial-image";
 
 export interface CaptchaResponse {
   question: string;
@@ -421,6 +422,17 @@ function wait(ms: number, signal?: AbortSignal) {
 }
 
 export async function downloadImage(url: string, filename = `ai-image-result-${Date.now()}.png`) {
+  const trialImage = parseTrialImageUrl(url);
+  if (trialImage?.state === "locked") {
+    window.sessionStorage.setItem(
+      "imagegood:pricing-notice",
+      "本次免费体验结果带有水印，购买任意套餐后即可下载无水印图片。"
+    );
+    window.sessionStorage.setItem("imagegood:unlock-task-id", trialImage.taskId);
+    window.location.assign("/pricing");
+    return;
+  }
+
   const isIosSafari =
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

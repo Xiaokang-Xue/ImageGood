@@ -284,11 +284,17 @@ export default function AccountPage() {
             <InfoBlock
               label="会员积分"
               value={
-                user.membershipCredits
-                  ? `${user.membershipPlan ? `${user.membershipPlan} · ` : ""}${user.membershipCredits} 积分 · ${
-                      user.membershipExpiresAt
-                        ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期`
-                        : "限时有效"
+                user.membershipPlan
+                  ? `${user.membershipPlan ? `${user.membershipPlan} · ` : ""}${user.membershipCredits} 积分${
+                      user.membershipNextRefreshAt
+                        ? ` · ${new Date(user.membershipNextRefreshAt).toLocaleDateString("zh-CN")} 刷新`
+                        : ""
+                    } · ${
+                      user.membershipLifetime
+                        ? "长期有效"
+                        : user.membershipExpiresAt
+                          ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期`
+                          : "有效会员"
                     }`
                   : "暂无有效会员积分"
               }

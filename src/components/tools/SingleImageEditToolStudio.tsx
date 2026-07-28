@@ -23,6 +23,7 @@ import {
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { appendPromptFragment, type InputSuggestion } from "@/lib/input-assist";
 
@@ -316,7 +317,7 @@ export function SingleImageEditToolStudio({
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <Button className="flex-1" variant="dark" onClick={() => downloadImage(resultUrl, downloadName)}>
                 <Download className="h-4 w-4" />
-                下载图片
+                {trialDownloadLabel(resultUrl)}
               </Button>
               <Button className="flex-1" variant="outline" loading={loading} onClick={handleGenerate}>
                 重新处理

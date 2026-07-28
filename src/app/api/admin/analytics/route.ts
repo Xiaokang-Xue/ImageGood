@@ -411,6 +411,9 @@ export async function GET(request: Request) {
   const creditsConsumed = db.creditTransactions
     .filter((transaction) => transaction.type === "consume")
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  const totalRevenueCents = paidOrders.reduce((sum, order) => sum + order.amountCents, 0);
+  const registeredUserValueCents =
+    db.users.length > 0 ? Math.round(totalRevenueCents / db.users.length) : 0;
 
   const dayKeys = lastDays(60);
   const daily = dayKeys.map((key) => ({
@@ -510,7 +513,8 @@ export async function GET(request: Request) {
       generationPageVisitors: new Set(generationPageViews.map((event) => event.visitorId)).size,
       activeUsers7d: new Set(activeUserEvents7d.map((event) => event.userId)).size,
       todayActiveUsers: new Set(todayActiveUserEvents.map((event) => event.userId)).size,
-      revenueCents: paidOrders.reduce((sum, order) => sum + order.amountCents, 0),
+      revenueCents: totalRevenueCents,
+      registeredUserValueCents,
       todayRevenueCents: todayPaidOrders.reduce((sum, order) => sum + order.amountCents, 0),
       creditsConsumed,
       todayTasks: todayTasks.length,

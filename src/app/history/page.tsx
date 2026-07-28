@@ -31,6 +31,7 @@ import {
   historyTaskTypeLabels
 } from "@/lib/history-task";
 import { useStudioStore } from "@/lib/studio-store";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import { cn } from "@/lib/utils";
 import type {
   ImageTaskRecord,
@@ -521,7 +522,7 @@ export default function HistoryPage() {
                         onClick={() => resultImage && downloadImage(resultImage)}
                       >
                         <Download className="h-4 w-4" />
-                        下载
+                        {trialDownloadLabel(resultImage, "下载")}
                       </Button>
                       <Button
                         variant="ghost"

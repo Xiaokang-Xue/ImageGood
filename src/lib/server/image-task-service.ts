@@ -29,6 +29,7 @@ import {
   cleanupLocalTaskDirectoryAfterUpload,
   findSavedTaskResult,
   normalizeResultImages,
+  saveTrialResultImages,
   saveUploadFile
 } from "@/lib/server/image-storage";
 import type {
@@ -83,6 +84,8 @@ function createTask(input: {
     inputImageUrl: null,
     resultImageUrl: null,
     resultImages: [],
+    isFreeTrial: false,
+    hasWatermark: false,
     creditCharged: false,
     errorMessage: null,
     createdAt: now,
@@ -123,6 +126,19 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
       throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请等待正在生成的任务完成，或购买积分后继续生成", 402);
     }
 
+    const hasPaidOrder = db.orders.some(
+      (order) => order.userId === task.userId && order.status === "paid" && order.amountCents > 0
+    );
+    const hasSucceededTask = db.imageTasks.some(
+      (item) => item.userId === task.userId && item.status === "succeeded"
+    );
+    const hasActiveFreeTrial = db.imageTasks.some(
+      (item) =>
+        item.userId === task.userId &&
+        item.isFreeTrial === true &&
+        (item.status === "pending" || item.status === "processing")
+    );
+    task.isFreeTrial = !hasPaidOrder && !hasSucceededTask && !hasActiveFreeTrial;
     db.imageTasks.push(task);
     return { task, created: true as const };
   });
@@ -163,7 +179,15 @@ async function failTask(taskId: string, error: unknown) {
   return message;
 }
 
-async function saveResults(userId: string, taskId: string, urls: string[]) {
+async function saveResults(userId: string, taskId: string, urls: string[], isFreeTrial: boolean) {
+  if (isFreeTrial) {
+    const saved = await saveTrialResultImages(urls, userId, taskId);
+    if (saved.resultImages.length === 0 || saved.originalResultImages.length === 0) {
+      throw new Error("未检测到生成结果");
+    }
+    return saved;
+  }
+
   const savedImages = await normalizeResultImages(urls, userId, taskId);
   const resultImages = savedImages.filter(Boolean);
 
@@ -173,11 +197,19 @@ async function saveResults(userId: string, taskId: string, urls: string[]) {
 
   return {
     resultImages,
-    resultImageUrl: resultImages[0] ?? null
+    resultImageUrl: resultImages[0] ?? null,
+    originalResultImages: [] as string[]
   };
 }
 
-async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]; resultImageUrl: string | null }) {
+async function markTaskSucceeded(
+  taskId: string,
+  saved: {
+    resultImages: string[];
+    resultImageUrl: string | null;
+    originalResultImages: string[];
+  }
+) {
   return withDb((db) => {
     const task = db.imageTasks.find((item) => item.id === taskId);
     if (!task) {
@@ -193,6 +225,8 @@ async function markTaskSucceeded(taskId: string, saved: { resultImages: string[]
     task.status = "succeeded";
     task.resultImages = saved.resultImages;
     task.resultImageUrl = saved.resultImageUrl;
+    task.originalResultImages = saved.originalResultImages;
+    task.hasWatermark = task.isFreeTrial === true && saved.originalResultImages.length > 0;
     task.errorMessage = null;
     task.updatedAt = now;
 
@@ -423,7 +457,7 @@ async function completeTask(task: ImageTaskRecord, generatedUrl: string) {
     task,
     stage: "result_storage",
     operation: "save_generated_result",
-    run: () => saveResults(task.userId, task.id, [generatedUrl]),
+    run: () => saveResults(task.userId, task.id, [generatedUrl], task.isFreeTrial === true),
     successFields: (result) => ({
       outputImageCount: result.resultImages.length,
       storageProvider: isCosStorageEnabled() ? "cos" : "local"

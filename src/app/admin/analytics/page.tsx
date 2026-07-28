@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
+  CircleDollarSign,
   Clock3,
   CreditCard,
   Eye,
@@ -179,7 +180,7 @@ export default function AdminAnalyticsPage() {
             description="累计指标使用数据库中的全部历史记录，不与今日口径混合。"
             className="mt-8"
           />
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <MetricCard
               icon={Eye}
               label="累计访问量"
@@ -203,6 +204,12 @@ export default function AdminAnalyticsPage() {
               label="累计支付收入"
               value={formatCny(data.overview.revenueCents)}
               helper={`付费用户 ${formatNumber(data.overview.payingUsers)} 人 · 已完成订单 ${formatNumber(data.overview.paidOrders)} 单`}
+            />
+            <MetricCard
+              icon={CircleDollarSign}
+              label="单个注册用户价值"
+              value={formatCny(data.overview.registeredUserValueCents ?? 0)}
+              helper="累计实收金额 ÷ 累计已注册用户"
             />
             <MetricCard
               icon={Repeat2}

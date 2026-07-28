@@ -10,7 +10,9 @@ export type CreditPackageId =
   | "pro"
   | "business"
   | "creator_monthly"
+  | "creator_half_year"
   | "creator_yearly"
+  | "creator_lifetime"
   | "wechat_test";
 
 export interface CreditPackage {
@@ -27,6 +29,10 @@ export interface CreditPackage {
   oneTimePerUser?: boolean;
   oneTimeNotice?: string;
   validityMonths?: number;
+  validityDays?: number;
+  membershipLifetime?: boolean;
+  periodDays?: number;
+  creditsPerPeriod?: number;
   validityLabel?: string;
   creditsLabel?: string;
 }
@@ -56,6 +62,10 @@ export interface OrderRecord {
   amountCents: number;
   credits: number;
   validityMonths?: number | null;
+  validityDays?: number | null;
+  membershipLifetime?: boolean;
+  periodDays?: number | null;
+  creditsPerPeriod?: number | null;
   status: OrderStatus;
   paymentProvider: PaymentProvider;
   paymentMethod: PaymentMethod;
@@ -102,6 +112,10 @@ export interface PaymentOrderResponse {
   credits: number;
   packageKind: CreditPackageKind;
   validityMonths: number | null;
+  validityDays: number | null;
+  membershipLifetime: boolean;
+  periodDays: number | null;
+  creditsPerPeriod: number | null;
   codeUrl: string | null;
   paymentUrl: string | null;
   paidAt: string | null;

@@ -21,6 +21,7 @@ import {
   isPaymentSourceSurveyRequiredError,
   isUnauthorizedError
 } from "@/lib/api-client";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { HISTORY_TEXT_PROMPT_KEY } from "@/lib/history-task";
 import { cn } from "@/lib/utils";
@@ -290,7 +291,7 @@ export function TextToImageStudio() {
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <Button className="flex-1" variant="dark" onClick={() => downloadImage(resultUrl, `imagegood-text-to-image-${Date.now()}.png`)}>
                 <Download className="h-4 w-4" />
-                下载图片
+                {trialDownloadLabel(resultUrl)}
               </Button>
               <Button className="flex-1" variant="outline" onClick={handleGenerate} loading={loading}>
                 再次生成

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { apiClient, downloadImage, getImageErrorMessage, isUnauthorizedError } from "@/lib/api-client";
+import { trialDownloadLabel } from "@/lib/trial-image";
 import {
   getHistoryTaskTitle,
   historyTaskStatusLabels,
@@ -135,7 +136,7 @@ export default function HistoryDetailPage() {
                   <div className="p-4">
                     <Button variant="dark" className="w-full" onClick={() => downloadImage(image)}>
                       <Download className="h-4 w-4" />
-                      下载图片
+                      {trialDownloadLabel(image)}
                     </Button>
                   </div>
                 </div>

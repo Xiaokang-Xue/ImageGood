@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { AnalyticsDailySummaryRecord, AnalyticsEventRecord } from "@/types/analytics";
 import type { AdminOrderRecord, CreditTransactionRecord, OrderRecord, OrderStatus, PaymentProvider } from "@/types/billing";
-import { clearExpiredMembershipCredits } from "@/lib/credit-balance";
+import { refreshMembershipCredits } from "@/lib/credit-balance";
 import type {
   ImageTaskRecord,
   ImageTaskStatus,
@@ -26,6 +26,10 @@ export interface DbUser {
   membershipCredits?: number;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
+  membershipLifetime?: boolean;
+  membershipNextRefreshAt?: string | null;
+  membershipCreditsPerPeriod?: number;
+  membershipPeriodDays?: number;
   role: "user" | "admin";
   emailVerified: boolean;
   emailVerifiedAt?: string | null;
@@ -76,6 +80,10 @@ export interface DbSmsCode {
   failedAttempts?: number;
 }
 
+export interface StoredImageTaskRecord extends ImageTaskRecord {
+  originalResultImages?: string[] | null;
+}
+
 interface DatabaseShape {
   users: DbUser[];
   sessions: DbSession[];
@@ -84,7 +92,7 @@ interface DatabaseShape {
   smsCodes: DbSmsCode[];
   creditTransactions: CreditTransactionRecord[];
   orders: OrderRecord[];
-  imageTasks: ImageTaskRecord[];
+  imageTasks: StoredImageTaskRecord[];
   analyticsEvents: AnalyticsEventRecord[];
   analyticsDailySummaries: AnalyticsDailySummaryRecord[];
 }
@@ -310,6 +318,16 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
               typeof user.membershipCredits === "number" ? Math.max(0, Math.trunc(user.membershipCredits)) : 0,
             membershipExpiresAt: user.membershipExpiresAt ?? null,
             membershipPlan: user.membershipPlan ?? null,
+            membershipLifetime: Boolean(user.membershipLifetime),
+            membershipNextRefreshAt: user.membershipNextRefreshAt ?? null,
+            membershipCreditsPerPeriod:
+              typeof user.membershipCreditsPerPeriod === "number"
+                ? Math.max(0, Math.trunc(user.membershipCreditsPerPeriod))
+                : 0,
+            membershipPeriodDays:
+              typeof user.membershipPeriodDays === "number"
+                ? Math.max(0, Math.trunc(user.membershipPeriodDays))
+                : 0,
             role: user.role === "admin" ? ("admin" as const) : ("user" as const),
             emailVerified: Boolean(user.emailVerified),
             emailVerifiedAt: user.emailVerifiedAt ?? null,
@@ -318,7 +336,7 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
             phoneVerifiedAt: user.phoneVerifiedAt ?? null,
             lastLoginAt: user.lastLoginAt ?? null
           };
-          clearExpiredMembershipCredits(normalizedUser);
+          refreshMembershipCredits(normalizedUser);
           return normalizedUser;
         })
       : [],
@@ -356,6 +374,15 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
             packageKind: order.packageKind === "membership" ? "membership" : "credit_pack",
             validityMonths:
               typeof order.validityMonths === "number" ? Math.max(1, Math.trunc(order.validityMonths)) : null,
+            validityDays:
+              typeof order.validityDays === "number" ? Math.max(1, Math.trunc(order.validityDays)) : null,
+            membershipLifetime: Boolean(order.membershipLifetime),
+            periodDays:
+              typeof order.periodDays === "number" ? Math.max(1, Math.trunc(order.periodDays)) : null,
+            creditsPerPeriod:
+              typeof order.creditsPerPeriod === "number"
+                ? Math.max(1, Math.trunc(order.creditsPerPeriod))
+                : null,
             amountCents,
             status: ["pending", "paid", "cancelled", "expired", "failed"].includes(order.status)
               ? order.status
@@ -387,6 +414,9 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
           title: typeof task.title === "string" ? task.title : null,
           isFavorite: Boolean(task.isFavorite),
           resultImages: Array.isArray(task.resultImages) ? task.resultImages : [],
+          originalResultImages: Array.isArray(task.originalResultImages) ? task.originalResultImages : [],
+          isFreeTrial: Boolean(task.isFreeTrial),
+          hasWatermark: Boolean(task.hasWatermark),
           creditCharged: Boolean(task.creditCharged)
         }))
       : [],
@@ -854,7 +884,7 @@ export async function findSessionUserByTokenHash(tokenHash: string) {
 }
 
 export interface UserImageTaskPage {
-  tasks: ImageTaskRecord[];
+  tasks: StoredImageTaskRecord[];
   page: number;
   limit: number;
   total: number;
@@ -1082,6 +1112,29 @@ export async function getOrderByOutTradeNo(outTradeNo: string) {
   const row = rowsFromResult(result)[0];
   if (!row) return null;
   return normalizeDb({ orders: [parseMysqlJsonRecord(row.record) as OrderRecord] }).orders[0] ?? null;
+}
+
+export async function hasPaidOrderForUser(userId: string) {
+  if (!isMysqlDatabaseUrl()) {
+    const db = await readFileDb();
+    return db.orders.some(
+      (order) => order.userId === userId && order.status === "paid" && order.amountCents > 0
+    );
+  }
+
+  await ensureMysqlSchema();
+  const pool = await getMysqlPool();
+  const result = await pool.query(
+    `SELECT id
+     FROM imagegood_records
+     WHERE collection = 'orders'
+       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?
+       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.status')) = 'paid'
+       AND CAST(JSON_UNQUOTE(JSON_EXTRACT(record, '$.amountCents')) AS UNSIGNED) > 0
+     LIMIT 1`,
+    [userId]
+  );
+  return rowsFromResult(result).length > 0;
 }
 
 export async function hasPaymentSourceSurveyRecord(userId: string, orderId: string) {

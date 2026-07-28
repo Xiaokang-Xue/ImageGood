@@ -9,6 +9,8 @@ export interface PublicUser {
   membershipCredits?: number;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
+  membershipLifetime?: boolean;
+  membershipNextRefreshAt?: string | null;
   role: "user" | "admin";
   emailVerified: boolean;
   emailVerifiedAt?: string | null;

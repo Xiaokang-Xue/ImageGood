@@ -107,6 +107,7 @@ export interface AdminAnalyticsResponse {
     activeUsers7d: number;
     todayActiveUsers: number;
     revenueCents: number;
+    registeredUserValueCents: number;
     todayRevenueCents: number;
     creditsConsumed: number;
     todayTasks: number;

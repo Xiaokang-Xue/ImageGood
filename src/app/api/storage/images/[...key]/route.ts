@@ -1,6 +1,6 @@
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { getImageTaskById } from "@/lib/db";
+import { getImageTaskById, hasPaidOrderForUser } from "@/lib/db";
 import { getCosObjectBuffer, getCosObjectSignedUrl, isCosStorageEnabled, parseTaskInfoFromCosKey } from "@/lib/server/cos-storage";
 import { detectBrowserImageMimeType, imageMimeTypeFromExtension } from "@/lib/server/image-file";
 import { cosImagePreviewQuery, parseImagePreviewWidth } from "@/lib/server/image-preview";
@@ -41,6 +41,21 @@ export async function GET(
   const task = await getImageTaskById(taskInfo.taskId);
   if (!task || task.userId !== taskInfo.userId || (task.userId !== user.id && user.role !== "admin")) {
     return NextResponse.json({ error: { code: "FORBIDDEN", message: "无权访问该图片" } }, { status: 403 });
+  }
+  if (
+    taskInfo.filename.startsWith("original-") &&
+    user.role !== "admin" &&
+    !(await hasPaidOrderForUser(task.userId))
+  ) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "PAID_DOWNLOAD_REQUIRED",
+          message: "购买任意套餐后即可访问无水印图片"
+        }
+      },
+      { status: 402 }
+    );
   }
 
   const previewWidth = parseImagePreviewWidth(request.nextUrl.searchParams.get("image_preview"));

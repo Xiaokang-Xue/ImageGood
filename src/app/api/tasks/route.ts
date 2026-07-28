@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { hasPaidOrderForUser } from "@/lib/db";
 import { deleteUserTasks, listUserTasks } from "@/lib/server/image-task-service";
+import { toPublicImageTask } from "@/lib/server/image-task-access";
 import { getCurrentUser } from "@/lib/session";
 import type { ImageTaskStatus, ImageTaskTimeRange, ImageTaskType } from "@/types/task";
 
@@ -40,23 +42,29 @@ export async function GET(request: Request) {
     rawTimeRange && timeRanges.has(rawTimeRange as ImageTaskTimeRange)
       ? (rawTimeRange as ImageTaskTimeRange)
       : "all";
-  const result = await listUserTasks(user.id, {
-    page,
-    limit,
-    type,
-    status,
-    timeRange,
-    favorite: url.searchParams.get("favorite") === "1"
-  });
+  const [result, hasPaidOrder] = await Promise.all([
+    listUserTasks(user.id, {
+      page,
+      limit,
+      type,
+      status,
+      timeRange,
+      favorite: url.searchParams.get("favorite") === "1"
+    }),
+    hasPaidOrderForUser(user.id)
+  ]);
   return NextResponse.json(
     {
       ok: true,
       ...result,
-      tasks: result.tasks.map((task) => ({
-        ...task,
-        prompt: task.prompt.slice(0, 500),
-        resultImages: task.resultImages?.slice(0, 1) ?? []
-      }))
+      tasks: result.tasks.map((storedTask) => {
+        const task = toPublicImageTask(storedTask, hasPaidOrder);
+        return {
+          ...task,
+          prompt: task.prompt.slice(0, 500),
+          resultImages: task.resultImages?.slice(0, 1) ?? []
+        };
+      })
     },
     {
       headers: { "Cache-Control": "private, no-store" }

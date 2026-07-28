@@ -102,6 +102,22 @@ npm run dev
 
 生产部署还应配置公网 HTTPS、强随机 `AUTH_SECRET`、安全 Cookie、支付回调地址和进程管理。完整环境变量及启用条件以 [.env.example](.env.example) 和 [docs/configuration.md](docs/configuration.md) 为准。
 
+生产服务器不得使用 `npm run dev` 对外提供服务。更新代码后应重新构建并启动生产运行时：
+
+```bash
+npm install
+npm run build
+npm run start:prod
+```
+
+使用 PM2 时，将最后一步替换为：
+
+```bash
+pm2 delete imagegood
+pm2 start npm --name imagegood -- run start:prod
+pm2 save
+```
+
 ## 自动化检查
 
 ```bash
