@@ -4,12 +4,12 @@
 
 **面向内容创作者、商家与普通用户的 AI 图片创作与处理平台**
 
-[![CI](https://github.com/Xiaokang-Xue/ImageGood/actions/workflows/ci.yml/badge.svg)](https://github.com/Xiaokang-Xue/ImageGood/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Xiaokang-Xue/ImageGood?include_prereleases&label=release)](https://github.com/Xiaokang-Xue/ImageGood/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2.35-000000?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18.3.1-149ECA?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7.2-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-All%20rights%20reserved-525252)](LICENSE)
 
-[在线体验](https://imagegood.net) · [English](README_EN.md) · [配置文档](docs/configuration.md) · [参与贡献](CONTRIBUTING.md)
+[在线体验](https://imagegood.net) · [English](README_EN.md) · [配置文档](docs/configuration.md)
 
 </div>
 
@@ -164,14 +164,8 @@ ImageGood/
 - [图片任务可观测性](docs/image-task-observability.md)
 - [页面质量基线](docs/quality-baseline.md)
 - [Codex 服务部署](docs/deploy-codex-server.md)
-- [贡献指南](CONTRIBUTING.md)
 - [支持说明](SUPPORT.md)
 - [安全策略](SECURITY.md)
-
-
-## 参与贡献
-
-提交代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。Issue 和 Pull Request 中不得包含密钥、证书、用户图片、手机号、邮箱、订单信息或生产数据库内容。
 
 ## 安全说明
 

@@ -4,12 +4,12 @@
 
 **An AI image creation and editing platform for creators, merchants, and everyday users**
 
-[![CI](https://github.com/Xiaokang-Xue/ImageGood/actions/workflows/ci.yml/badge.svg)](https://github.com/Xiaokang-Xue/ImageGood/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Xiaokang-Xue/ImageGood?include_prereleases&label=release)](https://github.com/Xiaokang-Xue/ImageGood/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2.35-000000?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18.3.1-149ECA?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7.2-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-All%20rights%20reserved-525252)](LICENSE)
 
-[Live site](https://imagegood.net) · [中文](README.md) · [Configuration](docs/configuration.md) · [Contributing](CONTRIBUTING.md)
+[Live site](https://imagegood.net) · [中文](README.md) · [Configuration](docs/configuration.md)
 
 </div>
 
@@ -140,17 +140,12 @@ ImageGood/
 - [Image job observability](docs/image-task-observability.md)
 - [Quality baseline](docs/quality-baseline.md)
 - [Codex service deployment](docs/deploy-codex-server.md)
-- [Contributing](CONTRIBUTING.md)
 - [Support](SUPPORT.md)
 - [Security policy](SECURITY.md)
 
 ## Roadmap and Releases
 
 See [ROADMAP.md](ROADMAP.md) for current priorities. It does not promise fixed delivery dates. Published versions are listed in [GitHub Releases](https://github.com/Xiaokang-Xue/ImageGood/releases), with repository changes tracked in [CHANGELOG.md](CHANGELOG.md).
-
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request. Never include secrets, certificates, user images, personal data, order data, or production database contents in an Issue or pull request.
 
 ## Security
 
