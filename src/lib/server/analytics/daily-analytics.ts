@@ -1,5 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
+import { CREDIT_PACKAGES } from "@/config/billing-plans";
+import { customerPaymentOrders } from "@/lib/server/analytics/payment-order-filter";
 
 type DailyReportRange = "today" | "yesterday";
 
@@ -15,10 +17,14 @@ interface StoredUser {
 interface StoredOrder {
   id: string;
   userId: string;
+  packageId?: string;
+  packageKind?: "credit_pack" | "membership";
+  packageName?: string;
   status: "pending" | "paid" | "cancelled" | "expired" | "failed";
   amountCents?: number;
   credits?: number;
   paymentProvider?: "wechat" | "alipay" | "manual";
+  transactionId?: string | null;
   createdAt?: string;
   paidAt?: string | null;
   updatedAt?: string;
@@ -34,6 +40,7 @@ interface StoredImageTask {
 
 interface StoredCreditTransaction {
   id: string;
+  orderId?: string | null;
   type: "grant" | "consume" | "purchase" | "refund" | "admin_adjust";
   amount: number;
   createdAt?: string;
@@ -70,6 +77,14 @@ interface AnalyticsDatabase {
   analyticsDailySummaries: StoredAnalyticsDailySummary[];
 }
 
+export interface PackagePurchaseSummary {
+  packageId: string;
+  packageKind: "credit_pack" | "membership";
+  packageName: string;
+  buyers: number;
+  revenueCents: number;
+}
+
 export interface DailyAnalyticsReport {
   date: string;
   range: DailyReportRange;
@@ -101,6 +116,7 @@ export interface DailyAnalyticsReport {
     pendingOrders: number;
     pendingOrderUsers: number;
     purchaseClicks: number;
+    packagePurchases: PackagePurchaseSummary[];
   };
   content: {
     newHistoryRecords: number;
@@ -335,6 +351,24 @@ function repeatPurchaseMetrics(orders: StoredOrder[]) {
   };
 }
 
+function packagePurchaseSummaries(orders: StoredOrder[]): PackagePurchaseSummary[] {
+  return CREDIT_PACKAGES.map((plan) => {
+    const planOrders = orders.filter(
+      (order) =>
+        order.packageId === plan.id ||
+        (!order.packageId && order.packageKind === plan.kind && order.packageName === plan.name)
+    );
+
+    return {
+      packageId: plan.id,
+      packageKind: plan.kind,
+      packageName: plan.name,
+      buyers: new Set(planOrders.map((order) => order.userId)).size,
+      revenueCents: planOrders.reduce((sum, order) => sum + (order.amountCents || 0), 0)
+    };
+  });
+}
+
 function emptyAnalyticsDatabase(): AnalyticsDatabase {
   return {
     users: [],
@@ -423,6 +457,7 @@ export async function getDailyAnalyticsReport(input: {
 } = {}): Promise<DailyAnalyticsReport> {
   const { date, range, start, end } = resolveReportWindow(input);
   const db = await readAnalyticsDatabase();
+  const analyticsOrders = customerPaymentOrders(db.orders, db.creditTransactions);
 
   const allPageViews = db.analyticsEvents.filter((event) => event.type === "page_view");
   const allPurchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
@@ -437,8 +472,8 @@ export async function getDailyAnalyticsReport(input: {
   const allCreditsConsumed = db.creditTransactions
     .filter((transaction) => transaction.type === "consume")
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  const allPaidOrders = db.orders.filter((order) => order.status === "paid");
-  const allPendingOrders = db.orders.filter((order) => order.status === "pending");
+  const allPaidOrders = analyticsOrders.filter((order) => order.status === "paid");
+  const allPendingOrders = analyticsOrders.filter((order) => order.status === "pending");
   const cumulativeRepeatPurchases = repeatPurchaseMetrics(allPaidOrders);
 
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view" && inRange(event.createdAt, start, end));
@@ -456,8 +491,12 @@ export async function getDailyAnalyticsReport(input: {
     .filter((transaction) => transaction.type === "consume" && inRange(transaction.createdAt, start, end))
     .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
 
-  const paidOrders = db.orders.filter((order) => order.status === "paid" && inRange(order.paidAt || order.updatedAt, start, end));
-  const pendingOrders = db.orders.filter((order) => order.status === "pending" && inRange(order.createdAt, start, end));
+  const paidOrders = analyticsOrders.filter(
+    (order) => order.status === "paid" && inRange(order.paidAt || order.updatedAt, start, end)
+  );
+  const pendingOrders = analyticsOrders.filter(
+    (order) => order.status === "pending" && inRange(order.createdAt, start, end)
+  );
   const paidUserIdsInRange = new Set(paidOrders.map((order) => order.userId));
   const paidOrdersThroughPeriodEnd = allPaidOrders.filter((order) => {
     const time = paidOrderTime(order);
@@ -501,7 +540,8 @@ export async function getDailyAnalyticsReport(input: {
       alipayPaidOrders: paidOrders.filter((order) => order.paymentProvider === "alipay").length,
       pendingOrders: pendingOrders.length,
       pendingOrderUsers: new Set(pendingOrders.map((order) => order.userId)).size,
-      purchaseClicks: rangeTraffic.purchaseClicks || purchaseClicks.length
+      purchaseClicks: rangeTraffic.purchaseClicks || purchaseClicks.length,
+      packagePurchases: packagePurchaseSummaries(paidOrders)
     },
     content: {
       newHistoryRecords: succeededTasks.length

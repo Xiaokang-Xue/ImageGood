@@ -306,14 +306,16 @@ function PlanCard({
         )}
       </div>
 
-      <Button
-        className="mt-5 w-full"
-        variant={plan.recommended ? "dark" : "primary"}
-        loading={loading}
-        onClick={onBuy}
-      >
-        {plan.buttonLabel ?? "立即购买"}
-      </Button>
+      <div className="mt-auto pt-5">
+        <Button
+          className="w-full"
+          variant={plan.recommended ? "dark" : "primary"}
+          loading={loading}
+          onClick={onBuy}
+        >
+          {plan.buttonLabel ?? "立即购买"}
+        </Button>
+      </div>
       {isMembership ? (
         <p className="mt-3 text-[10px] leading-4 text-neutral-400">
           50 会员积分 / 30 天，积分每 30 天刷新，周期内未使用额度不结转；

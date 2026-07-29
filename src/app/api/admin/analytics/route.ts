@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDbSnapshot } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import { customerPaymentOrders } from "@/lib/server/analytics/payment-order-filter";
 import type {
   AdminAnalyticsResponse,
   AnalyticsDailySummaryRecord,
@@ -378,10 +379,17 @@ export async function GET(request: Request) {
   }
 
   const db = await getDbSnapshot({ includeAnalytics: true });
-  const paidOrders = db.orders.filter((order) => order.status === "paid");
+  const analyticsOrders = customerPaymentOrders(db.orders, db.creditTransactions);
+  const analyticsOrderIds = new Set(analyticsOrders.map((order) => order.id));
+  const excludedOrderIds = new Set(
+    db.orders
+      .filter((order) => !analyticsOrderIds.has(order.id))
+      .map((order) => order.id)
+  );
+  const paidOrders = analyticsOrders.filter((order) => order.status === "paid");
   const repeatPurchases = repeatPurchaseMetrics(paidOrders);
-  const pendingOrders = db.orders.filter((order) => order.status === "pending");
-  const todayCreatedOrders = db.orders.filter((order) => beijingDateKey(order.createdAt) === todayKey);
+  const pendingOrders = analyticsOrders.filter((order) => order.status === "pending");
+  const todayCreatedOrders = analyticsOrders.filter((order) => beijingDateKey(order.createdAt) === todayKey);
   const todayPendingOrders = todayCreatedOrders.filter((order) => order.status === "pending");
   const todayPaidOrders = paidOrders.filter((order) => beijingDateKey(order.paidAt) === todayKey);
   const pendingOrderUsers = new Set(pendingOrders.map((order) => order.userId)).size;
@@ -391,7 +399,11 @@ export async function GET(request: Request) {
   const todaySucceededTasks = todayTasks.filter((task) => task.status === "succeeded");
   const pageViews = db.analyticsEvents.filter((event) => event.type === "page_view");
   const purchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
-  const acquisitionEvents = db.analyticsEvents.filter((event) => event.type === "acquisition_channel");
+  const acquisitionEvents = db.analyticsEvents.filter(
+    (event) =>
+      event.type === "acquisition_channel" &&
+      !excludedOrderIds.has(String(event.metadata?.orderId || ""))
+  );
   const trafficCounters = buildTrafficCounters(db.analyticsDailySummaries, db.analyticsEvents);
   const todayTraffic = trafficCounters.byDate.get(todayKey) ?? emptyTrafficCounts();
   const todayPageViews = pageViews.filter((event) => beijingDateKey(event.createdAt) === todayKey);
@@ -471,7 +483,7 @@ export async function GET(request: Request) {
 
   const funnelSteps = buildConversionFunnel({
     events: db.analyticsEvents,
-    orders: db.orders,
+    orders: analyticsOrders,
     range,
     todayKey
   });

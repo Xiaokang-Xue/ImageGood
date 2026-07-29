@@ -338,19 +338,24 @@ export default function HistoryPage() {
               ["30d", "近 30 天"]
             ]}
           />
-          <button
-            type="button"
-            className={cn(
-              "mt-6 flex h-11 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition",
-              filters.favorite
-                ? "border-neutral-900 bg-neutral-950 text-white"
-                : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-500"
-            )}
-            onClick={() => updateFilter("favorite", !filters.favorite)}
-          >
-            <Heart className={cn("h-4 w-4", filters.favorite && "fill-current")} />
-            仅看收藏
-          </button>
+          <div className="flex flex-col">
+            <span aria-hidden="true" className="hidden text-xs font-semibold text-neutral-500 sm:block">
+              收藏筛选
+            </span>
+            <button
+              type="button"
+              className={cn(
+                "flex h-11 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition sm:mt-1.5",
+                filters.favorite
+                  ? "border-neutral-900 bg-neutral-950 text-white"
+                  : "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-500"
+              )}
+              onClick={() => updateFilter("favorite", !filters.favorite)}
+            >
+              <Heart className={cn("h-4 w-4", filters.favorite && "fill-current")} />
+              仅看收藏
+            </button>
+          </div>
         </div>
         {hasActiveFilters ? (
           <button
