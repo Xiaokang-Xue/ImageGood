@@ -4,12 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Copy,
   Download,
   ExternalLink,
   Heart,
   Pencil,
-  RotateCcw,
   SlidersHorizontal,
   Trash2
 } from "lucide-react";
@@ -26,7 +24,6 @@ import {
   getHistoryTaskEditorTool,
   getHistoryTaskResult,
   getHistoryTaskTitle,
-  HISTORY_TEXT_PROMPT_KEY,
   historyTaskStatusLabels,
   historyTaskTypeLabels
 } from "@/lib/history-task";
@@ -253,23 +250,9 @@ export default function HistoryPage() {
     }
   };
 
-  const reusePrompt = async (task: ImageTaskRecord) => {
-    try {
-      await navigator.clipboard.writeText(task.prompt);
-      setMessage("提示词已复制，可粘贴到任意图片工具继续使用");
-    } catch {
-      setError("浏览器未允许复制，请在任务详情中手动复制提示词");
-    }
-  };
-
-  const openEditorWithTask = (task: ImageTaskRecord, mode: "continue" | "rerun") => {
-    if (mode === "rerun" && task.type === "text_to_image") {
-      window.sessionStorage.setItem(HISTORY_TEXT_PROMPT_KEY, task.prompt);
-      router.push("/text-to-image");
-      return;
-    }
+  const openEditorWithTask = (task: ImageTaskRecord) => {
     const resultImage = getHistoryTaskResult(task);
-    const sourceImage = mode === "continue" ? resultImage || task.inputImageUrl : task.inputImageUrl || resultImage;
+    const sourceImage = resultImage || task.inputImageUrl;
     if (!sourceImage) {
       setError("该任务没有可复用的输入图片");
       return;
@@ -506,22 +489,12 @@ export default function HistoryPage() {
                         variant="dark"
                         size="sm"
                         disabled={!resultImage}
-                        onClick={() => openEditorWithTask(task, "continue")}
+                        onClick={() => openEditorWithTask(task)}
                       >
                         继续编辑
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => openEditorWithTask(task, "rerun")}>
-                        <RotateCcw className="h-4 w-4" />
-                        重新生成
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => void reusePrompt(task)}>
-                        <Copy className="h-4 w-4" />
-                        复用提示词
-                      </Button>
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         disabled={!resultImage}
                         onClick={() => resultImage && downloadImage(resultImage)}
@@ -530,8 +503,9 @@ export default function HistoryPage() {
                         {trialDownloadLabel(resultImage, "下载")}
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        className="text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
                         disabled={deleting || !canDelete}
                         onClick={() => void handleDeleteOne(task)}
                       >

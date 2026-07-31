@@ -112,9 +112,14 @@ export default function AdminOrdersPage() {
           <h1 className="mt-2 text-3xl font-bold text-ink">支付订单</h1>
           <p className="mt-3 text-sm text-muted">正常订单由支付平台异步通知自动加积分。管理员补发仅用于异常处理。</p>
         </div>
-        <Link href="/admin/analytics">
-          <Button variant="outline">查看运营数据</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/tasks">
+            <Button variant="outline">查询图片任务</Button>
+          </Link>
+          <Link href="/admin/analytics">
+            <Button variant="outline">查看运营数据</Button>
+          </Link>
+        </div>
       </div>
 
       {error ? (

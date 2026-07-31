@@ -93,7 +93,7 @@ export function TextToImageStudio() {
       const response = await apiClient.createTextToImage({
         prompt: finalPrompt,
         style,
-        size: "1024x1024",
+        size: "auto",
         quality: "auto",
         outputFormat: "png"
       });

@@ -155,25 +155,17 @@ export function SmartImage({
           <ImageOff className="h-8 w-8 text-slate-400" />
           <p className="mt-3 text-sm font-semibold text-slate-600">{alt || "图片素材"}</p>
           <p className="mt-1 text-xs text-slate-400">图片暂时无法显示</p>
-          <span
-            role="button"
-            tabIndex={0}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-500 hover:bg-neutral-50"
+          <button
+            type="button"
+            className="relative z-30 mt-3 inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-500 hover:bg-neutral-50"
             onClick={(event) => {
               event.stopPropagation();
               retryNow();
             }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                event.stopPropagation();
-                retryNow();
-              }
-            }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
             重新加载
-          </span>
+          </button>
         </div>
       ) : (
         <>

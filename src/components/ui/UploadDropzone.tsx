@@ -56,6 +56,9 @@ export function UploadDropzone({
       const previewUrl = URL.createObjectURL(uploadFile);
       ownedPreviewRef.current = previewUrl;
       onImageSelected(previewUrl, uploadFile);
+      // The receiving workspace owns this URL after selection. In particular,
+      // the homepage unmounts immediately when it routes to the editor.
+      ownedPreviewRef.current = null;
     } catch (error) {
       setUploadError(
         error instanceof ImageNormalizationError

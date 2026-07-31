@@ -123,7 +123,7 @@ export function RemoveBackgroundStudio() {
       const response = await apiClient.removeBackground({
         image: imageFile ?? undefined,
         imageUrl: imageFile ? undefined : imageUrl,
-        size: "1024x1024",
+        size: "auto",
         quality: "auto"
       });
       setTaskId(response.taskId);

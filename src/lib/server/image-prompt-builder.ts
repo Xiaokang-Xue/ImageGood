@@ -1,7 +1,5 @@
 import type {
   EditTool,
-  PosterRatio,
-  PosterStyle,
   PosterUsage,
   ProductRatio,
   ProductScene,
@@ -51,20 +49,12 @@ const posterUsageLabels: Record<PosterUsage, string> = {
   checkin: "学习打卡图"
 };
 
-const posterStyleLabels: Record<PosterStyle, string> = {
-  clean: "干净清爽",
-  premium: "高级质感",
-  cute: "轻快亲和",
-  tech: "科技秩序",
-  handdrawn: "手作灵感"
-};
-
-const posterStyleGuides: Record<PosterStyle, string> = {
-  clean: "大面积留白、浅色背景、清晰层次、轻量图形元素",
-  premium: "克制高级的商业视觉、柔和光影、精致材质、低饱和配色",
-  cute: "明亮轻快、亲和但不幼稚、圆润细节、柔和色块",
-  tech: "现代科技感、秩序网格、清晰几何结构、冷静色彩",
-  handdrawn: "轻设计手作感、细腻线条、自然纸感、干净构图"
+const posterUsageGuides: Record<PosterUsage, string> = {
+  xiaohongshu: "视觉焦点鲜明，适合手机信息流浏览，主体和内容主题一眼可辨",
+  wechat: "横向构图稳重清晰，适合公众号文章首图，重要内容位于安全区域",
+  community: "活动氛围明确，信息层级清楚，适合社群传播和活动通知",
+  course: "专业可信，主题聚焦，适合课程详情页、知识内容和学习项目封面",
+  checkin: "积极有行动感，画面简洁，适合每日打卡、计划记录和阶段挑战"
 };
 
 const textToImageStyleLabels: Record<TextToImageStyle, string> = {
@@ -164,19 +154,17 @@ export function buildProductPrompt(input: {
 }
 
 export function buildPosterPrompt(input: {
-  title: string;
-  subtitle?: string;
   usage: PosterUsage;
-  style: PosterStyle;
-  ratio: PosterRatio;
+  prompt?: string;
 }) {
+  const userPrompt = input.prompt?.trim();
+
   return joinPrompt([
-    "任务：生成无文字的封面或海报背景。",
-    `主题：${withFallback(input.title, "与用户用途相关的封面视觉")}。`,
-    input.subtitle?.trim() ? `补充语义：${input.subtitle.trim()}。` : undefined,
-    `用途：${posterUsageLabels[input.usage]}；风格：${posterStyleLabels[input.style]}，${posterStyleGuides[input.style]}；比例 ${input.ratio}。`,
-    "围绕主题建立清晰视觉中心，并预留完整、低干扰的标题排版区域。",
-    "不要生成任何文字、Logo、价格、二维码或水印；避免杂乱拼贴和无关装饰。"
+    `任务：直接生成一张完整、可用的${posterUsageLabels[input.usage]}，不是线框稿或空白模板。`,
+    `用途要求：${posterUsageGuides[input.usage]}。`,
+    userPrompt ? `用户画面要求：${userPrompt}。严格保留用户意图。` : "未提供额外描述时，由你为该用途完成专业、自然的视觉构思。",
+    "由模型完成主体、场景、光影和版式关系；画面现代、干净、有真实设计质感。",
+    "除非用户明确要求，否则不生成文字；不要添加无关装饰、随机字符、Logo、二维码或水印。"
   ]);
 }
 

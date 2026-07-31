@@ -26,6 +26,7 @@ import type {
 } from "@/types/billing";
 import type { AdminAnalyticsResponse, AnalyticsFunnelRange } from "@/types/analytics";
 import type {
+  AdminImageTaskListResponse,
   DeleteImageTaskResponse,
   DeleteImageTasksResponse,
   ImageTaskDetailResponse,
@@ -628,6 +629,25 @@ export const apiClient = {
     }>(`/api/admin/orders${query ? `?${query}` : ""}`);
   },
 
+  listAdminImageTasks(options?: {
+    page?: number;
+    limit?: number;
+    query?: string;
+    type?: ImageTaskRecord["type"] | "all";
+    status?: ImageTaskRecord["status"] | "all";
+  }) {
+    const params = new URLSearchParams();
+    if (options?.page) params.set("page", String(options.page));
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.query) params.set("query", options.query);
+    if (options?.type && options.type !== "all") params.set("type", options.type);
+    if (options?.status && options.status !== "all") params.set("status", options.status);
+    const query = params.toString();
+    return requestJson<AdminImageTaskListResponse>(
+      `/api/admin/tasks${query ? `?${query}` : ""}`
+    );
+  },
+
   getAdminAnalytics(options?: { range?: AnalyticsFunnelRange; refresh?: boolean }) {
     const params = new URLSearchParams();
     if (options?.range) params.set("range", options.range);
@@ -727,7 +747,7 @@ export const apiClient = {
     if (image) formData.append("image", image);
     formData.append("prompt", payload.prompt ?? "");
     formData.append("tool", payload.tool);
-    formData.append("size", payload.size ?? "1024x1024");
+    formData.append("size", payload.size ?? "auto");
     formData.append("quality", payload.quality ?? "auto");
     formData.append("outputFormat", payload.outputFormat ?? "png");
 
@@ -765,7 +785,7 @@ export const apiClient = {
     const formData = new FormData();
 
     if (image) formData.append("image", image);
-    formData.append("size", typeof payload.size === "string" ? payload.size : "1024x1024");
+    formData.append("size", typeof payload.size === "string" ? payload.size : "auto");
     formData.append("quality", payload.quality ?? "auto");
 
     return postTrackedTaskForm<RemoveBackgroundResponse>("/api/images/remove-background", formData, "/remove-background");
@@ -775,7 +795,7 @@ export const apiClient = {
     const formData = new FormData();
     formData.append("image", payload.image);
     formData.append("prompt", payload.prompt);
-    formData.append("size", "1024x1024");
+    formData.append("size", "auto");
     formData.append("quality", "auto");
     return postTrackedTaskForm<EditImageResponse>(endpoint, formData, payload.returnPath);
   },

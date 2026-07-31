@@ -72,5 +72,5 @@ export function normalizeImageSize(value?: string): ImageSize {
     return value as ImageSize;
   }
 
-  return "1024x1024";
+  return "auto";
 }

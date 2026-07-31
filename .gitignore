@@ -19,6 +19,7 @@ pnpm-debug.log*
 dev.db
 ci.db
 data/
+exports/
 public/generated/
 tsconfig.tsbuildinfo
 server/__pycache__/

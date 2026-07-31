@@ -120,7 +120,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
           imageUrl: currentImage ?? originalImage ?? undefined,
           prompt: finalPrompt,
           tool: finalTool,
-          size: "1024x1024",
+          size: "auto",
           quality: "auto",
           outputFormat: "png"
         });

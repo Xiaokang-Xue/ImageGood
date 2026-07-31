@@ -270,6 +270,13 @@ export async function readPrivateResultImage(reference: string) {
   throw new Error("无水印结果引用无效");
 }
 
+export async function readStoredTaskImage(reference: string, taskId: string) {
+  if (reference.startsWith(PRIVATE_RESULT_PREFIX)) {
+    return readPrivateResultImage(reference);
+  }
+  return loadResultImageBuffer(reference, taskId);
+}
+
 async function createTrialWatermark(buffer: Buffer) {
   const image = sharp(buffer, { failOn: "warning" }).rotate();
   const metadata = await image.metadata();

@@ -19,6 +19,7 @@ import {
   buildTextToImagePrompt
 } from "@/lib/server/image-prompt-builder";
 import { getImageProviderService } from "@/lib/server/image-provider";
+import { appendImageSizeGuidance } from "@/lib/server/image-size-policy";
 import {
   availableCredits,
   consumeOneAvailableCredit
@@ -38,8 +39,6 @@ import type {
   ImageProvider,
   ImageQuality,
   ImageSize,
-  PosterRatio,
-  PosterStyle,
   PosterUsage,
   ProductRatio,
   ProductScene,
@@ -650,7 +649,7 @@ export async function runEditTask(input: {
   outputFormat: ImageOutputFormat;
 }) {
   const provider = getImageProviderService();
-  const prompt = buildEditPrompt(input.tool, input.prompt);
+  const prompt = appendImageSizeGuidance(buildEditPrompt(input.tool, input.prompt), input.size);
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
@@ -694,7 +693,7 @@ export async function runProductTask(input: {
   size: ImageSize;
 }) {
   const provider = getImageProviderService();
-  const prompt = buildProductPrompt(input);
+  const prompt = appendImageSizeGuidance(buildProductPrompt(input), input.size);
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
@@ -729,15 +728,12 @@ export async function runProductTask(input: {
 export async function runPosterTask(input: {
   requestId?: string;
   userId: string;
-  title: string;
-  subtitle: string;
   usage: PosterUsage;
-  style: PosterStyle;
-  ratio: PosterRatio;
+  prompt?: string;
   size: ImageSize;
 }) {
   const provider = getImageProviderService();
-  const prompt = buildPosterPrompt(input);
+  const prompt = appendImageSizeGuidance(buildPosterPrompt(input), input.size);
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
@@ -776,10 +772,13 @@ export async function runTextToImageTask(input: {
   outputFormat: ImageOutputFormat;
 }) {
   const provider = getImageProviderService();
-  const prompt = buildTextToImagePrompt({
-    prompt: input.prompt,
-    style: input.style
-  });
+  const prompt = appendImageSizeGuidance(
+    buildTextToImagePrompt({
+      prompt: input.prompt,
+      style: input.style
+    }),
+    input.size
+  );
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
@@ -817,7 +816,7 @@ export async function runRemoveBackgroundTask(input: {
   prompt?: string;
 }) {
   const provider = getImageProviderService();
-  const prompt = buildRemoveBackgroundPrompt(input.prompt);
+  const prompt = appendImageSizeGuidance(buildRemoveBackgroundPrompt(input.prompt), input.size);
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
@@ -860,11 +859,12 @@ async function runPromptedImageEditTask(input: {
   outputFormat?: ImageOutputFormat;
 }) {
   const provider = getImageProviderService();
+  const prompt = appendImageSizeGuidance(input.prompt, input.size);
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
     type: input.type,
-    prompt: input.prompt,
+    prompt,
     tool: input.tool,
     provider: provider.name
   });
@@ -879,7 +879,7 @@ async function runPromptedImageEditTask(input: {
       provider.editImage({
         taskId: task.id,
         image: providerImage,
-        prompt: input.prompt,
+        prompt,
         size: input.size,
         quality: input.quality,
         outputFormat: input.outputFormat || "png"

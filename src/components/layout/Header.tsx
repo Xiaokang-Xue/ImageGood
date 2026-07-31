@@ -177,6 +177,13 @@ export function Header() {
                         >
                           订单后台
                         </Link>
+                        <Link
+                          href="/admin/tasks"
+                          className="block px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          图片任务
+                        </Link>
                       </>
                     ) : null}
                     <button

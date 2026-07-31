@@ -73,6 +73,20 @@ export interface ImageTaskDetailResponse {
   task: ImageTaskRecord;
 }
 
+export interface AdminImageTaskRecord extends ImageTaskRecord {
+  originalResultImages?: string[] | null;
+  userAccount: string;
+  userName: string | null;
+}
+
+export interface AdminImageTaskListResponse {
+  tasks: AdminImageTaskRecord[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
 export interface DeleteImageTaskResponse {
   ok: boolean;
   deletedId: string;

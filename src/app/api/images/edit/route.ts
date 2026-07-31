@@ -10,6 +10,7 @@ import {
   normalizeOutputFormat
 } from "@/lib/server/image-validation";
 import { runEditTask } from "@/lib/server/image-task-service";
+import { resolveInputImageSize } from "@/lib/server/image-size-policy";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
     const image = await getRequiredImageFile(formData);
     const prompt = getFormString(formData, "prompt");
     const tool = normalizeEditTool(getFormString(formData, "tool", "custom"));
-    const size = normalizeImageSize(getFormString(formData, "size", "1024x1024"));
+    const requestedSize = normalizeImageSize(getFormString(formData, "size", "auto"));
+    const size = await resolveInputImageSize({ image, prompt, requestedSize });
     const quality = normalizeImageQuality(getFormString(formData, "quality", "auto"));
     const outputFormat = normalizeOutputFormat(getFormString(formData, "outputFormat", "png"));
 

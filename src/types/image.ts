@@ -91,11 +91,12 @@ export interface ProductImageResponse {
 
 export interface PosterImageRequest {
   requestId?: string;
-  title: string;
-  subtitle: string;
   usage: PosterUsage;
-  style: PosterStyle;
-  ratio: PosterRatio;
+  prompt?: string;
+  title?: string;
+  subtitle?: string;
+  style?: PosterStyle;
+  ratio?: PosterRatio;
 }
 
 export interface PosterImageResult {

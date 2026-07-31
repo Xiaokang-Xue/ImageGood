@@ -3,6 +3,7 @@ import { assertContactVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import { getFormString, getRequiredImageFile, normalizeImageQuality, normalizeImageSize } from "@/lib/server/image-validation";
 import { runRemoveBackgroundTask } from "@/lib/server/image-task-service";
+import { resolveInputImageSize } from "@/lib/server/image-size-policy";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -17,13 +18,15 @@ export async function POST(request: Request) {
     const requestId = getFormString(formData, "requestId");
     const image = await getRequiredImageFile(formData);
     const prompt = getFormString(formData, "prompt");
+    const requestedSize = normalizeImageSize(getFormString(formData, "size", "auto"));
+    const size = await resolveInputImageSize({ image, prompt, requestedSize });
 
     const data = await runRemoveBackgroundTask({
       requestId,
       userId: user.id,
       image,
       prompt,
-      size: normalizeImageSize(getFormString(formData, "size", "1024x1024")),
+      size,
       quality: normalizeImageQuality(getFormString(formData, "quality", "auto"))
     });
 

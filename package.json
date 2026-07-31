@@ -10,10 +10,12 @@
     "lint": "next lint",
     "db:generate": "node scripts/db-generate.mjs",
     "db:push": "node scripts/db-push.mjs",
+    "db:audit-records": "node scripts/audit-db-records.mjs",
     "db:migrate-json": "node scripts/migrate-json-db-to-mysql.mjs",
     "ops:daily-report": "tsx scripts/send-daily-feishu-report.ts",
     "ops:quality-baseline": "tsx scripts/quality-baseline.ts",
     "ops:task-audit": "node --conditions=react-server --import tsx scripts/image-task-audit.ts",
+    "ops:export-image-pairs": "node --conditions=react-server --import tsx scripts/export-image-pairs.ts",
     "test:smoke": "tsx scripts/smoke-test.ts",
     "test:image-formats": "node --conditions=react-server --import tsx scripts/check-image-normalization.ts"
   },

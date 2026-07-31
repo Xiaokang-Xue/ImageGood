@@ -3,6 +3,7 @@ import { assertContactVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import { ImageRequestError, normalizeImageQuality, normalizeImageSize, normalizeOutputFormat } from "@/lib/server/image-validation";
 import { runTextToImageTask } from "@/lib/server/image-task-service";
+import { resolveGeneratedImageSize } from "@/lib/server/image-size-policy";
 import { getCurrentUser } from "@/lib/session";
 import type { TextToImageRequest, TextToImageStyle } from "@/types/image";
 
@@ -31,13 +32,15 @@ export async function POST(request: Request) {
     if (prompt.length < 4) {
       throw new ImageRequestError("PROMPT_REQUIRED", "请先输入想生成的图片描述");
     }
+    const requestedSize = normalizeImageSize(typeof body.size === "string" ? body.size : "auto");
+    const size = resolveGeneratedImageSize({ prompt, requestedSize });
 
     const data = await runTextToImageTask({
       requestId: body.requestId,
       userId: user.id,
       prompt,
       style: normalizeTextStyle(body.style),
-      size: normalizeImageSize(typeof body.size === "string" ? body.size : "1024x1024"),
+      size,
       quality: normalizeImageQuality(body.quality || "auto"),
       outputFormat: normalizeOutputFormat(body.outputFormat || "png")
     });

@@ -6,6 +6,7 @@ import type { AnalyticsDailySummaryRecord, AnalyticsEventRecord } from "@/types/
 import type { AdminOrderRecord, CreditTransactionRecord, OrderRecord, OrderStatus, PaymentProvider } from "@/types/billing";
 import { refreshMembershipCredits } from "@/lib/credit-balance";
 import type {
+  AdminImageTaskRecord,
   ImageTaskRecord,
   ImageTaskStatus,
   ImageTaskTimeRange,
@@ -524,15 +525,22 @@ function affectedRowsFromResult(result: unknown) {
 }
 
 function parseMysqlJsonRecord(value: unknown) {
-  if (typeof value === "string") {
-    return JSON.parse(value);
+  let current: unknown = Buffer.isBuffer(value) ? value.toString("utf-8") : value;
+  for (let depth = 0; depth < 3 && typeof current === "string"; depth += 1) {
+    current = JSON.parse(current);
   }
+  return current;
+}
 
-  if (Buffer.isBuffer(value)) {
-    return JSON.parse(value.toString("utf-8"));
+function mysqlRecordDocument(column = "record") {
+  return `IF(JSON_TYPE(${column}) = 'STRING', JSON_UNQUOTE(${column}), ${column})`;
+}
+
+function mysqlRecordText(path: string, column = "record") {
+  if (!/^\$\.[A-Za-z0-9_.]+$/.test(path)) {
+    throw new Error(`Unsupported MySQL JSON path: ${path}`);
   }
-
-  return value;
+  return `JSON_UNQUOTE(JSON_EXTRACT(${mysqlRecordDocument(column)}, '${path}'))`;
 }
 
 function hashJson(json: string) {
@@ -860,14 +868,16 @@ export async function findSessionUserByTokenHash(tokenHash: string) {
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const sessionUserId = mysqlRecordText("$.userId", "session_record.record");
+  const sessionTokenHash = mysqlRecordText("$.tokenHash", "session_record.record");
   const result = await pool.query(
     `SELECT session_record.record AS session_record, user_record.record AS user_record
      FROM imagegood_records AS session_record
      INNER JOIN imagegood_records AS user_record
        ON user_record.collection = 'users'
-      AND user_record.id = JSON_UNQUOTE(JSON_EXTRACT(session_record.record, '$.userId'))
+      AND user_record.id = ${sessionUserId}
      WHERE session_record.collection = 'sessions'
-       AND JSON_UNQUOTE(JSON_EXTRACT(session_record.record, '$.tokenHash')) = ?
+       AND ${sessionTokenHash} = ?
      LIMIT 1`,
     [tokenHash]
   );
@@ -968,25 +978,30 @@ export async function getUserImageTaskPage(
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const taskUserId = mysqlRecordText("$.userId");
+  const taskType = mysqlRecordText("$.type");
+  const taskStatus = mysqlRecordText("$.status");
+  const taskCreatedAt = mysqlRecordText("$.createdAt");
+  const taskFavorite = mysqlRecordText("$.isFavorite");
   const whereClauses = [
     "collection = 'imageTasks'",
-    "JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?"
+    `${taskUserId} = ?`
   ];
   const whereValues: Array<string | number> = [userId];
   if (options.type && options.type !== "all") {
-    whereClauses.push("JSON_UNQUOTE(JSON_EXTRACT(record, '$.type')) = ?");
+    whereClauses.push(`${taskType} = ?`);
     whereValues.push(options.type);
   }
   if (options.status && options.status !== "all") {
-    whereClauses.push("JSON_UNQUOTE(JSON_EXTRACT(record, '$.status')) = ?");
+    whereClauses.push(`${taskStatus} = ?`);
     whereValues.push(options.status);
   }
   if (rangeStart) {
-    whereClauses.push("JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt')) >= ?");
+    whereClauses.push(`${taskCreatedAt} >= ?`);
     whereValues.push(rangeStart);
   }
   if (options.favorite) {
-    whereClauses.push("COALESCE(JSON_UNQUOTE(JSON_EXTRACT(record, '$.isFavorite')), 'false') = 'true'");
+    whereClauses.push(`COALESCE(${taskFavorite}, 'false') = 'true'`);
   }
   const whereSql = whereClauses.join("\n         AND ");
   const [taskResult, countResult] = await Promise.all([
@@ -994,7 +1009,7 @@ export async function getUserImageTaskPage(
       `SELECT record
        FROM imagegood_records
        WHERE ${whereSql}
-       ORDER BY JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt')) DESC, id DESC
+       ORDER BY ${taskCreatedAt} DESC, id DESC
        LIMIT ? OFFSET ?`,
       [...whereValues, safeLimit, offset]
     ),
@@ -1003,11 +1018,11 @@ export async function getUserImageTaskPage(
          COUNT(*) AS total,
          SUM(
            CASE
-             WHEN JSON_UNQUOTE(JSON_EXTRACT(record, '$.status')) = 'succeeded' THEN 1
+             WHEN ${taskStatus} = 'succeeded' THEN 1
              ELSE 0
            END
          ) AS succeeded,
-         MAX(JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt'))) AS latest_created_at
+         MAX(${taskCreatedAt}) AS latest_created_at
        FROM imagegood_records
        WHERE ${whereSql}`,
       whereValues
@@ -1101,11 +1116,12 @@ export async function getOrderByOutTradeNo(outTradeNo: string) {
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const orderOutTradeNo = mysqlRecordText("$.outTradeNo");
   const result = await pool.query(
     `SELECT record
      FROM imagegood_records
      WHERE collection = 'orders'
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.outTradeNo')) = ?
+       AND ${orderOutTradeNo} = ?
      LIMIT 1`,
     [outTradeNo]
   );
@@ -1124,13 +1140,16 @@ export async function hasPaidOrderForUser(userId: string) {
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const orderUserId = mysqlRecordText("$.userId");
+  const orderStatus = mysqlRecordText("$.status");
+  const orderAmountCents = mysqlRecordText("$.amountCents");
   const result = await pool.query(
     `SELECT id
      FROM imagegood_records
      WHERE collection = 'orders'
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.status')) = 'paid'
-       AND CAST(JSON_UNQUOTE(JSON_EXTRACT(record, '$.amountCents')) AS UNSIGNED) > 0
+       AND ${orderUserId} = ?
+       AND ${orderStatus} = 'paid'
+       AND CAST(${orderAmountCents} AS UNSIGNED) > 0
      LIMIT 1`,
     [userId]
   );
@@ -1150,13 +1169,16 @@ export async function hasPaymentSourceSurveyRecord(userId: string, orderId: stri
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const eventType = mysqlRecordText("$.type");
+  const eventUserId = mysqlRecordText("$.userId");
+  const eventOrderId = mysqlRecordText("$.metadata.orderId");
   const result = await pool.query(
     `SELECT id
      FROM imagegood_records
      WHERE collection = 'analyticsEvents'
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.type')) = 'acquisition_channel'
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.metadata.orderId')) = ?
+       AND ${eventType} = 'acquisition_channel'
+       AND ${eventUserId} = ?
+       AND ${eventOrderId} = ?
      LIMIT 1`,
     [userId, orderId]
   );
@@ -1191,24 +1213,32 @@ export async function findMissingPaymentSourceSurveyOrderRecord(userId: string) 
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const orderUserId = mysqlRecordText("$.userId", "orders.record");
+  const orderStatus = mysqlRecordText("$.status", "orders.record");
+  const orderProvider = mysqlRecordText("$.paymentProvider", "orders.record");
+  const orderPaidAt = mysqlRecordText("$.paidAt", "orders.record");
+  const orderUpdatedAt = mysqlRecordText("$.updatedAt", "orders.record");
+  const eventType = mysqlRecordText("$.type", "events.record");
+  const eventUserId = mysqlRecordText("$.userId", "events.record");
+  const eventOrderId = mysqlRecordText("$.metadata.orderId", "events.record");
   const result = await pool.query(
     `SELECT orders.record
      FROM imagegood_records AS orders
      WHERE orders.collection = 'orders'
-       AND JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.userId')) = ?
-       AND JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.status')) = 'paid'
-       AND JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.paymentProvider')) IN ('wechat', 'alipay')
+       AND ${orderUserId} = ?
+       AND ${orderStatus} = 'paid'
+       AND ${orderProvider} IN ('wechat', 'alipay')
        AND NOT EXISTS (
          SELECT 1
          FROM imagegood_records AS events
          WHERE events.collection = 'analyticsEvents'
-           AND JSON_UNQUOTE(JSON_EXTRACT(events.record, '$.type')) = 'acquisition_channel'
-           AND JSON_UNQUOTE(JSON_EXTRACT(events.record, '$.userId')) = ?
-           AND JSON_UNQUOTE(JSON_EXTRACT(events.record, '$.metadata.orderId')) = orders.id
+           AND ${eventType} = 'acquisition_channel'
+           AND ${eventUserId} = ?
+           AND ${eventOrderId} = orders.id
        )
      ORDER BY COALESCE(
-       JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.paidAt')),
-       JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.updatedAt'))
+       ${orderPaidAt},
+       ${orderUpdatedAt}
      ) DESC
      LIMIT 1`,
     [userId, userId]
@@ -1231,12 +1261,14 @@ export async function getUserCreditTransactions(userId: string, limit = 50) {
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const transactionUserId = mysqlRecordText("$.userId");
+  const transactionCreatedAt = mysqlRecordText("$.createdAt");
   const result = await pool.query(
     `SELECT record
      FROM imagegood_records
      WHERE collection = 'creditTransactions'
-       AND JSON_UNQUOTE(JSON_EXTRACT(record, '$.userId')) = ?
-     ORDER BY JSON_UNQUOTE(JSON_EXTRACT(record, '$.createdAt')) DESC, id DESC
+       AND ${transactionUserId} = ?
+     ORDER BY ${transactionCreatedAt} DESC, id DESC
      LIMIT ?`,
     [userId, safeLimit]
   );
@@ -1244,6 +1276,79 @@ export async function getUserCreditTransactions(userId: string, limit = 50) {
     (row) => parseMysqlJsonRecord(row.record) as CreditTransactionRecord
   );
   return normalizeDb({ creditTransactions: records }).creditTransactions;
+}
+
+export interface AdminImageTaskPage {
+  tasks: AdminImageTaskRecord[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
+function adminImageTaskWithUser(
+  task: StoredImageTaskRecord,
+  user?: DbUser
+): AdminImageTaskRecord {
+  return {
+    ...task,
+    userAccount:
+      user?.email ||
+      user?.phone?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ||
+      task.userId,
+    userName: user?.name ?? null
+  };
+}
+
+export async function getAdminImageTaskPage(options?: {
+  page?: number;
+  limit?: number;
+  query?: string;
+  type?: ImageTaskType | "all";
+  status?: ImageTaskStatus | "all";
+}): Promise<AdminImageTaskPage> {
+  const page = Math.max(1, Math.trunc(options?.page ?? 1));
+  const limit = Math.min(20, Math.max(1, Math.trunc(options?.limit ?? 10)));
+  const offset = (page - 1) * limit;
+  const query = options?.query?.trim().toLocaleLowerCase() || "";
+  const type = options?.type && options.type !== "all" ? options.type : null;
+  const status = options?.status && options.status !== "all" ? options.status : null;
+  const db = await readDb();
+  const usersById = new Map(db.users.map((user) => [user.id, user]));
+
+  const filtered = db.imageTasks
+    .filter((task) => {
+      if (type && task.type !== type) return false;
+      if (status && task.status !== status) return false;
+      if (!query) return true;
+      const user = usersById.get(task.userId);
+      return [
+        task.id,
+        task.userId,
+        task.prompt,
+        task.title,
+        user?.email,
+        user?.phone,
+        user?.name
+      ].some((value) => String(value || "").toLocaleLowerCase().includes(query));
+    })
+    .sort((left, right) => {
+      const createdDifference =
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      return createdDifference || right.id.localeCompare(left.id);
+    });
+
+  const tasks = filtered
+    .slice(offset, offset + limit)
+    .map((task) => adminImageTaskWithUser(task, usersById.get(task.userId)));
+
+  return {
+    tasks,
+    page,
+    limit,
+    total: filtered.length,
+    hasMore: offset + tasks.length < filtered.length
+  };
 }
 
 export interface AdminOrderPage {
@@ -1297,14 +1402,18 @@ export async function getAdminOrderPage(options?: {
 
   await ensureMysqlSchema();
   const pool = await getMysqlPool();
+  const orderStatus = mysqlRecordText("$.status", "orders.record");
+  const orderProvider = mysqlRecordText("$.paymentProvider", "orders.record");
+  const orderUserId = mysqlRecordText("$.userId", "orders.record");
+  const orderCreatedAt = mysqlRecordText("$.createdAt", "orders.record");
   const conditions = ["orders.collection = 'orders'"];
   const values: unknown[] = [];
   if (status) {
-    conditions.push("JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.status')) = ?");
+    conditions.push(`${orderStatus} = ?`);
     values.push(status);
   }
   if (provider) {
-    conditions.push("JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.paymentProvider')) = ?");
+    conditions.push(`${orderProvider} = ?`);
     values.push(provider);
   }
   const where = conditions.join(" AND ");
@@ -1314,9 +1423,9 @@ export async function getAdminOrderPage(options?: {
        FROM imagegood_records AS orders
        LEFT JOIN imagegood_records AS users
          ON users.collection = 'users'
-        AND users.id = JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.userId'))
+        AND users.id = ${orderUserId}
        WHERE ${where}
-       ORDER BY JSON_UNQUOTE(JSON_EXTRACT(orders.record, '$.createdAt')) DESC, orders.id DESC
+       ORDER BY ${orderCreatedAt} DESC, orders.id DESC
        LIMIT ? OFFSET ?`,
       [...values, limit, offset]
     ),

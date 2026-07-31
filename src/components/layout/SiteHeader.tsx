@@ -324,6 +324,9 @@ export function SiteHeader() {
                         <Link href="/admin/orders" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
                           订单后台
                         </Link>
+                        <Link href="/admin/tasks" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
+                          图片任务
+                        </Link>
                       </>
                     ) : null}
                     <div className="my-1 border-t border-neutral-100" />

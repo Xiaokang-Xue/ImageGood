@@ -106,6 +106,9 @@ export default function AdminAnalyticsPage() {
           <p className="mt-3 text-sm text-muted">按北京时间查看今日表现、累计规模和用户转化流失。</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/admin/tasks">
+            <Button variant="outline">查询图片任务</Button>
+          </Link>
           <Link href="/admin/orders">
             <Button variant="outline">查看订单后台</Button>
           </Link>

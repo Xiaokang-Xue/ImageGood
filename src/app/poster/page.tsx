@@ -14,8 +14,6 @@ export default function PosterPage({
   return (
     <PosterStudio
       initialUsage={firstParam(searchParams?.usage)}
-      initialStyle={firstParam(searchParams?.style)}
-      initialRatio={firstParam(searchParams?.ratio)}
     />
   );
 }
