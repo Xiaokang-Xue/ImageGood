@@ -11,15 +11,24 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录后再购买积分" } }, { status: 401 });
+      return NextResponse.json({ status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录后选择创作方案" } }, { status: 401 });
     }
     if (!hasVerifiedContact(user)) {
       return NextResponse.json(contactNotVerifiedBody(), { status: 403 });
     }
 
-    const body = (await request.json()) as Partial<{ packageId: CreditPackageId; provider: PaymentProviderName }>;
+    const body = (await request.json()) as Partial<{
+      packageId: CreditPackageId;
+      provider: PaymentProviderName;
+      targetTaskId: string;
+    }>;
     const provider = body.provider === "wechat" ? "wechat" : "alipay";
-    const order = await createPaymentOrder(user.id, String(body.packageId || "") as CreditPackageId, provider);
+    const order = await createPaymentOrder(
+      user.id,
+      String(body.packageId || "") as CreditPackageId,
+      provider,
+      typeof body.targetTaskId === "string" ? body.targetTaskId : null
+    );
 
     return NextResponse.json({
       orderId: order.id,

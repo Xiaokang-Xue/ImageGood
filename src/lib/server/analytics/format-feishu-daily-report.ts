@@ -20,18 +20,26 @@ function formatPackageSales(report: DailyAnalyticsReport) {
   const paidPackages = report.payments.packagePurchases.filter((item) => item.buyers > 0);
   const lines: string[] = [];
   const memberships = paidPackages.filter((item) => item.packageKind === "membership");
+  const singleUnlocks = paidPackages.filter((item) => item.packageKind === "single_unlock");
   const creditPacks = paidPackages.filter((item) => item.packageKind === "credit_pack");
 
   if (memberships.length > 0) {
     lines.push(
-      `会员｜${memberships
+      `历史不限次方案｜${memberships
+        .map((item) => `${item.packageName} ${formatNumber(item.buyers)}人/${formatCny(item.revenueCents)}`)
+        .join(" · ")}`
+    );
+  }
+  if (singleUnlocks.length > 0) {
+    lines.push(
+      `单次解锁｜${singleUnlocks
         .map((item) => `${item.packageName} ${formatNumber(item.buyers)}人/${formatCny(item.revenueCents)}`)
         .join(" · ")}`
     );
   }
   if (creditPacks.length > 0) {
     lines.push(
-      `积分包｜${creditPacks
+      `图片额度｜${creditPacks
         .map((item) => `${item.packageName} ${formatNumber(item.buyers)}人/${formatCny(item.revenueCents)}`)
         .join(" · ")}`
     );

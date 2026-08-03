@@ -427,9 +427,8 @@ export async function downloadImage(url: string, filename = `ai-image-result-${D
   if (trialImage?.state === "locked") {
     window.sessionStorage.setItem(
       "imagegood:pricing-notice",
-      "本次免费体验结果带有水印，购买任意套餐后即可下载无水印图片。"
+      "本次免费体验结果带有水印，购买任一图片额度方案后即可查看无水印结果并继续创作。"
     );
-    window.sessionStorage.setItem("imagegood:unlock-task-id", trialImage.taskId);
     window.location.assign("/pricing");
     return;
   }
@@ -571,7 +570,11 @@ export const apiClient = {
     return requestJson<BillingPackagesResponse>("/api/billing/packages");
   },
 
-  createPaymentOrder(payload: { packageId: CreditPackageId; provider?: Exclude<PaymentProvider, "manual"> }) {
+  createPaymentOrder(payload: {
+    packageId: CreditPackageId;
+    provider?: Exclude<PaymentProvider, "manual">;
+    targetTaskId?: string | null;
+  }) {
     return requestJson<PaymentCreateResponse>("/api/payment/create", {
       method: "POST",
       body: JSON.stringify(payload)

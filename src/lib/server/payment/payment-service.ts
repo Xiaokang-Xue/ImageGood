@@ -5,6 +5,7 @@ import { CREDIT_PACKAGES, findCreditPackage } from "@/config/billing-plans";
 import {
   getDbSnapshot,
   getDbUserById,
+  getImageTaskById,
   getOrderById,
   getOrderByOutTradeNo,
   hasPaymentSourceSurveyRecord,
@@ -168,7 +169,12 @@ function providerForOrder(order: OrderRecord): PaymentProviderName | undefined {
   return undefined;
 }
 
-function createPendingOrder(userId: string, packageItem: CreditPackage, providerName: PaymentProviderName): OrderRecord {
+function createPendingOrder(
+  userId: string,
+  packageItem: CreditPackage,
+  providerName: PaymentProviderName,
+  targetTaskId?: string | null
+): OrderRecord {
   const now = nowIso();
   return {
     id: randomUUID(),
@@ -181,6 +187,8 @@ function createPendingOrder(userId: string, packageItem: CreditPackage, provider
     validityMonths: packageItem.validityMonths ?? null,
     validityDays: packageItem.validityDays ?? null,
     membershipLifetime: Boolean(packageItem.membershipLifetime),
+    unlimitedGenerations: Boolean(packageItem.unlimitedGenerations),
+    targetTaskId: targetTaskId ?? null,
     periodDays: packageItem.periodDays ?? null,
     creditsPerPeriod: packageItem.creditsPerPeriod ?? null,
     status: "pending",
@@ -214,7 +222,7 @@ async function getReusableLimitedPackageOrder(userId: string, packageItem: Credi
   if (userOrders.some((order) => order.status === "paid")) {
     throw new PaymentError(
       "PACKAGE_PURCHASE_LIMIT_REACHED",
-      `${packageItem.name}每个账号限购 1 次，可选择其他积分包继续购买`,
+      `${packageItem.name}每个账号限购 1 次，可选择其他创作方案`,
       409
     );
   }
@@ -228,14 +236,29 @@ async function getReusableLimitedPackageOrder(userId: string, packageItem: Credi
   );
 }
 
-export async function createPaymentOrder(userId: string, packageId: CreditPackageId, providerName: PaymentProviderName = "alipay") {
+export async function createPaymentOrder(
+  userId: string,
+  packageId: CreditPackageId,
+  providerName: PaymentProviderName = "alipay",
+  targetTaskId?: string | null
+) {
   if (providerName !== "wechat" && providerName !== "alipay") {
     throw new PaymentError("INVALID_PAYMENT_PROVIDER", "不支持的支付方式", 400);
   }
 
   const packageItem = findCreditPackage(packageId);
   if (!packageItem) {
-    throw new PaymentError("INVALID_PACKAGE", "积分包不存在", 404);
+    throw new PaymentError("INVALID_PACKAGE", "创作方案不存在", 404);
+  }
+
+  if (packageItem.requiresTaskTarget) {
+    const task = targetTaskId ? await getImageTaskById(targetTaskId) : null;
+    if (!task || task.userId !== userId || task.status !== "succeeded" || !task.isFreeTrial || !task.hasWatermark) {
+      throw new PaymentError("INVALID_UNLOCK_TARGET", "请先选择一张可解锁的体验作品", 400);
+    }
+    if (task.unlockedAt) {
+      throw new PaymentError("TASK_ALREADY_UNLOCKED", "这张作品已经解锁", 409);
+    }
   }
 
   const reusableOrder = await getReusableLimitedPackageOrder(userId, packageItem);
@@ -245,7 +268,7 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
 
   await assertPaymentConfigReady(providerName);
   const provider = getPaymentProvider(providerName);
-  const order = createPendingOrder(userId, packageItem, providerName);
+  const order = createPendingOrder(userId, packageItem, providerName, targetTaskId);
 
   await withDb((db) => {
     if (db.orders.some((item) => item.outTradeNo === order.outTradeNo)) {
@@ -257,7 +280,7 @@ export async function createPaymentOrder(userId: string, packageId: CreditPackag
   try {
     const payment = await provider.createPayment({
       order,
-      description: `ImageGood ${order.packageKind === "membership" ? "会员" : "积分包"} - ${order.packageName}`,
+      description: `ImageGood 创作方案 - ${order.packageName}`,
       notifyUrl: providerName === "alipay" ? getAlipayNotifyUrl() : getWechatNotifyUrl(),
       returnUrl: providerName === "alipay" ? getAlipayReturnUrl(order.id) : undefined
     });
@@ -345,6 +368,8 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     validityMonths: order.validityMonths ?? null,
     validityDays: order.validityDays ?? null,
     membershipLifetime: Boolean(order.membershipLifetime),
+    unlimitedGenerations: Boolean(order.unlimitedGenerations),
+    targetTaskId: order.targetTaskId ?? null,
     periodDays: order.periodDays ?? null,
     creditsPerPeriod: order.creditsPerPeriod ?? null,
     codeUrl: order.codeUrl ?? null,
@@ -419,6 +444,15 @@ export async function markOrderPaid(input: {
     if (order.status === "paid") {
       assertSuccessfulPayment(order, input);
       const user = db.users.find((item) => item.id === order.userId);
+      if (order.packageKind === "single_unlock" && order.targetTaskId) {
+        const targetTask = db.imageTasks.find(
+          (item) => item.id === order.targetTaskId && item.userId === order.userId
+        );
+        if (targetTask && !targetTask.unlockedAt) {
+          targetTask.unlockedAt = order.paidAt || nowIso();
+          targetTask.updatedAt = nowIso();
+        }
+      }
       return { order, latestCredits: user ? availableCredits(user) : 0, alreadyPaid: true };
     }
 
@@ -439,6 +473,16 @@ export async function markOrderPaid(input: {
 
     const now = input.paidAt || nowIso();
     const grant = grantOrderCredits(user, order, now);
+    if (order.packageKind === "single_unlock") {
+      const targetTask = order.targetTaskId
+        ? db.imageTasks.find((item) => item.id === order.targetTaskId && item.userId === order.userId)
+        : null;
+      if (!targetTask || !targetTask.isFreeTrial || !targetTask.hasWatermark) {
+        throw new PaymentError("UNLOCK_TARGET_NOT_FOUND", "待解锁作品不存在", 404);
+      }
+      targetTask.unlockedAt = now;
+      targetTask.updatedAt = now;
+    }
     user.updatedAt = now;
     order.status = "paid";
     order.transactionId = input.transactionId ?? order.transactionId ?? null;
@@ -451,12 +495,16 @@ export async function markOrderPaid(input: {
       userId: user.id,
       orderId: order.id,
       type: input.transactionType ?? "purchase",
-      amount: order.credits,
+      amount: order.packageKind === "single_unlock" || order.unlimitedGenerations ? 0 : order.credits,
       balanceAfter: grant.balanceAfter,
       reason:
-        order.packageKind === "membership"
-          ? `${input.reason?.replace("购买积分包", "开通会员") ?? "开通会员"}：${order.packageName}，会员积分按周期刷新`
-          : input.reason ?? `购买积分包：${order.packageName}`,
+        order.packageKind === "single_unlock"
+          ? `解锁无水印作品：${order.packageName}`
+          : order.unlimitedGenerations
+            ? `开通历史不限次方案：${order.packageName}`
+            : order.packageKind === "membership"
+              ? `${input.reason?.replace("购买积分包", "开通会员") ?? "开通会员"}：${order.packageName}`
+              : `${input.reason ?? "购买图片额度"}：${order.packageName}`,
       createdAt: now
     });
 
@@ -487,7 +535,7 @@ export async function processWechatPayment(payment: WechatPaymentNotification) {
     provider: "wechat",
     transactionId: payment.transaction_id ?? null,
     mchid: payment.mchid,
-    reason: "微信支付购买积分包",
+    reason: "微信支付开通创作方案",
     transactionType: "purchase"
   });
 }
@@ -512,7 +560,7 @@ export async function processAlipayPayment(payment: AlipayNotification) {
     tradeState: "SUCCESS",
     provider: "alipay",
     transactionId: payment.trade_no ?? null,
-    reason: "支付宝购买积分包",
+    reason: "支付宝开通创作方案",
     transactionType: "purchase"
   });
 }

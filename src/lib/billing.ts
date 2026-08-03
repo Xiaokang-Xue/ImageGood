@@ -12,7 +12,8 @@ import {
 import {
   availableCredits,
   consumeOneAvailableCredit,
-  grantOrderCredits
+  grantOrderCredits,
+  hasUnlimitedAccess
 } from "@/lib/server/credit-ledger";
 import type {
   AdminOrderRecord,
@@ -45,9 +46,11 @@ export async function getCreditBalance(userId: string) {
 }
 
 export async function assertHasCredits(userId: string) {
-  const credits = await getCreditBalance(userId);
+  const user = await getDbUserById(userId);
+  if (user && hasUnlimitedAccess(user)) return availableCredits(user);
+  const credits = user ? availableCredits(user) : 0;
   if (credits <= 0) {
-    throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+    throw new BillingError("INSUFFICIENT_CREDITS", "当前免费体验已使用，请选择创作方案后继续", 402);
   }
   return credits;
 }
@@ -56,12 +59,14 @@ export async function consumeCredit(userId: string, reason = "图片生成") {
   return withDb((db) => {
     const user = db.users.find((item) => item.id === userId);
     if (!user) {
-      throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+      throw new BillingError("INSUFFICIENT_CREDITS", "当前创作权益不足，请选择创作方案后继续", 402);
     }
+
+    if (hasUnlimitedAccess(user)) return availableCredits(user);
 
     const consumed = consumeOneAvailableCredit(user);
     if (!consumed) {
-      throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+      throw new BillingError("INSUFFICIENT_CREDITS", "当前免费体验已使用，请选择创作方案后继续", 402);
     }
     user.updatedAt = nowIso();
     db.creditTransactions.push({
@@ -85,7 +90,7 @@ export async function listCreditTransactions(userId: string, limit = 50) {
 export async function createOrder(userId: string, packageId: CreditPackageId) {
   const packageItem = findCreditPackage(packageId);
   if (!packageItem) {
-    throw new BillingError("INVALID_PACKAGE", "积分包不存在");
+    throw new BillingError("INVALID_PACKAGE", "创作方案不存在");
   }
 
   const order: OrderRecord = {
@@ -99,6 +104,8 @@ export async function createOrder(userId: string, packageId: CreditPackageId) {
     validityMonths: packageItem.validityMonths ?? null,
     validityDays: packageItem.validityDays ?? null,
     membershipLifetime: Boolean(packageItem.membershipLifetime),
+    unlimitedGenerations: Boolean(packageItem.unlimitedGenerations),
+    targetTaskId: null,
     periodDays: packageItem.periodDays ?? null,
     creditsPerPeriod: packageItem.creditsPerPeriod ?? null,
     status: "pending",
@@ -187,6 +194,16 @@ export async function confirmOrderPaid(orderId: string) {
 
     const now = nowIso();
     const grant = grantOrderCredits(user, order, now);
+    if (order.packageKind === "single_unlock") {
+      const task = order.targetTaskId
+        ? db.imageTasks.find((item) => item.id === order.targetTaskId && item.userId === order.userId)
+        : null;
+      if (!task) {
+        throw new BillingError("UNLOCK_TARGET_NOT_FOUND", "待解锁作品不存在", 404);
+      }
+      task.unlockedAt = now;
+      task.updatedAt = now;
+    }
     user.updatedAt = now;
     order.status = "paid";
     order.paidAt = now;
@@ -197,12 +214,16 @@ export async function confirmOrderPaid(orderId: string) {
       userId: user.id,
       orderId: order.id,
       type: "purchase",
-      amount: order.credits,
+      amount: order.packageKind === "single_unlock" || order.unlimitedGenerations ? 0 : order.credits,
       balanceAfter: grant.balanceAfter,
       reason:
-        order.packageKind === "membership"
-          ? `开通会员：${order.packageName}，会员积分按周期刷新`
-          : `购买积分包：${order.packageName}`,
+        order.packageKind === "single_unlock"
+          ? `解锁无水印作品：${order.packageName}`
+          : order.unlimitedGenerations
+            ? `开通历史不限次方案：${order.packageName}`
+            : order.packageKind === "membership"
+              ? `开通历史会员：${order.packageName}`
+              : `购买图片额度：${order.packageName}`,
       createdAt: now
     };
     db.creditTransactions.push(transaction);

@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录后再购买积分" } }, { status: 401 });
+      return NextResponse.json({ status: "failed", error: { code: "UNAUTHORIZED", message: "请先登录后选择创作方案" } }, { status: 401 });
     }
     if (!hasVerifiedContact(user)) {
       return NextResponse.json(contactNotVerifiedBody(), { status: 403 });

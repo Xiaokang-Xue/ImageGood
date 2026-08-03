@@ -34,6 +34,7 @@ export interface ImageTaskRecord {
   resultImages?: string[] | null;
   isFreeTrial?: boolean;
   hasWatermark?: boolean;
+  unlockedAt?: string | null;
   creditCharged?: boolean;
   errorMessage?: string | null;
   createdAt: string;

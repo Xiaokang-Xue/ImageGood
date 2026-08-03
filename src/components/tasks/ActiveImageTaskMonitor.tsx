@@ -37,7 +37,7 @@ export function ActiveImageTaskMonitor() {
             setNotice({ kind: "succeeded", message: "图片已生成，可在历史记录中查看结果。" });
           } else if (response.task.status === "failed") {
             forgetTrackedImageTask(item.id);
-            setNotice({ kind: "failed", message: "图片任务未完成，本次不会扣除积分。" });
+            setNotice({ kind: "failed", message: "图片任务未完成，本次不会消耗创作权益。" });
           }
         } catch (error) {
           if (isUnauthorizedError(error)) {

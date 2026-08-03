@@ -12,7 +12,7 @@ export function toPublicImageTask(
     return task;
   }
 
-  if (hasPaidOrder) {
+  if (hasPaidOrder || Boolean(task.unlockedAt)) {
     const cleanUrl = markTrialImageUrl(
       `/api/tasks/${encodeURIComponent(task.id)}/download?inline=1`,
       task.id,

@@ -266,7 +266,7 @@ export default function AccountPage() {
                     ? "当前账号未绑定邮箱。"
                     : user.emailVerified
                       ? `验证时间：${user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString("zh-CN") : "已完成"}`
-                      : "完成手机号或邮箱任一验证后可使用图片生成和购买积分功能。"}
+                      : "完成手机号或邮箱任一验证后可使用图片生成和创作方案功能。"}
                 </p>
               </div>
               {user.email && !user.emailVerified ? (
@@ -280,23 +280,26 @@ export default function AccountPage() {
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoBlock label="可用积分总额" value={`${user.credits} 积分`} />
             <InfoBlock
-              label="会员积分"
+              label="当前创作权益"
               value={
-                user.membershipPlan
-                  ? `${user.membershipPlan ? `${user.membershipPlan} · ` : ""}${user.membershipCredits} 积分${
-                      user.membershipNextRefreshAt
-                        ? ` · ${new Date(user.membershipNextRefreshAt).toLocaleDateString("zh-CN")} 刷新`
-                        : ""
-                    } · ${
-                      user.membershipLifetime
-                        ? "长期有效"
-                        : user.membershipExpiresAt
-                          ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期`
-                          : "有效会员"
-                    }`
-                  : "暂无有效会员积分"
+                user.membershipUnlimited
+                  ? user.membershipPlan || "历史不限次权益"
+                  : user.credits > 0
+                    ? `${user.credits} 张图片可用`
+                    : "暂未开通"
+              }
+            />
+            <InfoBlock
+              label="权益有效期"
+              value={
+                user.membershipUnlimited
+                  ? user.membershipLifetime
+                    ? "长期有效"
+                    : user.membershipExpiresAt
+                      ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期`
+                      : "有效"
+                  : "图片额度长期有效"
               }
             />
             <InfoBlock label="注册时间" value={new Date(user.createdAt).toLocaleDateString("zh-CN")} />
@@ -315,10 +318,10 @@ export default function AccountPage() {
           </div>
 
           <div className="mt-8 rounded-lg border border-line bg-white p-5">
-            <h2 className="text-xl font-bold text-ink">最近积分流水</h2>
+            <h2 className="text-xl font-bold text-ink">最近权益与使用记录</h2>
             <div className="mt-4 grid gap-3">
               {transactions.slice(0, 5).length === 0 ? (
-                <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-muted">暂无积分流水。</p>
+                <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-muted">暂无权益记录。</p>
               ) : null}
               {transactions.slice(0, 5).map((transaction) => (
                 <div key={transaction.id} className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
@@ -327,11 +330,10 @@ export default function AccountPage() {
                     <p className="mt-1 text-xs text-muted">{new Date(transaction.createdAt).toLocaleString("zh-CN")}</p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-bold ${transaction.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {transaction.amount > 0 ? "+" : ""}
-                      {transaction.amount}
+                    <p className={`text-sm font-bold ${transaction.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {transaction.amount === 0 ? "已生效" : `${transaction.amount > 0 ? "+" : ""}${transaction.amount}`}
                     </p>
-                    <p className="mt-1 text-xs text-muted">余额 {transaction.balanceAfter}</p>
+                    {transaction.amount !== 0 ? <p className="mt-1 text-xs text-muted">历史额度 {transaction.balanceAfter}</p> : null}
                   </div>
                 </div>
               ))}
@@ -370,7 +372,7 @@ export default function AccountPage() {
           <h2 className="text-xl font-bold text-ink">快捷操作</h2>
           <div className="mt-5 grid gap-3">
             <Link href="/pricing">
-              <Button className="w-full">购买积分或创作卡</Button>
+              <Button className="w-full">查看创作方案</Button>
             </Link>
             <Link href="/history">
               <Button variant="outline" className="w-full">查看历史记录</Button>

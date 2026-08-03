@@ -270,9 +270,9 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
       {error ? (
         <div className="mb-6 flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
-          {error.includes("积分不足") ? (
+          {error.includes("积分不足") || error.includes("创作权益") || error.includes("免费体验") ? (
             <Link href="/pricing" className="text-studio-700 underline">
-              购买积分
+              查看创作方案
             </Link>
           ) : error.includes("验证") ? (
             <Link href="/account" className="text-studio-700 underline">

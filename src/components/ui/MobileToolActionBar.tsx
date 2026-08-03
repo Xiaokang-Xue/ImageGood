@@ -19,7 +19,7 @@ export function MobileToolActionBar({
   loadingLabel = "图片生成中",
   mode = "generate",
   disabled = false,
-  helper = "成功后消耗 1 积分，失败不扣积分",
+  helper = "生成结果会自动保存到历史记录",
   onClick
 }: MobileToolActionBarProps) {
   return (

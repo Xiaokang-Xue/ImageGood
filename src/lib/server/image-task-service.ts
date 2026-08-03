@@ -22,7 +22,8 @@ import { getImageProviderService } from "@/lib/server/image-provider";
 import { appendImageSizeGuidance } from "@/lib/server/image-size-policy";
 import {
   availableCredits,
-  consumeOneAvailableCredit
+  consumeOneAvailableCredit,
+  hasUnlimitedAccess
 } from "@/lib/server/credit-ledger";
 import { normalizeImageInputFile } from "@/lib/server/image-input-normalizer";
 import { logImageTaskEvent, type ImageTaskLogContext } from "@/lib/server/image-task-observability";
@@ -85,6 +86,7 @@ function createTask(input: {
     resultImages: [],
     isFreeTrial: false,
     hasWatermark: false,
+    unlockedAt: null,
     creditCharged: false,
     errorMessage: null,
     createdAt: now,
@@ -110,8 +112,13 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
     }
 
     const user = db.users.find((item) => item.id === task.userId);
-    if (!user || availableCredits(user) <= 0) {
-      throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+    if (!user) {
+      throw new BillingError("INSUFFICIENT_CREDITS", "当前创作权益不足，请选择创作方案后继续", 402);
+    }
+
+    const unlimitedAccess = hasUnlimitedAccess(user);
+    if (!unlimitedAccess && availableCredits(user) <= 0) {
+      throw new BillingError("INSUFFICIENT_CREDITS", "当前免费体验已使用，请选择创作方案后继续", 402);
     }
 
     const activeUnchargedTasks = db.imageTasks.filter(
@@ -121,8 +128,12 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
         (item.status === "pending" || item.status === "processing")
     ).length;
 
-    if (availableCredits(user) - activeUnchargedTasks <= 0) {
-      throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请等待正在生成的任务完成，或购买积分后继续生成", 402);
+    if (unlimitedAccess && activeUnchargedTasks > 0) {
+      throw new BillingError("TASK_IN_PROGRESS", "已有图片任务正在生成，请完成后再继续", 409);
+    }
+
+    if (!unlimitedAccess && availableCredits(user) - activeUnchargedTasks <= 0) {
+      throw new BillingError("INSUFFICIENT_CREDITS", "当前免费体验已占用，请等待任务完成或选择创作方案", 402);
     }
 
     const hasPaidOrder = db.orders.some(
@@ -137,7 +148,7 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
         item.isFreeTrial === true &&
         (item.status === "pending" || item.status === "processing")
     );
-    task.isFreeTrial = !hasPaidOrder && !hasSucceededTask && !hasActiveFreeTrial;
+    task.isFreeTrial = !unlimitedAccess && !hasPaidOrder && !hasSucceededTask && !hasActiveFreeTrial;
     db.imageTasks.push(task);
     return { task, created: true as const };
   });
@@ -233,13 +244,14 @@ async function markTaskSucceeded(
       task.creditCharged ||
       db.creditTransactions.some((transaction) => transaction.type === "consume" && transaction.taskId === task.id);
 
-    const creditChargedNow = !alreadyCharged;
+    const unlimitedAccess = hasUnlimitedAccess(user);
+    const creditChargedNow = !alreadyCharged && !unlimitedAccess;
     let latestCredits = availableCredits(user);
 
     if (creditChargedNow) {
       const consumed = consumeOneAvailableCredit(user);
       if (!consumed) {
-        throw new BillingError("INSUFFICIENT_CREDITS", "当前积分不足，请购买积分后继续生成", 402);
+        throw new BillingError("INSUFFICIENT_CREDITS", "当前创作权益不足，请选择创作方案后继续", 402);
       }
       latestCredits = consumed.balanceAfter;
       user.updatedAt = now;
@@ -991,6 +1003,9 @@ export async function deleteUserTask(userId: string, taskId: string) {
     if (!isDeletableTask(task)) {
       return { deleted: false as const, reason: "in_progress" as const };
     }
+    if (db.orders.some((order) => order.status === "pending" && order.targetTaskId === task.id)) {
+      return { deleted: false as const, reason: "in_progress" as const };
+    }
 
     db.imageTasks = db.imageTasks.filter((item) => item.id !== task.id);
     return { deleted: true as const, id: task.id };
@@ -1007,7 +1022,11 @@ export async function deleteUserTasks(userId: string, taskIds: string[]) {
 
     for (const taskId of uniqueIds) {
       const task = db.imageTasks.find((item) => item.userId === userId && item.id === taskId);
-      if (!task || !isDeletableTask(task)) {
+      if (
+        !task ||
+        !isDeletableTask(task) ||
+        db.orders.some((order) => order.status === "pending" && order.targetTaskId === task.id)
+      ) {
         skippedIds.push(taskId);
         continue;
       }

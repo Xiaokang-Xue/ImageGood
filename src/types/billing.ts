@@ -2,8 +2,17 @@ export type CreditTransactionType = "grant" | "consume" | "purchase" | "refund" 
 export type OrderStatus = "pending" | "paid" | "cancelled" | "expired" | "failed";
 export type PaymentProvider = "wechat" | "alipay" | "manual";
 export type PaymentMethod = "native" | "page" | "manual";
-export type CreditPackageKind = "credit_pack" | "membership";
+export type CreditPackageKind = "credit_pack" | "single_unlock" | "membership";
 export type CreditPackageId =
+  | "single_unlock"
+  | "image_single_unlock"
+  | "image_pack_1"
+  | "image_pack_10"
+  | "image_pack_100"
+  | "image_pack_600"
+  | "unlimited_monthly"
+  | "unlimited_yearly"
+  | "unlimited_lifetime"
   | "first_purchase"
   | "starter"
   | "standard"
@@ -31,6 +40,8 @@ export interface CreditPackage {
   validityMonths?: number;
   validityDays?: number;
   membershipLifetime?: boolean;
+  unlimitedGenerations?: boolean;
+  requiresTaskTarget?: boolean;
   periodDays?: number;
   creditsPerPeriod?: number;
   validityLabel?: string;
@@ -64,6 +75,8 @@ export interface OrderRecord {
   validityMonths?: number | null;
   validityDays?: number | null;
   membershipLifetime?: boolean;
+  unlimitedGenerations?: boolean;
+  targetTaskId?: string | null;
   periodDays?: number | null;
   creditsPerPeriod?: number | null;
   status: OrderStatus;
@@ -114,6 +127,8 @@ export interface PaymentOrderResponse {
   validityMonths: number | null;
   validityDays: number | null;
   membershipLifetime: boolean;
+  unlimitedGenerations: boolean;
+  targetTaskId: string | null;
   periodDays: number | null;
   creditsPerPeriod: number | null;
   codeUrl: string | null;

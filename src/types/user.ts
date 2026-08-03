@@ -7,6 +7,7 @@ export interface PublicUser {
   credits: number;
   permanentCredits?: number;
   membershipCredits?: number;
+  membershipUnlimited?: boolean;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
   membershipLifetime?: boolean;

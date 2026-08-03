@@ -125,9 +125,9 @@ export default function CheckoutPage() {
       <main className="mx-auto max-w-[1000px] px-5 py-10">
         <Card className="p-8 text-center">
           <h1 className="text-2xl font-bold text-ink">{error || "服务暂时不可用，请稍后重试"}</h1>
-          <p className="mt-3 text-sm text-muted">你可以返回积分页面重新选择套餐。</p>
+          <p className="mt-3 text-sm text-muted">你可以返回价格页重新选择创作方案。</p>
           <Link href="/pricing" className="mt-6 inline-flex">
-            <Button>返回积分页面</Button>
+            <Button>返回价格页</Button>
           </Link>
         </Card>
       </main>
@@ -139,16 +139,18 @@ export default function CheckoutPage() {
   const isClosed = order.status === "failed" || order.status === "expired" || order.status === "cancelled";
   const isAlipay = order.paymentProvider === "alipay";
   const isMembership = order.packageKind === "membership";
+  const isSingleUnlock = order.packageKind === "single_unlock";
+  const effectiveUnlockTaskId = unlockTaskId || order.targetTaskId || "";
 
   return (
     <main className="mx-auto max-w-[1000px] px-5 py-10">
       <div className="mb-6">
         <p className="text-sm font-semibold text-studio-600">{isAlipay ? "支付宝支付" : "微信支付"}</p>
         <h1 className="mt-2 text-3xl font-bold text-ink">
-          {isMembership ? "开通创作会员" : isAlipay ? "购买积分" : "扫码购买积分"}
+          {isSingleUnlock ? "解锁无水印作品" : "购买图片额度"}
         </h1>
         <p className="mt-3 text-sm text-muted">
-          支付成功后，{isMembership ? "会员积分" : "积分"}会自动到账。
+          支付成功后，创作权益会自动生效。
         </p>
       </div>
 
@@ -164,14 +166,7 @@ export default function CheckoutPage() {
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Info label="套餐" value={order.packageName} />
             <Info label="支付金额" value={formatCny(order.amountCents)} />
-            <Info
-              label={isMembership ? "会员积分" : "购买积分"}
-              value={
-                isMembership
-                  ? `${order.creditsPerPeriod ?? order.credits} 积分 / ${order.periodDays ?? 30} 天`
-                  : `${order.credits} 积分`
-              }
-            />
+            <Info label="创作权益" value={isSingleUnlock ? "指定作品无水印下载" : `${order.credits} 张图片额度`} />
             <Info label="订单状态" value={statusLabels[order.status]} />
             {isMembership ? (
               <Info label="会员有效期" value={membershipValidity(order)} />
@@ -184,9 +179,9 @@ export default function CheckoutPage() {
                 <CheckCircle2 className="mt-0.5 h-5 w-5" />
                 <div>
                   <p className="text-sm font-bold">
-                    支付成功，{isMembership ? "会员积分" : "积分"}已到账
+                    支付成功，创作权益已生效
                   </p>
-                  <p className="mt-1 text-sm">当前剩余积分：{order.currentCredits}</p>
+                  <p className="mt-1 text-sm">{isSingleUnlock ? "当前作品已解锁" : `当前剩余 ${order.currentCredits} 张`}</p>
                 </div>
               </div>
             ) : isPending ? (
@@ -202,7 +197,7 @@ export default function CheckoutPage() {
                 <XCircle className="mt-0.5 h-5 w-5" />
                 <div>
                   <p className="text-sm font-bold">{order.status === "expired" ? "订单已过期，请重新购买" : "支付未完成"}</p>
-                  <p className="mt-1 text-sm">你可以返回积分页面重新创建订单。</p>
+                  <p className="mt-1 text-sm">你可以返回价格页重新创建订单。</p>
                 </div>
               </div>
             )}
@@ -210,9 +205,9 @@ export default function CheckoutPage() {
 
           <div className="mt-6 flex flex-wrap gap-3">
           {isPaid ? (
-            unlockTaskId ? (
+            effectiveUnlockTaskId ? (
               <Link
-                href={`/history/${encodeURIComponent(unlockTaskId)}`}
+                href={`/history/${encodeURIComponent(effectiveUnlockTaskId)}`}
                 onClick={() => window.sessionStorage.removeItem("imagegood:unlock-task-id")}
               >
                 <Button>查看无水印结果</Button>
@@ -255,7 +250,7 @@ export default function CheckoutPage() {
             <div className="mt-5 flex aspect-square items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-center">
               <div>
                 <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-                <p className="mt-4 text-sm font-bold text-emerald-700">积分已到账</p>
+                <p className="mt-4 text-sm font-bold text-emerald-700">权益已生效</p>
               </div>
             </div>
           ) : (
@@ -265,8 +260,8 @@ export default function CheckoutPage() {
           )}
           <p className="mt-4 text-sm leading-6 text-muted">
             {isAlipay
-              ? "请在支付宝收银台完成支付。页面跳转不作为到账依据，积分会在支付宝异步通知验签成功后自动到账。"
-              : "请使用微信扫码支付。支付完成后，系统会通过微信支付回调自动为账户增加积分。"}
+              ? "请在支付宝收银台完成支付。页面跳转不作为生效依据，权益会在支付宝异步通知验签成功后自动开通。"
+              : "请使用微信扫码支付。支付完成后，系统会通过微信支付回调自动开通权益。"}
           </p>
 
           {order.paymentMode === "mock" && isPending ? (

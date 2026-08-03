@@ -1,6 +1,7 @@
 export interface MembershipCreditAccount {
   credits: number;
   membershipCredits?: number;
+  membershipUnlimited?: boolean;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
   membershipLifetime?: boolean;
@@ -19,6 +20,7 @@ function parseTime(value: string | null | undefined) {
 
 function resetMembership(account: MembershipCreditAccount) {
   account.membershipCredits = 0;
+  account.membershipUnlimited = false;
   account.membershipExpiresAt = null;
   account.membershipPlan = null;
   account.membershipLifetime = false;
@@ -84,6 +86,10 @@ export function hasActiveMembership(account: MembershipCreditAccount, now = Date
   if (account.membershipLifetime) return true;
   const expiresAt = parseTime(account.membershipExpiresAt);
   return expiresAt > now;
+}
+
+export function hasUnlimitedGenerationAccess(account: MembershipCreditAccount, now = Date.now()) {
+  return Boolean(account.membershipUnlimited) && hasActiveMembership(account, now);
 }
 
 export function getAvailableCreditBalance(account: MembershipCreditAccount, now = Date.now()) {

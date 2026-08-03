@@ -33,6 +33,12 @@ export const imageAssetSets = {
   ]
 };
 
+export const homepageComparisonAssets = {
+  productBackground: "/assets/images/comparisons/product-background.webp",
+  posterText: "/assets/images/comparisons/poster-text.webp",
+  objectRemoval: "/assets/images/comparisons/object-removal.webp"
+} as const;
+
 export const imageAssets = {
   original: imageAssetSets.products[0],
   edit1: imageAssetSets.products[1],

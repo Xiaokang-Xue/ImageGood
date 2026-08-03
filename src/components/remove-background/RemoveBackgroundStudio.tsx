@@ -259,7 +259,7 @@ export function RemoveBackgroundStudio() {
           <span>{error}</span>
           {errorActionHref ? (
             <Link href={errorActionHref} className="text-studio-700 underline">
-              {errorActionHref === "/pricing" ? "购买积分" : "前往账户中心"}
+              {errorActionHref === "/pricing" ? "查看创作方案" : "前往账户中心"}
             </Link>
           ) : null}
         </div>

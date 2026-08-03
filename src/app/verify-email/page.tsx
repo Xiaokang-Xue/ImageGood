@@ -43,7 +43,7 @@ function VerifyEmailContent() {
       <Card className="w-full max-w-md p-7 text-center">
         <p className="text-sm font-semibold text-studio-600">邮箱验证</p>
         <h1 className="mt-2 text-2xl font-bold text-ink">验证你的 ImageGood 账号</h1>
-        <p className="mt-2 text-sm leading-6 text-muted">验证完成后即可使用图片生成和购买积分功能。</p>
+        <p className="mt-2 text-sm leading-6 text-muted">验证完成后即可使用图片生成和创作方案功能。</p>
 
         {loading ? (
           <div className="mt-6 rounded-lg border border-studio-200 bg-studio-50 px-4 py-3 text-sm font-semibold text-studio-700">

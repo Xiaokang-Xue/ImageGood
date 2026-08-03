@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { ComplianceFooter } from "@/components/layout/ComplianceFooter";
 import { LazyActiveImageTaskMonitor } from "@/components/tasks/LazyActiveImageTaskMonitor";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ export default function RootLayout({
         <PageViewTracker />
         <LazyActiveImageTaskMonitor />
         {children}
+        <ComplianceFooter />
       </body>
     </html>
   );

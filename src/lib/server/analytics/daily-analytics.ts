@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import { CREDIT_PACKAGES } from "@/config/billing-plans";
+import { ALL_BILLING_PLANS } from "@/config/billing-plans";
 import { customerPaymentOrders } from "@/lib/server/analytics/payment-order-filter";
 
 type DailyReportRange = "today" | "yesterday";
@@ -18,7 +18,7 @@ interface StoredOrder {
   id: string;
   userId: string;
   packageId?: string;
-  packageKind?: "credit_pack" | "membership";
+  packageKind?: "credit_pack" | "single_unlock" | "membership";
   packageName?: string;
   status: "pending" | "paid" | "cancelled" | "expired" | "failed";
   amountCents?: number;
@@ -79,7 +79,7 @@ interface AnalyticsDatabase {
 
 export interface PackagePurchaseSummary {
   packageId: string;
-  packageKind: "credit_pack" | "membership";
+  packageKind: "credit_pack" | "single_unlock" | "membership";
   packageName: string;
   buyers: number;
   revenueCents: number;
@@ -352,7 +352,7 @@ function repeatPurchaseMetrics(orders: StoredOrder[]) {
 }
 
 function packagePurchaseSummaries(orders: StoredOrder[]): PackagePurchaseSummary[] {
-  return CREDIT_PACKAGES.map((plan) => {
+  return ALL_BILLING_PLANS.map((plan) => {
     const planOrders = orders.filter(
       (order) =>
         order.packageId === plan.id ||

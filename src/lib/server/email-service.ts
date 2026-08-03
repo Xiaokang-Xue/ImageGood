@@ -244,7 +244,7 @@ export async function sendVerificationEmail(user: MailUser, verifyUrl: string) {
     text: `你好，${user.name}。\n\n请打开以下链接完成 ImageGood 账号邮箱验证：\n${verifyUrl}\n\n该链接 30 分钟内有效。`,
     html: baseEmailHtml(
       "验证你的 ImageGood 账号邮箱",
-      `你好，${user.name}。请点击下方按钮完成邮箱验证，验证后即可使用图片生成和购买积分功能。`,
+      `你好，${user.name}。请点击下方按钮完成邮箱验证，验证后即可使用图片生成和创作方案功能。`,
       "验证邮箱",
       verifyUrl
     )

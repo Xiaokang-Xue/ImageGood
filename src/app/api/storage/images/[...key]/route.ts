@@ -45,13 +45,14 @@ export async function GET(
   if (
     taskInfo.filename.startsWith("original-") &&
     user.role !== "admin" &&
+    !task.unlockedAt &&
     !(await hasPaidOrderForUser(task.userId))
   ) {
     return NextResponse.json(
       {
         error: {
           code: "PAID_DOWNLOAD_REQUIRED",
-          message: "购买任意套餐后即可访问无水印图片"
+          message: "请先购买图片额度后下载无水印结果"
         }
       },
       { status: 402 }

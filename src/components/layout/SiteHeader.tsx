@@ -282,7 +282,7 @@ export function SiteHeader() {
                 href="/pricing"
                 className="hidden rounded-md border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-950 sm:block"
               >
-                {user.credits} 积分
+                {user.membershipUnlimited ? user.membershipPlan || "历史不限次权益" : `${user.credits} 张可用`}
               </Link>
               <div className="relative">
                 <button
@@ -304,13 +304,13 @@ export function SiteHeader() {
                 {userMenuOpen ? (
                   <div className="absolute right-0 mt-2 w-48 overflow-hidden rounded-lg border border-neutral-200 bg-white p-1 shadow-[0_16px_40px_rgba(0,0,0,0.10)]">
                     <div className="border-b border-neutral-100 px-3 py-2.5 text-xs font-medium text-neutral-500">
-                      剩余积分：{user.credits}
+                      {user.membershipUnlimited ? user.membershipPlan || "历史不限次权益有效" : `剩余 ${user.credits} 张`}
                     </div>
                     <Link href="/account" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
                       账户中心
                     </Link>
                     <Link href="/pricing" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
-                      购买积分
+                      查看创作方案
                     </Link>
                     <Link href="/history" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
                       历史记录

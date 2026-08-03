@@ -64,7 +64,7 @@ export function CleanHeroSection() {
           </div>
 
           <div className="mt-5 hidden flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-neutral-500 sm:flex">
-            {["生成成功后扣除积分", "结果自动保存", "支持手机上传"].map((item) => (
+            {["免费体验一次", "结果自动保存", "支持手机上传"].map((item) => (
               <span key={item} className="inline-flex items-center gap-1.5">
                 <Check className="h-3.5 w-3.5 text-blue-600" />
                 {item}

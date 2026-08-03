@@ -261,9 +261,9 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
             <Link href="/login?redirect=/editor" className="text-studio-700 underline">
               去登录
             </Link>
-          ) : error.includes("积分不足") ? (
+          ) : error.includes("积分不足") || error.includes("创作权益") || error.includes("免费体验") ? (
             <Link href="/pricing" className="text-studio-700 underline">
-              购买积分
+              查看创作方案
             </Link>
           ) : error.includes("验证") ? (
             <Link href="/account" className="text-studio-700 underline">

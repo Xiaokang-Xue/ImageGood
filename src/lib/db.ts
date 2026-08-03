@@ -25,6 +25,7 @@ export interface DbUser {
   avatar?: string | null;
   credits: number;
   membershipCredits?: number;
+  membershipUnlimited?: boolean;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
   membershipLifetime?: boolean;
@@ -317,6 +318,7 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
             credits: typeof user.credits === "number" ? user.credits : 0,
             membershipCredits:
               typeof user.membershipCredits === "number" ? Math.max(0, Math.trunc(user.membershipCredits)) : 0,
+            membershipUnlimited: Boolean(user.membershipUnlimited),
             membershipExpiresAt: user.membershipExpiresAt ?? null,
             membershipPlan: user.membershipPlan ?? null,
             membershipLifetime: Boolean(user.membershipLifetime),
@@ -372,12 +374,17 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
 
           return {
             ...order,
-            packageKind: order.packageKind === "membership" ? "membership" : "credit_pack",
+            packageKind:
+              order.packageKind === "membership" || order.packageKind === "single_unlock"
+                ? order.packageKind
+                : "credit_pack",
             validityMonths:
               typeof order.validityMonths === "number" ? Math.max(1, Math.trunc(order.validityMonths)) : null,
             validityDays:
               typeof order.validityDays === "number" ? Math.max(1, Math.trunc(order.validityDays)) : null,
             membershipLifetime: Boolean(order.membershipLifetime),
+            unlimitedGenerations: Boolean(order.unlimitedGenerations),
+            targetTaskId: order.targetTaskId ?? null,
             periodDays:
               typeof order.periodDays === "number" ? Math.max(1, Math.trunc(order.periodDays)) : null,
             creditsPerPeriod:
@@ -418,6 +425,7 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
           originalResultImages: Array.isArray(task.originalResultImages) ? task.originalResultImages : [],
           isFreeTrial: Boolean(task.isFreeTrial),
           hasWatermark: Boolean(task.hasWatermark),
+          unlockedAt: task.unlockedAt ?? null,
           creditCharged: Boolean(task.creditCharged)
         }))
       : [],
@@ -1134,7 +1142,11 @@ export async function hasPaidOrderForUser(userId: string) {
   if (!isMysqlDatabaseUrl()) {
     const db = await readFileDb();
     return db.orders.some(
-      (order) => order.userId === userId && order.status === "paid" && order.amountCents > 0
+      (order) =>
+        order.userId === userId &&
+        order.status === "paid" &&
+        order.amountCents > 0 &&
+        order.packageKind !== "single_unlock"
     );
   }
 
@@ -1143,6 +1155,7 @@ export async function hasPaidOrderForUser(userId: string) {
   const orderUserId = mysqlRecordText("$.userId");
   const orderStatus = mysqlRecordText("$.status");
   const orderAmountCents = mysqlRecordText("$.amountCents");
+  const orderPackageKind = mysqlRecordText("$.packageKind");
   const result = await pool.query(
     `SELECT id
      FROM imagegood_records
@@ -1150,6 +1163,7 @@ export async function hasPaidOrderForUser(userId: string) {
        AND ${orderUserId} = ?
        AND ${orderStatus} = 'paid'
        AND CAST(${orderAmountCents} AS UNSIGNED) > 0
+       AND COALESCE(${orderPackageKind}, 'credit_pack') <> 'single_unlock'
      LIMIT 1`,
     [userId]
   );

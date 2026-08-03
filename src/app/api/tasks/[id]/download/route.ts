@@ -33,14 +33,14 @@ export async function GET(
     );
   }
 
-  const unlocked = user.role === "admin" || (await hasPaidOrderForUser(task.userId));
+  const unlocked = user.role === "admin" || Boolean(task.unlockedAt) || (await hasPaidOrderForUser(task.userId));
   if (!unlocked) {
     return NextResponse.json(
       {
         status: "failed",
         error: {
           code: "PAID_DOWNLOAD_REQUIRED",
-          message: "免费体验结果带有水印，购买任意套餐后即可下载无水印图片",
+          message: "免费体验结果带有水印，购买任一图片额度方案后可下载无水印图片",
           actionUrl: "/pricing"
         }
       },

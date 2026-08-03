@@ -34,6 +34,7 @@ function publicUser(user: {
   avatar?: string | null;
   credits?: number;
   membershipCredits?: number;
+  membershipUnlimited?: boolean;
   membershipExpiresAt?: string | null;
   membershipPlan?: string | null;
   membershipLifetime?: boolean;
@@ -62,6 +63,7 @@ function publicUser(user: {
     credits: getAvailableCreditBalance(creditAccount),
     permanentCredits: user.credits ?? 0,
     membershipCredits,
+    membershipUnlimited: activeMembership && Boolean(creditAccount.membershipUnlimited),
     membershipExpiresAt: activeMembership ? creditAccount.membershipExpiresAt ?? null : null,
     membershipPlan: activeMembership ? creditAccount.membershipPlan ?? null : null,
     membershipLifetime: activeMembership && Boolean(creditAccount.membershipLifetime),

@@ -84,7 +84,7 @@ export default function AdminOrdersPage() {
   }, [loadOrders]);
 
   const handleConfirm = async (orderId: string) => {
-    const confirmed = window.confirm("该操作仅用于异常补发积分。确认后会将订单标记为已完成并给用户增加积分，是否继续？");
+    const confirmed = window.confirm("该操作仅用于支付异常补发。确认后会将订单标记为已完成并发放对应创作权益，是否继续？");
     if (!confirmed) return;
 
     setConfirmingId(orderId);
@@ -110,7 +110,7 @@ export default function AdminOrdersPage() {
         <div>
           <p className="text-sm font-semibold text-studio-600">管理员</p>
           <h1 className="mt-2 text-3xl font-bold text-ink">支付订单</h1>
-          <p className="mt-3 text-sm text-muted">正常订单由支付平台异步通知自动加积分。管理员补发仅用于异常处理。</p>
+          <p className="mt-3 text-sm text-muted">正常订单由支付平台异步通知自动生效。管理员补发仅用于异常处理。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/tasks">
@@ -221,8 +221,7 @@ export default function AdminOrdersPage() {
                     </span>
                   </div>
                   <h2 className="mt-1 text-xl font-bold text-ink">
-                    {formatCny(order.amountCents)} / {order.credits}
-                    {order.packageKind === "membership" ? " 会员积分" : " 积分"}
+                    {formatCny(order.amountCents)} / {order.packageKind === "single_unlock" ? "单张解锁" : order.unlimitedGenerations ? "历史不限次" : `${order.credits} 张`}
                   </h2>
                   <div className="mt-3 grid gap-1 text-sm text-muted">
                     <p>订单 ID：{order.id}</p>
@@ -233,12 +232,14 @@ export default function AdminOrdersPage() {
                     <p>平台交易号：{order.transactionId || "未返回"}</p>
                     <p>创建时间：{new Date(order.createdAt).toLocaleString("zh-CN")}</p>
                     <p>支付时间：{order.paidAt ? new Date(order.paidAt).toLocaleString("zh-CN") : "未支付"}</p>
-                    {order.packageKind === "membership" ? (
+                    {order.packageKind === "membership" && !order.unlimitedGenerations ? (
                       <p>
                         会员周期：{membershipValidity(order)} · 每 {order.periodDays ?? 30} 天发放{" "}
                         {order.creditsPerPeriod ?? order.credits} 积分
                       </p>
                     ) : null}
+                    {order.unlimitedGenerations ? <p>创作权益：{membershipValidity(order)}内不限生成次数</p> : null}
+                    {order.targetTaskId ? <p>解锁任务：{order.targetTaskId}</p> : null}
                   </div>
                 </div>
                 <Button
@@ -247,7 +248,7 @@ export default function AdminOrdersPage() {
                   variant="outline"
                   onClick={() => handleConfirm(order.id)}
                 >
-                  异常补发积分
+                  异常补发权益
                 </Button>
               </div>
             </Card>

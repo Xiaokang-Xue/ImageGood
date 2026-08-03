@@ -121,7 +121,7 @@ export function Header() {
                 历史记录
               </Link>
               <Link href="/pricing" className="hidden rounded-lg bg-studio-50 px-3 py-2 text-sm font-semibold text-studio-700 sm:block">
-                积分：{user.credits}
+                {user.membershipUnlimited ? user.membershipPlan || "历史不限次权益" : `${user.credits} 张可用`}
               </Link>
               <div className="relative" ref={menuRef}>
                 <button
@@ -138,7 +138,7 @@ export function Header() {
                 {menuOpen ? (
                   <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-line bg-white shadow-xl">
                     <div className="border-b border-line px-4 py-3 text-sm font-semibold text-studio-700">
-                      剩余积分：{user.credits}
+                      {user.membershipUnlimited ? user.membershipPlan || "历史不限次权益有效" : `剩余 ${user.credits} 张`}
                     </div>
                     <Link
                       href="/account"
@@ -152,7 +152,7 @@ export function Header() {
                       className="block px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                       onClick={() => setMenuOpen(false)}
                     >
-                      购买积分
+                      查看创作方案
                     </Link>
                     <Link
                       href="/history"

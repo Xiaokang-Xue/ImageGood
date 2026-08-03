@@ -104,13 +104,14 @@ function AlipayReturnContent() {
   const isPaid = order?.status === "paid";
   const isPending = order?.status === "pending";
   const isClosed = order?.status === "failed" || order?.status === "expired" || order?.status === "cancelled";
+  const effectiveUnlockTaskId = unlockTaskId || order?.targetTaskId || "";
 
   return (
     <main className="mx-auto max-w-[820px] px-5 py-10">
       <Card className="p-8">
         <p className="text-sm font-semibold text-studio-600">支付宝支付</p>
         <h1 className="mt-2 text-3xl font-bold text-ink">
-          {isPaid ? "支付成功，积分已到账" : isClosed ? "支付未完成" : "支付结果确认中"}
+          {isPaid ? "支付成功，创作权益已生效" : isClosed ? "支付未完成" : "支付结果确认中"}
         </h1>
         <p className="mt-3 text-sm leading-6 text-muted">
           return_url 只用于页面跳转，系统会继续等待支付宝异步通知完成验签。请稍候，页面会自动刷新订单状态。
@@ -131,8 +132,8 @@ function AlipayReturnContent() {
               <div className="flex items-start gap-3 text-emerald-700">
                 <CheckCircle2 className="mt-0.5 h-6 w-6" />
                 <div>
-                  <p className="text-base font-bold">支付成功，积分已到账</p>
-                  <p className="mt-1 text-sm">当前剩余积分：{order.currentCredits}</p>
+                  <p className="text-base font-bold">支付成功，创作权益已生效</p>
+                  <p className="mt-1 text-sm">{order.packageKind === "single_unlock" ? "当前作品已解锁。" : `当前剩余 ${order.currentCredits} 张。`}</p>
                 </div>
               </div>
             ) : isPending ? (
@@ -148,7 +149,7 @@ function AlipayReturnContent() {
                 <XCircle className="mt-0.5 h-6 w-6" />
                 <div>
                   <p className="text-base font-bold">{order.status === "expired" ? "订单已过期" : "支付未完成"}</p>
-                  <p className="mt-1 text-sm">你可以返回积分页面重新创建订单。</p>
+                  <p className="mt-1 text-sm">你可以返回价格页重新创建订单。</p>
                 </div>
               </div>
             )}
@@ -157,12 +158,8 @@ function AlipayReturnContent() {
               <Info label="套餐" value={order.packageName} />
               <Info label="支付金额" value={`¥${(order.amountCents / 100).toFixed(2)}`} />
               <Info
-                label={order.packageKind === "membership" ? "会员积分" : "积分"}
-                value={
-                  order.packageKind === "membership"
-                    ? `${order.creditsPerPeriod ?? order.credits} 积分 / ${order.periodDays ?? 30} 天`
-                    : `${order.credits} 积分`
-                }
+                label="创作权益"
+                value={order.packageKind === "single_unlock" ? "指定作品无水印下载" : `${order.credits} 张图片额度`}
               />
               <Info label="商户订单号" value={order.outTradeNo} />
             </div>
@@ -183,9 +180,9 @@ function AlipayReturnContent() {
 
         <div className="mt-6 flex flex-wrap gap-3">
           {isPaid ? (
-            unlockTaskId ? (
+            effectiveUnlockTaskId ? (
               <Link
-                href={`/history/${encodeURIComponent(unlockTaskId)}`}
+                href={`/history/${encodeURIComponent(effectiveUnlockTaskId)}`}
                 onClick={() => window.sessionStorage.removeItem("imagegood:unlock-task-id")}
               >
                 <Button>查看无水印结果</Button>

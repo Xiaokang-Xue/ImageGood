@@ -8,13 +8,13 @@ export function PricingCallout() {
       <div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 px-6 py-10 text-white sm:px-10 lg:flex lg:items-center lg:justify-between lg:px-12">
           <div className="max-w-2xl">
-            <p className="text-sm font-medium text-neutral-400">创作会员与积分包</p>
+            <p className="text-sm font-medium text-neutral-400">按张数选择创作方案</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">从一次真实创作开始</h2>
             <p className="mt-3 text-sm leading-6 text-neutral-300 sm:text-base">
-              新用户可免费生成一次带水印作品，购买任意套餐后即可下载无水印结果。生成失败不扣积分。
+              新用户可免费生成一次带水印作品，购买 1、10、100 或 600 张图片额度后即可继续创作。
             </p>
             <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-neutral-400">
-              {["微信与支付宝支付", "支付成功自动到账", "积分适用于全部图片工具"].map((item) => (
+              {["微信与支付宝支付", "支付成功自动到账", "图片额度适用于全部工具"].map((item) => (
                 <span key={item} className="inline-flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-white" />
                   {item}

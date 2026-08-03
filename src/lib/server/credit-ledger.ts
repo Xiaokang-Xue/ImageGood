@@ -3,6 +3,7 @@ import {
   addMembershipDays,
   addMembershipMonths,
   getAvailableCreditBalance,
+  hasUnlimitedGenerationAccess,
   refreshMembershipCredits
 } from "@/lib/credit-balance";
 import type { DbUser } from "@/lib/db";
@@ -11,6 +12,10 @@ import type { OrderRecord } from "@/types/billing";
 export function availableCredits(user: DbUser, now = Date.now()) {
   refreshMembershipCredits(user, now);
   return getAvailableCreditBalance(user, now);
+}
+
+export function hasUnlimitedAccess(user: DbUser, now = Date.now()) {
+  return hasUnlimitedGenerationAccess(user, now);
 }
 
 export function consumeOneAvailableCredit(user: DbUser, now = Date.now()) {
@@ -29,6 +34,38 @@ export function consumeOneAvailableCredit(user: DbUser, now = Date.now()) {
 export function grantOrderCredits(user: DbUser, order: OrderRecord, nowIso: string) {
   const now = new Date(nowIso).getTime();
   refreshMembershipCredits(user, now);
+  if (order.packageKind === "single_unlock") {
+    return {
+      source: "single_unlock" as const,
+      balanceAfter: getAvailableCreditBalance(user, now),
+      membershipExpiresAt: user.membershipExpiresAt ?? null
+    };
+  }
+
+  if (order.packageKind === "membership" && order.unlimitedGenerations) {
+    const previousExpiry = user.membershipExpiresAt;
+    if (order.membershipLifetime || user.membershipLifetime) {
+      user.membershipLifetime = true;
+      user.membershipExpiresAt = null;
+    } else {
+      user.membershipLifetime = false;
+      user.membershipExpiresAt = order.validityDays
+        ? addMembershipDays(previousExpiry, order.validityDays, now)
+        : addMembershipMonths(previousExpiry, Math.max(1, order.validityMonths ?? 1), now);
+    }
+    user.membershipUnlimited = true;
+    user.membershipPlan = order.packageName;
+    user.membershipCredits = 0;
+    user.membershipNextRefreshAt = null;
+    user.membershipCreditsPerPeriod = 0;
+    user.membershipPeriodDays = 0;
+    return {
+      source: "unlimited_membership" as const,
+      balanceAfter: getAvailableCreditBalance(user, now),
+      membershipExpiresAt: user.membershipExpiresAt
+    };
+  }
+
   if (order.packageKind === "membership") {
     const previousExpiry = user.membershipExpiresAt;
     const wasActive =
@@ -62,6 +99,7 @@ export function grantOrderCredits(user: DbUser, order: OrderRecord, nowIso: stri
     }
 
     user.membershipCreditsPerPeriod = creditsPerPeriod;
+    user.membershipUnlimited = false;
     user.membershipPeriodDays = periodDays;
     user.membershipPlan = order.packageName;
     return {

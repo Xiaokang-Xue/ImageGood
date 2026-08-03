@@ -95,6 +95,7 @@ function toPublicUser(user: DbUser): PublicUser {
     credits: getAvailableCreditBalance(user),
     permanentCredits: user.credits ?? 0,
     membershipCredits,
+    membershipUnlimited: activeMembership && Boolean(user.membershipUnlimited),
     membershipExpiresAt: activeMembership ? user.membershipExpiresAt ?? null : null,
     membershipPlan: activeMembership ? user.membershipPlan ?? null : null,
     membershipLifetime: activeMembership && Boolean(user.membershipLifetime),
