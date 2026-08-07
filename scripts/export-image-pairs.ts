@@ -5,6 +5,12 @@ import { loadEnvFiles } from "./load-env.mjs";
 import type { StoredImageTaskRecord } from "../src/lib/db";
 
 type ExportStatus = "complete" | "partial" | "failed";
+type ResultMode = "visible" | "clean" | "both";
+
+interface ResultReference {
+  reference: string;
+  label: "result" | "result-watermarked" | "result-clean";
+}
 
 interface ExportRow {
   userKey: string;
@@ -37,6 +43,44 @@ function parseBoundary(value: string | undefined, endOfDay: boolean) {
   const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(value) ? Date.parse(`${value}${suffix}`) : Date.parse(value);
   if (!Number.isFinite(timestamp)) throw new Error(`日期格式无效：${value}`);
   return timestamp;
+}
+
+function beijingDateKey(value = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(value);
+}
+
+function previousDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day) - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function resolveDateFilters() {
+  const explicitDate = argumentValue("--date");
+  const range = argumentValue("--range")?.toLowerCase();
+  if (explicitDate && !/^\d{4}-\d{2}-\d{2}$/.test(explicitDate)) {
+    throw new Error(`日期格式无效：${explicitDate}`);
+  }
+  if (range && range !== "today" && range !== "yesterday") {
+    throw new Error(`range 只支持 today 或 yesterday：${range}`);
+  }
+
+  const date = explicitDate || (range === "today" ? beijingDateKey() : range === "yesterday" ? previousDateKey(beijingDateKey()) : null);
+  return {
+    date,
+    since: date ? parseBoundary(date, false) : parseBoundary(argumentValue("--since"), false),
+    until: date ? parseBoundary(date, true) : parseBoundary(argumentValue("--until"), true)
+  };
+}
+
+function parseResultMode(value: string | undefined): ResultMode {
+  const normalized = value?.toLowerCase() || "visible";
+  if (normalized === "visible" || normalized === "clean" || normalized === "both") return normalized;
+  throw new Error(`result 只支持 visible、clean 或 both：${value}`);
 }
 
 function safeSegment(value: string) {
@@ -83,11 +127,38 @@ async function writeImage(filename: string, buffer: Buffer) {
   return "written";
 }
 
-function resultReferences(task: StoredImageTaskRecord) {
+function visibleResultReferences(task: StoredImageTaskRecord) {
+  return [...new Set([...(task.resultImages || []), task.resultImageUrl || ""].filter(Boolean))];
+}
+
+function cleanResultReferences(task: StoredImageTaskRecord) {
+  return [...new Set((task.originalResultImages || []).filter(Boolean))];
+}
+
+function resultReferences(task: StoredImageTaskRecord, mode: ResultMode): ResultReference[] {
   const cleanResults = (task.originalResultImages || []).filter(Boolean);
-  const visibleResults = (task.resultImages || []).filter(Boolean);
-  const candidates = cleanResults.length > 0 ? cleanResults : visibleResults.length > 0 ? visibleResults : [task.resultImageUrl || ""];
-  return [...new Set(candidates.filter(Boolean))];
+  const visibleResults = visibleResultReferences(task);
+  const visibleLabel = task.hasWatermark ? "result-watermarked" : "result";
+
+  if (mode === "visible") {
+    return visibleResults.map((reference) => ({ reference, label: visibleLabel }));
+  }
+  if (mode === "clean") {
+    const candidates = cleanResults.length > 0 ? cleanResultReferences(task) : visibleResults;
+    return candidates.map((reference) => ({
+      reference,
+      label: cleanResults.length > 0 ? "result-clean" : visibleLabel
+    }));
+  }
+
+  const results: ResultReference[] = [];
+  for (const reference of visibleResults) results.push({ reference, label: visibleLabel });
+  for (const reference of cleanResultReferences(task)) {
+    if (!results.some((item) => item.reference === reference)) {
+      results.push({ reference, label: "result-clean" });
+    }
+  }
+  return results;
 }
 
 function csvCell(value: string | number) {
@@ -123,14 +194,11 @@ function safeError(error: unknown) {
 async function exportTask(
   task: StoredImageTaskRecord,
   outputRoot: string,
+  resultMode: ResultMode,
   readStoredTaskImage: (reference: string, taskId: string) => Promise<{ buffer: Buffer; mimeType: string }>
 ): Promise<ExportRow> {
   const userKey = anonymousUserKey(task.userId);
-  const relativeDirectory = path.join(
-    "users",
-    userKey,
-    `${beijingTimestamp(task.createdAt)}_${safeSegment(task.type)}_${safeSegment(task.id)}`
-  );
+  const relativeDirectory = `${beijingTimestamp(task.createdAt)}_${safeSegment(task.type)}_${safeSegment(task.id)}`;
   const taskDirectory = path.join(outputRoot, relativeDirectory);
   await mkdir(taskDirectory, { recursive: true });
 
@@ -140,19 +208,24 @@ async function exportTask(
 
   try {
     const input = await readStoredTaskImage(task.inputImageUrl || "", task.id);
-    inputFile = path.join(relativeDirectory, `input.${extensionForMimeType(input.mimeType)}`);
+    inputFile = path.join(relativeDirectory, `original.${extensionForMimeType(input.mimeType)}`);
     await writeImage(path.join(outputRoot, inputFile), input.buffer);
   } catch (error) {
     errors.push(`input: ${safeError(error)}`);
   }
 
-  const references = resultReferences(task);
+  const references = resultReferences(task, resultMode);
+  const labelIndexes = new Map<ResultReference["label"], number>();
   for (let index = 0; index < references.length; index += 1) {
     try {
-      const result = await readStoredTaskImage(references[index], task.id);
+      const result = await readStoredTaskImage(references[index].reference, task.id);
+      const sameLabelCount = references.filter((item) => item.label === references[index].label).length;
+      const labelIndex = (labelIndexes.get(references[index].label) || 0) + 1;
+      labelIndexes.set(references[index].label, labelIndex);
+      const suffix = sameLabelCount > 1 ? `-${String(labelIndex).padStart(2, "0")}` : "";
       const relativeFile = path.join(
         relativeDirectory,
-        `result-${String(index + 1).padStart(2, "0")}.${extensionForMimeType(result.mimeType)}`
+        `${references[index].label}${suffix}.${extensionForMimeType(result.mimeType)}`
       );
       await writeImage(path.join(outputRoot, relativeFile), result.buffer);
       resultFiles.push(relativeFile);
@@ -163,6 +236,7 @@ async function exportTask(
 
   const status: ExportStatus =
     inputFile && resultFiles.length > 0 ? "complete" : inputFile || resultFiles.length > 0 ? "partial" : "failed";
+  await writeFile(path.join(taskDirectory, "prompt.txt"), `${task.prompt.trim()}\n`, "utf8");
   await writeFile(
     path.join(taskDirectory, "metadata.json"),
     JSON.stringify(
@@ -177,6 +251,8 @@ async function exportTask(
         exportStatus: status,
         inputFile: inputFile ? path.basename(inputFile) : null,
         resultFiles: resultFiles.map((filename) => path.basename(filename)),
+        watermark: Boolean(task.hasWatermark),
+        resultMode,
         errors
       },
       null,
@@ -224,8 +300,12 @@ async function main() {
         "Options:",
         "  --output=/data/imagegood_analysis/image-pairs",
         "  --limit=200|all",
+        "  --range=today|yesterday",
+        "  --date=YYYY-MM-DD",
         "  --since=YYYY-MM-DD",
         "  --until=YYYY-MM-DD",
+        "  --watermarked-only",
+        "  --result=visible|clean|both",
         "  --concurrency=3"
       ].join("\n")
     );
@@ -235,8 +315,9 @@ async function main() {
   const outputRoot = path.resolve(argumentValue("--output") || path.join("exports", "image-pairs"));
   const limit = parseLimit(argumentValue("--limit"));
   const concurrency = Math.min(parsePositiveInteger(argumentValue("--concurrency"), 3), 8);
-  const since = parseBoundary(argumentValue("--since"), false);
-  const until = parseBoundary(argumentValue("--until"), true);
+  const { date, since, until } = resolveDateFilters();
+  const watermarkedOnly = process.argv.includes("--watermarked-only");
+  const resultMode = parseResultMode(argumentValue("--result"));
 
   if (outputRoot === path.parse(outputRoot).root || outputRoot === path.resolve(".")) {
     throw new Error("导出目录不能是磁盘根目录或项目根目录");
@@ -253,7 +334,8 @@ async function main() {
       return (
         task.status === "succeeded" &&
         Boolean(task.inputImageUrl) &&
-        resultReferences(task).length > 0 &&
+        (!watermarkedOnly || (task.isFreeTrial === true && task.hasWatermark === true)) &&
+        resultReferences(task, resultMode).length > 0 &&
         (since === null || createdAt >= since) &&
         (until === null || createdAt <= until)
       );
@@ -268,7 +350,7 @@ async function main() {
 
   let completed = 0;
   const rows = await mapConcurrent(candidates, concurrency, async (task) => {
-    const row = await exportTask(task, outputRoot, readStoredTaskImage);
+    const row = await exportTask(task, outputRoot, resultMode, readStoredTaskImage);
     completed += 1;
     console.info(`[image-pair-export] ${completed}/${candidates.length} task=${task.id} status=${row.status}`);
     return row;
@@ -283,8 +365,12 @@ async function main() {
     failed: rows.filter((row) => row.status === "failed").length,
     filters: {
       limit: Number.isFinite(limit) ? limit : "all",
+      range: argumentValue("--range") || null,
+      date,
       since: argumentValue("--since") || null,
-      until: argumentValue("--until") || null
+      until: argumentValue("--until") || null,
+      watermarkedOnly,
+      resultMode
     }
   };
   await Promise.all([

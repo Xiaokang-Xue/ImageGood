@@ -3,48 +3,49 @@ import type { CreditPackage } from "@/types/billing";
 /** 当前可购买方案。服务端创建订单与前端展示共同使用这一份配置。 */
 export const BILLING_PLANS: CreditPackage[] = [
   {
-    id: "image_pack_1",
+    id: "image_pack_1_202608",
     kind: "credit_pack",
     name: "单张体验",
-    priceCents: 3900,
+    priceCents: 5900,
     credits: 1,
-    subtitle: "按需购买",
-    description: "适合先完成一张图片处理",
+    subtitle: "按需处理一张",
+    description: "适合临时修图或体验完整创作流程",
     buttonLabel: "购买 1 张",
     badgeLabel: "轻量体验"
   },
   {
-    id: "image_pack_10",
+    id: "image_pack_50",
     kind: "credit_pack",
-    name: "轻享 10 张",
-    priceCents: 9900,
-    credits: 10,
-    subtitle: "日常轻量处理",
-    description: "适合临时修图、抠图和少量创作",
-    buttonLabel: "购买 10 张"
+    name: "轻享 50 张",
+    priceCents: 19900,
+    credits: 50,
+    subtitle: "日常图片处理",
+    description: "适合稳定修图、抠图和内容创作",
+    buttonLabel: "购买 50 张",
+    badgeLabel: "日常推荐"
   },
   {
-    id: "image_pack_100",
+    id: "image_pack_500",
     kind: "credit_pack",
-    name: "进阶 100 张",
-    priceCents: 29900,
-    credits: 100,
-    subtitle: "持续创作推荐",
-    description: "适合内容创作者与日常高频图片处理",
-    buttonLabel: "购买 100 张",
-    badgeLabel: "推荐",
-    recommended: true
+    name: "进阶 500 张",
+    priceCents: 49900,
+    credits: 500,
+    subtitle: "高频创作更省",
+    description: "适合持续内容生产和批量图片处理",
+    buttonLabel: "购买 500 张",
+    badgeLabel: "高频推荐"
   },
   {
-    id: "image_pack_600",
+    id: "image_pack_5000",
     kind: "credit_pack",
-    name: "专业 600 张",
+    name: "专业 5000 张",
     priceCents: 59900,
-    credits: 600,
-    subtitle: "团队与高频使用",
-    description: "适合商品图、内容生产和批量创作",
-    buttonLabel: "购买 600 张",
-    badgeLabel: "最划算"
+    credits: 5000,
+    subtitle: "专业规模创作",
+    description: "适合团队、商品图和大批量内容生产",
+    buttonLabel: "购买 5000 张",
+    badgeLabel: "最划算",
+    recommended: true
   }
 ];
 
@@ -53,6 +54,10 @@ export const BILLING_PLANS: CreditPackage[] = [
  * 不参与新订单创建，也不会出现在价格页。
  */
 export const ARCHIVED_BILLING_PLANS: CreditPackage[] = [
+  { id: "image_pack_1", kind: "credit_pack", name: "单张体验（旧）", priceCents: 3900, credits: 1, subtitle: "按需购买" },
+  { id: "image_pack_10", kind: "credit_pack", name: "轻享 10 张（旧）", priceCents: 9900, credits: 10, subtitle: "日常轻量处理" },
+  { id: "image_pack_100", kind: "credit_pack", name: "进阶 100 张（旧）", priceCents: 29900, credits: 100, subtitle: "持续创作推荐" },
+  { id: "image_pack_600", kind: "credit_pack", name: "专业 600 张（旧）", priceCents: 59900, credits: 600, subtitle: "团队与高频使用" },
   { id: "image_single_unlock", kind: "single_unlock", name: "单张体验（旧）", priceCents: 3900, credits: 0, subtitle: "解锁一张作品", requiresTaskTarget: true },
   { id: "single_unlock", kind: "single_unlock", name: "单次去水印", priceCents: 5900, credits: 0, subtitle: "解锁一张作品", requiresTaskTarget: true },
   { id: "unlimited_monthly", kind: "membership", name: "包月不限次", priceCents: 19900, credits: 0, subtitle: "30 天持续创作", validityDays: 30, unlimitedGenerations: true },

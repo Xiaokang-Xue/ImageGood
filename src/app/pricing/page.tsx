@@ -17,6 +17,13 @@ function formatPrice(priceCents: number) {
   return amount.toFixed(priceCents % 100 === 0 ? 0 : 1);
 }
 
+function formatUnitPrice(plan: CreditPackage) {
+  const unitPrice = plan.priceCents / 100 / plan.credits;
+  if (plan.credits === 1) return `¥${unitPrice.toFixed(0)} / 张`;
+  if (unitPrice >= 0.995) return `约 ¥${Math.round(unitPrice)} / 张`;
+  return `约 ¥${unitPrice.toFixed(2)} / 张`;
+}
+
 export default function PricingPage() {
   const router = useRouter();
   const [loadingPackage, setLoadingPackage] = useState<CreditPackageId | null>(null);
@@ -82,10 +89,10 @@ export default function PricingPage() {
     <PageShell>
       <main className="mx-auto max-w-6xl pb-12">
         <header className="mx-auto max-w-2xl pb-8 pt-3 text-center md:pb-10 md:pt-6">
-          <p className="text-sm font-semibold text-neutral-500">从单张体验到专业创作</p>
+          <p className="text-sm font-semibold text-neutral-500">按创作量灵活选择</p>
           <h1 className="mt-2 text-3xl font-bold text-neutral-950 md:text-5xl">选择适合你的创作方案</h1>
           <p className="mt-4 text-sm leading-6 text-neutral-600 md:text-base">
-            按需要选择图片张数，支付成功后额度自动到账。
+            购买数量越多，折算单价越低。
           </p>
         </header>
 
@@ -96,7 +103,7 @@ export default function PricingPage() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {BILLING_PLANS.map((plan) => (
             <PlanCard
               key={plan.id}
@@ -107,10 +114,11 @@ export default function PricingPage() {
           ))}
         </div>
 
-        <section className="mt-7 grid gap-3 rounded-xl border border-neutral-300 bg-neutral-50 p-4 text-sm text-neutral-700 sm:grid-cols-3">
+        <section className="mt-7 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-neutral-300 bg-neutral-50 p-4 text-xs text-neutral-700 sm:text-sm lg:grid-cols-4">
+          <TrustItem text="生成失败不消耗额度" />
+          <TrustItem text="支付成功自动到账" />
           <TrustItem text="微信、支付宝均支持" />
-          <TrustItem text="支付成功后自动生效" />
-          <TrustItem text="请合法合规使用生成内容" />
+          <TrustItem text="额度全站工具通用" />
         </section>
       </main>
 
@@ -139,28 +147,31 @@ function PlanCard({
   return (
     <Card
       className={cn(
-        "relative flex min-h-[292px] flex-col border-neutral-300 p-4 sm:min-h-[350px] sm:p-5 lg:p-6",
-        plan.recommended && "border-neutral-950 ring-1 ring-neutral-950"
+        "relative flex min-h-[300px] flex-col overflow-hidden border-neutral-300 p-3.5 sm:min-h-[354px] sm:p-5 lg:p-6",
+        plan.recommended && "border-neutral-950 bg-neutral-50 ring-1 ring-neutral-950"
       )}
     >
-      {plan.badgeLabel ? (
-        <span className={cn("absolute right-3 top-3 rounded-full px-2 py-1 text-[10px] font-bold sm:right-4 sm:top-4 sm:px-2.5 sm:text-[11px]", plan.recommended ? "bg-neutral-950 text-white" : "bg-neutral-100 text-neutral-700")}>
-          {plan.badgeLabel}
+      <div className="flex items-start justify-between gap-2">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-300 bg-white text-neutral-900 sm:h-10 sm:w-10 sm:rounded-xl">
+          <Images className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
-      ) : null}
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-300 bg-neutral-50 text-neutral-900 sm:h-10 sm:w-10 sm:rounded-xl">
-        <Images className="h-4 w-4 sm:h-5 sm:w-5" />
-      </span>
-      <h2 className="mt-4 pr-9 text-base font-bold text-neutral-950 sm:mt-5 sm:pr-12 sm:text-xl">{plan.name}</h2>
-      <p className="mt-1 text-xs text-neutral-500 sm:text-sm">{plan.subtitle}</p>
-      <p className="mt-4 text-3xl font-bold text-neutral-950 sm:mt-5 sm:text-4xl">¥{formatPrice(plan.priceCents)}</p>
-      <p className="mt-3 hidden min-h-[48px] text-sm leading-6 text-neutral-600 sm:block">{plan.description}</p>
-      <div className="mt-4 grid gap-1.5 text-xs text-neutral-700 sm:mt-5 sm:gap-2 sm:text-sm">
-        <Feature text={`${plan.credits} 张图片处理额度`} />
-        <Feature text="生成失败不消耗" />
+        {plan.badgeLabel ? (
+          <span className={cn("rounded-full px-2 py-1 text-[10px] font-bold sm:px-2.5 sm:text-[11px]", plan.recommended ? "bg-neutral-950 text-white" : "bg-neutral-100 text-neutral-700")}>
+            {plan.badgeLabel}
+          </span>
+        ) : null}
       </div>
-      <div className="mt-auto pt-4 sm:pt-6">
-        <Button className="h-10 w-full px-2 text-xs sm:h-11 sm:px-4 sm:text-sm" variant={plan.recommended ? "dark" : "primary"} loading={loading} onClick={onBuy}>
+      <h2 className="mt-3 text-[15px] font-bold leading-5 text-neutral-950 sm:mt-5 sm:text-xl">{plan.name}</h2>
+      <p className="mt-1 text-xs text-neutral-500 sm:text-sm">{plan.subtitle}</p>
+      <p className="mt-3 text-[28px] font-bold leading-none text-neutral-950 sm:mt-5 sm:text-4xl">¥{formatPrice(plan.priceCents)}</p>
+      <p className="mt-2 text-xs font-semibold text-neutral-700 sm:text-sm">{plan.credits} 张图片额度</p>
+      <div className="mt-3 rounded-lg bg-neutral-950 px-2.5 py-2 text-white sm:mt-4 sm:px-3 sm:py-2.5">
+        <p className="text-[10px] text-neutral-300 sm:text-xs">折算单价</p>
+        <p className="mt-0.5 text-sm font-bold tracking-normal sm:text-base">{formatUnitPrice(plan)}</p>
+      </div>
+      <p className="mt-3 hidden min-h-[44px] text-sm leading-5 text-neutral-600 sm:block">{plan.description}</p>
+      <div className="mt-auto pt-4 sm:pt-5">
+        <Button className="h-11 w-full px-2 text-sm sm:px-4" variant={plan.recommended ? "dark" : "primary"} loading={loading} onClick={onBuy}>
           {plan.buttonLabel}
         </Button>
       </div>
@@ -188,7 +199,10 @@ function PaymentSelector({ plan, loading, error, onClose, onSelect }: {
           </button>
         </div>
         <div className="mt-4 flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-4">
-          <p className="text-sm font-semibold text-neutral-700">{plan.credits} 张图片额度</p>
+          <div>
+            <p className="text-sm font-semibold text-neutral-700">{plan.credits} 张图片额度</p>
+            <p className="mt-1 text-xs font-bold text-neutral-950">{formatUnitPrice(plan)}</p>
+          </div>
           <p className="text-2xl font-bold text-neutral-950">¥{formatPrice(plan.priceCents)}</p>
         </div>
         <div className="mt-5 grid gap-3">
@@ -217,10 +231,6 @@ function PaymentOption({ title, description, icon, loading, onClick }: {
       <span><span className="block text-sm font-bold text-neutral-950">{title}</span><span className="mt-0.5 block text-xs text-neutral-500">{loading ? "正在创建订单…" : description}</span></span>
     </button>
   );
-}
-
-function Feature({ text }: { text: string }) {
-  return <p className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{text}</p>;
 }
 
 function TrustItem({ text }: { text: string }) {

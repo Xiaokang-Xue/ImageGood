@@ -41,7 +41,7 @@ ImageGood 支持上传图片或输入文字完成 AI 修图、文生图、智能
 | 图片创作 | AI 修图、文生图、图片增强、去杂物、商品图、封面海报 | Stable · Requires external credentials |
 | 智能抠图 | 透明 PNG 与纯色背景结果处理 | Experimental · Requires external credentials |
 | 用户与认证 | 手机号验证码 / 密码登录、邮箱注册验证、密码找回、httpOnly Cookie 会话 | Stable；短信与邮件为 Optional · Requires external credentials |
-| 权益和支付 | 1 / 10 / 100 / 600 张图片额度、微信支付 APIv3、支付宝电脑网站支付 | Optional · Requires external credentials |
+| 权益和支付 | 1 / 50 / 500 / 5000 张图片额度、微信支付 APIv3、支付宝电脑网站支付 | Optional · Requires external credentials |
 | 历史记录 | 任务分页、详情、下载、单条与批量删除 | Stable |
 | 管理后台 | 订单管理、运营数据、转化漏斗、来源反馈 | Stable |
 | 存储 | 本地文件、腾讯云 COS 与受保护图片代理 | Stable；COS 为 Optional · Requires external credentials |
@@ -160,6 +160,7 @@ ImageGood/
 ## 文档
 
 - [环境变量与运行配置](docs/configuration.md)
+- [项目交接文档](docs/project-handover.md)
 - [核心功能冒烟测试](docs/smoke-testing.md)
 - [图片任务可观测性](docs/image-task-observability.md)
 - [页面质量基线](docs/quality-baseline.md)
