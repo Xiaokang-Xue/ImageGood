@@ -18,6 +18,7 @@ interface UploadDropzoneProps {
   subtitle?: string;
   compact?: boolean;
   className?: string;
+  disabled?: boolean;
   onImageSelected: (imageUrl: string, file: File) => void;
 }
 
@@ -27,13 +28,17 @@ export function UploadDropzone({
   subtitle = "点击选择图片，系统会在生成前完成格式兼容处理",
   compact = false,
   className,
+  disabled = false,
   onImageSelected
 }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const ownedPreviewRef = useRef<string | null>(null);
+  const disabledRef = useRef(disabled);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  disabledRef.current = disabled;
 
   useEffect(() => {
     return () => {
@@ -42,6 +47,7 @@ export function UploadDropzone({
   }, []);
 
   const readFile = async (file?: File) => {
+    if (disabledRef.current) return;
     if (!file || !isPotentialImageFile(file)) {
       setUploadError("请选择图片文件");
       return;
@@ -52,6 +58,7 @@ export function UploadDropzone({
     setUploadError("");
     try {
       const uploadFile = await prepareImageFileForUpload(file);
+      if (disabledRef.current) return;
       if (ownedPreviewRef.current) URL.revokeObjectURL(ownedPreviewRef.current);
       const previewUrl = URL.createObjectURL(uploadFile);
       ownedPreviewRef.current = previewUrl;
@@ -74,27 +81,30 @@ export function UploadDropzone({
     <div
       className={cn(
         "group relative overflow-hidden rounded-lg border border-dashed transition duration-200",
-        "bg-white hover:border-neutral-950 hover:bg-neutral-50",
+        disabled ? "cursor-not-allowed bg-neutral-50" : "bg-white hover:border-neutral-950 hover:bg-neutral-50",
         isDragging ? "border-neutral-950 bg-neutral-50" : "border-neutral-400",
         compact ? "min-h-[220px]" : "min-h-[320px]",
         className
       )}
       onDragOver={(event) => {
         event.preventDefault();
+        if (disabled) return;
         setIsDragging(true);
       }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
+        if (disabled) return;
         void readFile(event.dataTransfer.files[0]);
       }}
+      aria-disabled={disabled}
     >
       <button
         type="button"
-        className="absolute inset-0 z-10 cursor-pointer disabled:cursor-wait"
+        className="absolute inset-0 z-10 cursor-pointer disabled:cursor-not-allowed"
         aria-label={title}
-        disabled={isProcessing}
+        disabled={disabled || isProcessing}
         onClick={() => inputRef.current?.click()}
       />
       <input
@@ -127,7 +137,11 @@ export function UploadDropzone({
         </div>
       )}
 
-      {value ? (
+      {disabled ? (
+        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 rounded-lg border border-neutral-300 bg-white/95 px-4 py-3 text-center text-sm font-semibold text-neutral-700 shadow-lg backdrop-blur">
+          任务处理中，暂不可更换图片
+        </div>
+      ) : value ? (
         <div className="pointer-events-none absolute inset-x-4 bottom-4 z-20 rounded-lg border border-neutral-200 bg-white/92 px-4 py-3 text-sm text-neutral-700 opacity-0 shadow-lg backdrop-blur transition group-hover:opacity-100">
           点击重新上传或拖拽替换图片
         </div>

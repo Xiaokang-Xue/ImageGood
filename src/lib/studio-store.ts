@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
+import { clearWorkspaceDraftsOnReload, EDITOR_DRAFT_STORAGE_KEY } from "@/lib/workspace-draft-storage";
 import type { EditImageResult, EditTool, HistoryItem } from "@/types/image";
 
 interface StudioState {
@@ -54,7 +55,7 @@ export const useStudioStore = create<StudioState>()(
       selectedResult: null,
       history: [],
       setUploadedImage: (imageUrl, file = null) =>
-        set(() => ({
+        set((state) => ({
           uploadedImage: imageUrl,
           uploadedImageFile: file,
           currentImage: imageUrl,
@@ -62,13 +63,14 @@ export const useStudioStore = create<StudioState>()(
           selectedResult: null,
           editResults: [],
           history: [
+            ...state.history,
             {
               id: `history-upload-${Date.now()}`,
               title: "上传原图",
               createdAt: new Date().toISOString(),
               thumbnail: imageUrl
             }
-          ]
+          ].slice(-20)
         })),
       setCurrentImage: (imageUrl, file = null) => set({ currentImage: imageUrl, currentImageFile: file }),
       setPrompt: (prompt) => set({ prompt }),
@@ -78,9 +80,12 @@ export const useStudioStore = create<StudioState>()(
       addHistoryItem: (item) => set((state) => ({ history: [...state.history, item].slice(-20) }))
     }),
     {
-      name: "imagegood-editor-workspace",
+      name: EDITOR_DRAFT_STORAGE_KEY,
       storage: createJSONStorage(() => ({
-        getItem: safeStorageGet,
+        getItem: (key) => {
+          clearWorkspaceDraftsOnReload();
+          return safeStorageGet(key);
+        },
         setItem: (key, value) => {
           safeStorageSet(key, value);
         },

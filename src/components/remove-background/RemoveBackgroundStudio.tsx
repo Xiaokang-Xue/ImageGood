@@ -283,8 +283,10 @@ export function RemoveBackgroundStudio() {
             value={imageUrl}
             title="上传原图"
             subtitle=""
+            disabled={loading}
             className="min-h-[420px]"
             onImageSelected={(previewUrl, file) => {
+              if (loading) return;
               if (imageUrl.startsWith("blob:")) {
                 URL.revokeObjectURL(imageUrl);
               }

@@ -35,6 +35,7 @@ import { refreshCreditsAfterGeneration } from "@/lib/client-credit-feedback";
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { trialDownloadLabel } from "@/lib/trial-image";
 import { cn } from "@/lib/utils";
+import { clearWorkspaceDraftsOnReload, POSTER_DRAFT_STORAGE_KEY } from "@/lib/workspace-draft-storage";
 import type { PosterImageResult, PosterUsage } from "@/types/image";
 
 const usageOptions: Array<{
@@ -51,7 +52,6 @@ const usageOptions: Array<{
 ];
 
 const usages = new Set<PosterUsage>(usageOptions.map((item) => item.value));
-const POSTER_DRAFT_STORAGE_KEY = "imagegood-poster-studio-draft-v2";
 
 function normalizeUsage(value?: string): PosterUsage {
   return usages.has(value as PosterUsage) ? (value as PosterUsage) : "xiaohongshu";
@@ -89,6 +89,7 @@ export function PosterStudio({ initialUsage }: PosterStudioProps) {
   }, []);
 
   useEffect(() => {
+    clearWorkspaceDraftsOnReload();
     try {
       const raw = safeStorageGet(POSTER_DRAFT_STORAGE_KEY);
       if (raw) {

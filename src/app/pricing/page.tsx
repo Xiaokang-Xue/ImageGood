@@ -156,7 +156,14 @@ function PlanCard({
           <Images className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
         {plan.badgeLabel ? (
-          <span className={cn("rounded-full px-2 py-1 text-[10px] font-bold sm:px-2.5 sm:text-[11px]", plan.recommended ? "bg-neutral-950 text-white" : "bg-neutral-100 text-neutral-700")}>
+          <span
+            className={cn(
+              "rounded-full border px-2 py-1 text-[10px] font-bold sm:px-2.5 sm:text-[11px]",
+              plan.recommended
+                ? "border-neutral-400 bg-white text-neutral-950"
+                : "border-neutral-200 bg-neutral-100 text-neutral-700"
+            )}
+          >
             {plan.badgeLabel}
           </span>
         ) : null}
@@ -165,9 +172,9 @@ function PlanCard({
       <p className="mt-1 text-xs text-neutral-500 sm:text-sm">{plan.subtitle}</p>
       <p className="mt-3 text-[28px] font-bold leading-none text-neutral-950 sm:mt-5 sm:text-4xl">¥{formatPrice(plan.priceCents)}</p>
       <p className="mt-2 text-xs font-semibold text-neutral-700 sm:text-sm">{plan.credits} 张图片额度</p>
-      <div className="mt-3 rounded-lg bg-neutral-950 px-2.5 py-2 text-white sm:mt-4 sm:px-3 sm:py-2.5">
-        <p className="text-[10px] text-neutral-300 sm:text-xs">折算单价</p>
-        <p className="mt-0.5 text-sm font-bold tracking-normal sm:text-base">{formatUnitPrice(plan)}</p>
+      <div className="mt-3 border-t border-neutral-200 pt-3 sm:mt-4 sm:pt-4">
+        <p className="text-[10px] font-medium text-neutral-500 sm:text-xs">折算单价</p>
+        <p className="mt-0.5 text-base font-bold tracking-normal text-neutral-950 sm:text-lg">{formatUnitPrice(plan)}</p>
       </div>
       <p className="mt-3 hidden min-h-[44px] text-sm leading-5 text-neutral-600 sm:block">{plan.description}</p>
       <div className="mt-auto pt-4 sm:pt-5">

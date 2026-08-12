@@ -87,11 +87,12 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const mainResult = visibleResults[0];
 
   const activeStep = useMemo(() => {
+    if (!inputPreview) return -1;
     if (editResults.length > 0) return 3;
-    if (prompt) return 2;
-    if (uploadedImage) return 1;
+    if (loading) return 2;
+    if (prompt.trim()) return 1;
     return 0;
-  }, [editResults.length, prompt, uploadedImage]);
+  }, [editResults.length, inputPreview, loading, prompt]);
 
   const handleGenerate = async () => {
     const finalPrompt = prompt.trim() || toolPrompts[selectedTool] || "提升图片整体质感，画面更干净自然";
@@ -297,8 +298,12 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
             compact
             title="上传原图"
             subtitle=""
+            disabled={loading}
             className="min-h-[360px]"
-            onImageSelected={(imageUrl, file) => setUploadedImage(imageUrl, file)}
+            onImageSelected={(imageUrl, file) => {
+              if (loading) return;
+              setUploadedImage(imageUrl, file);
+            }}
           />
         </Card>
 

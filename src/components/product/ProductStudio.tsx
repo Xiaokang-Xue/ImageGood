@@ -29,6 +29,7 @@ import { appendPromptFragment, productSellingPointSuggestions } from "@/lib/inpu
 import { isPersistableImageUrl, safeStorageGet, safeStorageRemove, safeStorageSet } from "@/lib/safe-client-storage";
 import { industryTemplates } from "@/lib/studio-content";
 import { useStudioStore } from "@/lib/studio-store";
+import { clearWorkspaceDraftsOnReload, PRODUCT_DRAFT_STORAGE_KEY } from "@/lib/workspace-draft-storage";
 import type {
   ProductImageResult,
   ProductRatio,
@@ -54,7 +55,6 @@ const styles: Array<{ label: string; value: ProductStyle }> = [
 
 const ratios: ProductRatio[] = ["1:1", "3:4", "4:3", "16:9"];
 const productTemplates: ProductTemplate[] = ["white-bg", "lifestyle", "festival", "social"];
-const PRODUCT_DRAFT_STORAGE_KEY = "imagegood-product-studio-draft";
 const industrySellingPointPresets: Record<string, string> = {
   "美妆个护": "突出质地、肤感、精致包装和日常护理场景，画面干净高级",
   "食品饮料": "突出新鲜感、口感联想、食材细节和自然光氛围",
@@ -112,6 +112,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
   }, []);
 
   useEffect(() => {
+    clearWorkspaceDraftsOnReload();
     try {
       const raw = safeStorageGet(PRODUCT_DRAFT_STORAGE_KEY);
       if (raw) {
@@ -300,8 +301,10 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
             compact
             title="上传原图"
             subtitle=""
+            disabled={loading}
             className="min-h-[420px]"
             onImageSelected={(url, file) => {
+              if (loading) return;
               setImageUrl(url);
               setImageFile(file);
               setError("");
