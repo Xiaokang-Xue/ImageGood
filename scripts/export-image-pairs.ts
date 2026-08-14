@@ -23,6 +23,13 @@ interface ExportRow {
   error: string;
 }
 
+interface UserFilterSummary {
+  userId: string | null;
+  userName: string | null;
+  orderId: string | null;
+  matchedUsers: number;
+}
+
 function argumentValue(name: string) {
   return process.argv.slice(2).find((argument) => argument.startsWith(`${name}=`))?.slice(name.length + 1);
 }
@@ -206,12 +213,14 @@ async function exportTask(
   let inputFile = "";
   const resultFiles: string[] = [];
 
-  try {
-    const input = await readStoredTaskImage(task.inputImageUrl || "", task.id);
-    inputFile = path.join(relativeDirectory, `original.${extensionForMimeType(input.mimeType)}`);
-    await writeImage(path.join(outputRoot, inputFile), input.buffer);
-  } catch (error) {
-    errors.push(`input: ${safeError(error)}`);
+  if (task.inputImageUrl) {
+    try {
+      const input = await readStoredTaskImage(task.inputImageUrl, task.id);
+      inputFile = path.join(relativeDirectory, `original.${extensionForMimeType(input.mimeType)}`);
+      await writeImage(path.join(outputRoot, inputFile), input.buffer);
+    } catch (error) {
+      errors.push(`input: ${safeError(error)}`);
+    }
   }
 
   const references = resultReferences(task, resultMode);
@@ -234,8 +243,9 @@ async function exportTask(
     }
   }
 
+  const hasExpectedInput = !task.inputImageUrl || Boolean(inputFile);
   const status: ExportStatus =
-    inputFile && resultFiles.length > 0 ? "complete" : inputFile || resultFiles.length > 0 ? "partial" : "failed";
+    hasExpectedInput && resultFiles.length > 0 ? "complete" : inputFile || resultFiles.length > 0 ? "partial" : "failed";
   await writeFile(path.join(taskDirectory, "prompt.txt"), `${task.prompt.trim()}\n`, "utf8");
   await writeFile(
     path.join(taskDirectory, "metadata.json"),
@@ -305,6 +315,10 @@ async function main() {
         "  --since=YYYY-MM-DD",
         "  --until=YYYY-MM-DD",
         "  --watermarked-only",
+        "  --user-name=exact-name",
+        "  --user-id=user-id",
+        "  --order-id=order-id",
+        "  --include-result-only",
         "  --result=visible|clean|both",
         "  --concurrency=3"
       ].join("\n")
@@ -317,7 +331,15 @@ async function main() {
   const concurrency = Math.min(parsePositiveInteger(argumentValue("--concurrency"), 3), 8);
   const { date, since, until } = resolveDateFilters();
   const watermarkedOnly = process.argv.includes("--watermarked-only");
+  const includeResultOnly = process.argv.includes("--include-result-only");
+  const requestedUserName = argumentValue("--user-name")?.trim() || null;
+  const requestedUserId = argumentValue("--user-id")?.trim() || null;
+  const requestedOrderId = argumentValue("--order-id")?.trim() || null;
   const resultMode = parseResultMode(argumentValue("--result"));
+
+  if ([requestedUserName, requestedUserId, requestedOrderId].filter(Boolean).length > 1) {
+    throw new Error("Use only one of --user-name, --user-id, or --order-id");
+  }
 
   if (outputRoot === path.parse(outputRoot).root || outputRoot === path.resolve(".")) {
     throw new Error("导出目录不能是磁盘根目录或项目根目录");
@@ -328,12 +350,40 @@ async function main() {
     import("../src/lib/server/image-storage")
   ]);
   const db = await getDbSnapshot();
+  const requestedOrder = requestedOrderId ? db.orders.find((order) => order.id === requestedOrderId) : null;
+  if (requestedOrderId && !requestedOrder) {
+    throw new Error(`Order ID not found: ${requestedOrderId}`);
+  }
+  if (requestedOrderId && !requestedOrder?.userId) {
+    throw new Error(`Order has no user ID: ${requestedOrderId}`);
+  }
+
+  const effectiveUserId = requestedUserId || requestedOrder?.userId || null;
+  const hasUserFilter = Boolean(effectiveUserId || requestedUserName);
+  const matchedUsers = effectiveUserId
+    ? db.users.filter((user) => user.id === effectiveUserId)
+    : requestedUserName
+      ? db.users.filter((user) => user.name.trim() === requestedUserName)
+      : db.users;
+
+  if (hasUserFilter && matchedUsers.length === 0) {
+    throw new Error(effectiveUserId ? `User ID not found: ${effectiveUserId}` : `User name not found: ${requestedUserName}`);
+  }
+
+  const matchedUserIds = new Set(matchedUsers.map((user) => user.id));
+  const userFilter: UserFilterSummary = {
+    userId: effectiveUserId,
+    userName: requestedUserName,
+    orderId: requestedOrderId,
+    matchedUsers: matchedUsers.length
+  };
   const candidates = db.imageTasks
     .filter((task) => {
       const createdAt = Date.parse(task.createdAt);
       return (
+        (!hasUserFilter || matchedUserIds.has(task.userId)) &&
         task.status === "succeeded" &&
-        Boolean(task.inputImageUrl) &&
+        (includeResultOnly || Boolean(task.inputImageUrl)) &&
         (!watermarkedOnly || (task.isFreeTrial === true && task.hasWatermark === true)) &&
         resultReferences(task, resultMode).length > 0 &&
         (since === null || createdAt >= since) &&
@@ -370,6 +420,8 @@ async function main() {
       since: argumentValue("--since") || null,
       until: argumentValue("--until") || null,
       watermarkedOnly,
+      includeResultOnly,
+      user: userFilter,
       resultMode
     }
   };
