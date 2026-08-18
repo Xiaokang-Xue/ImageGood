@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
@@ -39,6 +40,9 @@ export default function AccountPage() {
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [myInviteCode, setMyInviteCode] = useState("");
+  const [inviteCouponSummary, setInviteCouponSummary] = useState({ count: 0, amountCents: 0 });
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const refreshAccount = async () => {
     const [currentUser, taskResponse, transactionResponse] = await Promise.all([
@@ -62,6 +66,13 @@ export default function AccountPage() {
   }, [router]);
 
   useEffect(() => {
+    apiClient.getMyInvitation().then((response) => {
+      setMyInviteCode(response.inviteCode);
+      setInviteCouponSummary({ count: response.availableCouponCount, amountCents: response.availableCouponAmountCents });
+    }).catch(() => null);
+  }, []);
+
+  useEffect(() => {
     if (phoneCountdown <= 0) return;
     const timer = window.setTimeout(() => setPhoneCountdown((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearTimeout(timer);
@@ -72,6 +83,22 @@ export default function AccountPage() {
     clearCurrentUserCache();
     router.push("/");
     router.refresh();
+  };
+
+  const handleCopyInviteCode = async () => {
+    if (!myInviteCode) return;
+    try {
+      await navigator.clipboard.writeText(myInviteCode);
+    } catch {
+      const input = document.createElement("input");
+      input.value = myInviteCode;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
+    setInviteCopied(true);
+    window.setTimeout(() => setInviteCopied(false), 1800);
   };
 
   const handleResendVerification = async () => {
@@ -211,6 +238,23 @@ export default function AccountPage() {
               <h2 className="text-2xl font-bold text-ink">{user.name}</h2>
               <p className="mt-1 text-sm text-muted">{user.email || "手机号账号"}</p>
             </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-4 rounded-xl border border-neutral-300 bg-neutral-950 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-neutral-300">我的邀请码</p>
+              <p className="mt-1 text-2xl font-bold tracking-[0.18em]">{myInviteCode || "生成中…"}</p>
+              <p className="mt-2 text-xs text-neutral-400">好友注册时填写，双方各得一张 ¥10 优惠券</p>
+              {inviteCouponSummary.count > 0 ? (
+                <p className="mt-1 text-xs font-semibold text-emerald-300">
+                  可用邀请券 {inviteCouponSummary.count} 张，共 ¥{(inviteCouponSummary.amountCents / 100).toFixed(0)}
+                </p>
+              ) : null}
+            </div>
+            <Button type="button" variant="outline" className="border-neutral-600 text-white hover:border-white hover:bg-white/10" disabled={!myInviteCode} onClick={handleCopyInviteCode}>
+              {inviteCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {inviteCopied ? "已复制" : "复制邀请码"}
+            </Button>
           </div>
 
           <div className={`mt-6 rounded-lg border p-4 ${user.phoneVerified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>

@@ -1,9 +1,11 @@
 import "server-only";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { AnalyticsDailySummaryRecord, AnalyticsEventRecord } from "@/types/analytics";
 import type { AdminOrderRecord, CreditTransactionRecord, OrderRecord, OrderStatus, PaymentProvider } from "@/types/billing";
+import type { CouponRecord, ReferralRecord } from "@/types/coupon";
+import type { AdminFeedbackPage, AdminFeedbackRecord, FeedbackRecord, FeedbackStatus, FeedbackType } from "@/types/feedback";
 import { refreshMembershipCredits } from "@/lib/credit-balance";
 import type {
   AdminImageTaskRecord,
@@ -33,6 +35,10 @@ export interface DbUser {
   membershipCreditsPerPeriod?: number;
   membershipPeriodDays?: number;
   role: "user" | "admin";
+  inviteCode?: string | null;
+  invitedByUserId?: string | null;
+  invitedAt?: string | null;
+  paymentOrderGuard?: string | null;
   emailVerified: boolean;
   emailVerifiedAt?: string | null;
   phone?: string | null;
@@ -92,6 +98,9 @@ interface DatabaseShape {
   emailVerificationTokens: DbEmailVerificationToken[];
   passwordResetTokens: DbPasswordResetToken[];
   smsCodes: DbSmsCode[];
+  referrals: ReferralRecord[];
+  coupons: CouponRecord[];
+  feedbackEntries: FeedbackRecord[];
   creditTransactions: CreditTransactionRecord[];
   orders: OrderRecord[];
   imageTasks: StoredImageTaskRecord[];
@@ -107,6 +116,9 @@ const COLLECTIONS: DbCollectionName[] = [
   "emailVerificationTokens",
   "passwordResetTokens",
   "smsCodes",
+  "referrals",
+  "coupons",
+  "feedbackEntries",
   "creditTransactions",
   "orders",
   "imageTasks",
@@ -120,6 +132,9 @@ const EMPTY_DB: DatabaseShape = {
   emailVerificationTokens: [],
   passwordResetTokens: [],
   smsCodes: [],
+  referrals: [],
+  coupons: [],
+  feedbackEntries: [],
   creditTransactions: [],
   orders: [],
   imageTasks: [],
@@ -186,6 +201,9 @@ function cloneEmptyDb(): DatabaseShape {
     emailVerificationTokens: [],
     passwordResetTokens: [],
     smsCodes: [],
+    referrals: [],
+    coupons: [],
+    feedbackEntries: [],
     creditTransactions: [],
     orders: [],
     imageTasks: [],
@@ -332,6 +350,10 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
                 ? Math.max(0, Math.trunc(user.membershipPeriodDays))
                 : 0,
             role: user.role === "admin" ? ("admin" as const) : ("user" as const),
+            inviteCode: user.inviteCode ?? null,
+            invitedByUserId: user.invitedByUserId ?? null,
+            invitedAt: user.invitedAt ?? null,
+            paymentOrderGuard: user.paymentOrderGuard ?? null,
             emailVerified: Boolean(user.emailVerified),
             emailVerifiedAt: user.emailVerifiedAt ?? null,
             phone: user.phone ?? null,
@@ -353,6 +375,36 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
           ip: item.ip ?? null,
           sendStatus: item.sendStatus ?? null,
           failedAttempts: typeof item.failedAttempts === "number" ? item.failedAttempts : 0
+        }))
+      : [],
+    referrals: Array.isArray(data.referrals)
+      ? data.referrals.map((referral) => ({
+          ...referral,
+          inviteCode: String(referral.inviteCode || "").toUpperCase()
+        }))
+      : [],
+    coupons: Array.isArray(data.coupons)
+      ? data.coupons.map((coupon) => ({
+          ...coupon,
+          amountCents: Math.max(0, Math.trunc(Number(coupon.amountCents) || 0)),
+          source: coupon.source === "inviter_reward" ? "inviter_reward" : "invitee_reward",
+          status: ["available", "reserved", "used"].includes(coupon.status) ? coupon.status : "available",
+          reservedOrderId: coupon.reservedOrderId ?? null,
+          usedOrderId: coupon.usedOrderId ?? null,
+          usedAt: coupon.usedAt ?? null
+        }))
+      : [],
+    feedbackEntries: Array.isArray(data.feedbackEntries)
+      ? data.feedbackEntries.map((entry) => ({
+          ...entry,
+          userId: entry.userId ?? null,
+          type: ["suggestion", "report", "problem"].includes(entry.type) ? entry.type : "suggestion",
+          contact: entry.contact ?? null,
+          pageUrl: entry.pageUrl ?? null,
+          taskId: entry.taskId ?? null,
+          status: ["pending", "reviewing", "resolved", "closed"].includes(entry.status)
+            ? entry.status
+            : "pending"
         }))
       : [],
     creditTransactions: Array.isArray(data.creditTransactions)
@@ -392,6 +444,18 @@ function normalizeDb(data: Partial<DatabaseShape>): DatabaseShape {
                 ? Math.max(1, Math.trunc(order.creditsPerPeriod))
                 : null,
             amountCents,
+            originalAmountCents:
+              typeof order.originalAmountCents === "number" ? order.originalAmountCents : amountCents,
+            discountAmountCents:
+              typeof order.discountAmountCents === "number" ? Math.max(0, order.discountAmountCents) : 0,
+            paidAmountCents:
+              typeof order.paidAmountCents === "number" ? order.paidAmountCents : amountCents,
+            inviteCode: order.inviteCode ?? null,
+            inviterUserId: order.inviterUserId ?? null,
+            inviteUsedAt: order.inviteUsedAt ?? null,
+            couponId: order.couponId ?? null,
+            couponAmountCents:
+              typeof order.couponAmountCents === "number" ? Math.max(0, order.couponAmountCents) : 0,
             status: ["pending", "paid", "cancelled", "expired", "failed"].includes(order.status)
               ? order.status
               : "pending",
@@ -1292,6 +1356,131 @@ export async function getUserCreditTransactions(userId: string, limit = 50) {
   return normalizeDb({ creditTransactions: records }).creditTransactions;
 }
 
+function adminFeedbackWithUser(entry: FeedbackRecord, user?: DbUser): AdminFeedbackRecord {
+  return {
+    ...entry,
+    userAccount:
+      user?.email ||
+      user?.phone?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ||
+      null,
+    userName: user?.name ?? null
+  };
+}
+
+export async function createFeedbackEntry(input: {
+  userId?: string | null;
+  type: FeedbackType;
+  content: string;
+  contact?: string | null;
+  pageUrl?: string | null;
+  taskId?: string | null;
+}) {
+  const now = new Date().toISOString();
+  const entry: FeedbackRecord = {
+    id: randomUUID(),
+    userId: input.userId ?? null,
+    type: input.type,
+    content: input.content,
+    contact: input.contact ?? null,
+    pageUrl: input.pageUrl ?? null,
+    taskId: input.taskId ?? null,
+    status: "pending",
+    createdAt: now,
+    updatedAt: now
+  };
+
+  if (!isMysqlDatabaseUrl()) {
+    return withFileDb((db) => {
+      db.feedbackEntries.push(entry);
+      return entry;
+    });
+  }
+
+  await ensureMysqlSchema();
+  const pool = await getMysqlPool();
+  const json = JSON.stringify(entry);
+  await pool.execute(
+    "INSERT INTO imagegood_records (collection, id, record, record_hash) VALUES ('feedbackEntries', ?, ?, ?)",
+    [entry.id, json, hashJson(json)]
+  );
+  return entry;
+}
+
+export async function getAdminFeedbackPage(options?: {
+  page?: number;
+  limit?: number;
+  type?: FeedbackType | "all";
+  status?: FeedbackStatus | "all";
+}): Promise<AdminFeedbackPage> {
+  const page = Math.max(1, Math.trunc(options?.page ?? 1));
+  const limit = Math.min(50, Math.max(1, Math.trunc(options?.limit ?? 12)));
+  const offset = (page - 1) * limit;
+  const type = options?.type && options.type !== "all" ? options.type : null;
+  const status = options?.status && options.status !== "all" ? options.status : null;
+
+  if (!isMysqlDatabaseUrl()) {
+    const db = await readFileDb();
+    const filtered = db.feedbackEntries
+      .filter((entry) => (!type || entry.type === type) && (!status || entry.status === status))
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    const feedback = filtered
+      .slice(offset, offset + limit)
+      .map((entry) => adminFeedbackWithUser(entry, db.users.find((user) => user.id === entry.userId)));
+    return { feedback, page, limit, total: filtered.length, hasMore: offset + feedback.length < filtered.length };
+  }
+
+  await ensureMysqlSchema();
+  const pool = await getMysqlPool();
+  const feedbackType = mysqlRecordText("$.type", "feedback.record");
+  const feedbackStatus = mysqlRecordText("$.status", "feedback.record");
+  const feedbackUserId = mysqlRecordText("$.userId", "feedback.record");
+  const feedbackCreatedAt = mysqlRecordText("$.createdAt", "feedback.record");
+  const conditions = ["feedback.collection = 'feedbackEntries'"];
+  const values: unknown[] = [];
+  if (type) {
+    conditions.push(`${feedbackType} = ?`);
+    values.push(type);
+  }
+  if (status) {
+    conditions.push(`${feedbackStatus} = ?`);
+    values.push(status);
+  }
+  const where = conditions.join(" AND ");
+  const [feedbackResult, countResult] = await Promise.all([
+    pool.query(
+      `SELECT feedback.record AS feedback_record, users.record AS user_record
+       FROM imagegood_records AS feedback
+       LEFT JOIN imagegood_records AS users
+         ON users.collection = 'users'
+        AND users.id = ${feedbackUserId}
+       WHERE ${where}
+       ORDER BY ${feedbackCreatedAt} DESC, feedback.id DESC
+       LIMIT ? OFFSET ?`,
+      [...values, limit, offset]
+    ),
+    pool.query(`SELECT COUNT(*) AS total FROM imagegood_records AS feedback WHERE ${where}`, values)
+  ]);
+  const feedback = rowsFromResult(feedbackResult).map((row) => {
+    const normalized = normalizeDb({
+      feedbackEntries: [parseMysqlJsonRecord(row.feedback_record) as FeedbackRecord],
+      users: row.user_record ? [parseMysqlJsonRecord(row.user_record) as DbUser] : []
+    });
+    return adminFeedbackWithUser(normalized.feedbackEntries[0], normalized.users[0]);
+  });
+  const total = Number(rowsFromResult(countResult)[0]?.total || 0);
+  return { feedback, page, limit, total, hasMore: offset + feedback.length < total };
+}
+
+export async function updateFeedbackStatus(id: string, status: FeedbackStatus) {
+  return withDb((db) => {
+    const entry = db.feedbackEntries.find((item) => item.id === id);
+    if (!entry) return null;
+    entry.status = status;
+    entry.updatedAt = new Date().toISOString();
+    return entry;
+  });
+}
+
 export interface AdminImageTaskPage {
   tasks: AdminImageTaskRecord[];
   page: number;
@@ -1373,14 +1562,19 @@ export interface AdminOrderPage {
   hasMore: boolean;
 }
 
-function adminOrderWithUser(order: OrderRecord, user?: DbUser): AdminOrderRecord {
+function adminOrderWithUser(order: OrderRecord, user?: DbUser, inviter?: DbUser): AdminOrderRecord {
   return {
     ...order,
     userEmail:
       user?.email ||
       user?.phone?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ||
       "未知用户",
-    userName: user?.name ?? null
+    userName: user?.name ?? null,
+    inviterAccount:
+      inviter?.email ||
+      inviter?.phone?.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2") ||
+      null,
+    inviterName: inviter?.name ?? null
   };
 }
 
@@ -1403,7 +1597,13 @@ export async function getAdminOrderPage(options?: {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const orders = filtered
       .slice(offset, offset + limit)
-      .map((order) => adminOrderWithUser(order, db.users.find((user) => user.id === order.userId)));
+      .map((order) =>
+        adminOrderWithUser(
+          order,
+          db.users.find((user) => user.id === order.userId),
+          db.users.find((user) => user.id === order.inviterUserId)
+        )
+      );
 
     return {
       orders,
@@ -1420,6 +1620,7 @@ export async function getAdminOrderPage(options?: {
   const orderProvider = mysqlRecordText("$.paymentProvider", "orders.record");
   const orderUserId = mysqlRecordText("$.userId", "orders.record");
   const orderCreatedAt = mysqlRecordText("$.createdAt", "orders.record");
+  const orderInviterUserId = mysqlRecordText("$.inviterUserId", "orders.record");
   const conditions = ["orders.collection = 'orders'"];
   const values: unknown[] = [];
   if (status) {
@@ -1433,11 +1634,14 @@ export async function getAdminOrderPage(options?: {
   const where = conditions.join(" AND ");
   const [orderResult, countResult] = await Promise.all([
     pool.query(
-      `SELECT orders.record AS order_record, users.record AS user_record
+      `SELECT orders.record AS order_record, users.record AS user_record, inviters.record AS inviter_record
        FROM imagegood_records AS orders
        LEFT JOIN imagegood_records AS users
-         ON users.collection = 'users'
+        ON users.collection = 'users'
         AND users.id = ${orderUserId}
+       LEFT JOIN imagegood_records AS inviters
+         ON inviters.collection = 'users'
+        AND inviters.id = ${orderInviterUserId}
        WHERE ${where}
        ORDER BY ${orderCreatedAt} DESC, orders.id DESC
        LIMIT ? OFFSET ?`,
@@ -1454,9 +1658,16 @@ export async function getAdminOrderPage(options?: {
   const orders = rowsFromResult(orderResult).map((row) => {
     const normalized = normalizeDb({
       orders: [parseMysqlJsonRecord(row.order_record) as OrderRecord],
-      users: row.user_record ? [parseMysqlJsonRecord(row.user_record) as DbUser] : []
+      users: [row.user_record, row.inviter_record]
+        .filter(Boolean)
+        .map((record) => parseMysqlJsonRecord(record) as DbUser)
     });
-    return adminOrderWithUser(normalized.orders[0], normalized.users[0]);
+    const order = normalized.orders[0];
+    return adminOrderWithUser(
+      order,
+      normalized.users.find((user) => user.id === order.userId),
+      normalized.users.find((user) => user.id === order.inviterUserId)
+    );
   });
   const total = Number(rowsFromResult(countResult)[0]?.total || 0);
 

@@ -315,6 +315,9 @@ export function SiteHeader() {
                     <Link href="/history" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
                       历史记录
                     </Link>
+                    <Link href="/feedback" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
+                      举报与建议
+                    </Link>
                     {user.role === "admin" ? (
                       <>
                         <div className="my-1 border-t border-neutral-100" />
@@ -326,6 +329,9 @@ export function SiteHeader() {
                         </Link>
                         <Link href="/admin/tasks" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
                           图片任务
+                        </Link>
+                        <Link href="/admin/feedback" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
+                          用户反馈
                         </Link>
                       </>
                     ) : null}
@@ -429,6 +435,9 @@ export function SiteHeader() {
                 </Link>
                 <Link href="/history" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
                   历史记录
+                </Link>
+                <Link href="/feedback" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
+                  举报与建议
                 </Link>
                 {user ? (
                   <Link href="/account" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">

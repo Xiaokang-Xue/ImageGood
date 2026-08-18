@@ -119,6 +119,9 @@ export default function AdminOrdersPage() {
           <Link href="/admin/analytics">
             <Button variant="outline">查看运营数据</Button>
           </Link>
+          <Link href="/admin/feedback">
+            <Button variant="outline">用户反馈</Button>
+          </Link>
         </div>
       </div>
 
@@ -227,6 +230,15 @@ export default function AdminOrdersPage() {
                     <p>订单 ID：{order.id}</p>
                     <p>用户账号：{order.userEmail}</p>
                     <p>用户昵称：{order.userName || "未填写"}</p>
+                    {order.couponId ? (
+                      <div className="my-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950">
+                        <p className="font-semibold">邀请优惠券：{order.couponId}</p>
+                        <p className="mt-1">
+                          原价 {formatCny(order.originalAmountCents ?? order.amountCents)} · 优惠 {formatCny(order.discountAmountCents ?? 0)} · 实付 {formatCny(order.paidAmountCents ?? order.amountCents)}
+                        </p>
+                        <p className="mt-1">状态：{order.status === "paid" ? "已核销" : "随订单处理中"}</p>
+                      </div>
+                    ) : null}
                     <p>支付渠道：{providerLabels[order.paymentProvider]} / {methodLabels[order.paymentMethod]}</p>
                     <p>商户订单号：{order.outTradeNo}</p>
                     <p>平台交易号：{order.transactionId || "未返回"}</p>

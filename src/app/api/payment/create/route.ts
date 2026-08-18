@@ -21,13 +21,15 @@ export async function POST(request: Request) {
       packageId: CreditPackageId;
       provider: PaymentProviderName;
       targetTaskId: string;
+      couponId: string;
     }>;
     const provider = body.provider === "wechat" ? "wechat" : "alipay";
     const order = await createPaymentOrder(
       user.id,
       String(body.packageId || "") as CreditPackageId,
       provider,
-      typeof body.targetTaskId === "string" ? body.targetTaskId : null
+      typeof body.targetTaskId === "string" ? body.targetTaskId : null,
+      typeof body.couponId === "string" ? body.couponId : null
     );
 
     return NextResponse.json({

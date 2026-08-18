@@ -75,6 +75,14 @@ export interface OrderRecord {
   packageKind?: CreditPackageKind;
   packageName: string;
   amountCents: number;
+  originalAmountCents?: number;
+  discountAmountCents?: number;
+  paidAmountCents?: number;
+  inviteCode?: string | null;
+  inviterUserId?: string | null;
+  inviteUsedAt?: string | null;
+  couponId?: string | null;
+  couponAmountCents?: number;
   credits: number;
   validityMonths?: number | null;
   validityDays?: number | null;
@@ -101,6 +109,8 @@ export interface OrderRecord {
 export interface AdminOrderRecord extends OrderRecord {
   userEmail: string;
   userName?: string | null;
+  inviterAccount?: string | null;
+  inviterName?: string | null;
 }
 
 export interface OrderDetailResponse {
@@ -126,6 +136,12 @@ export interface PaymentOrderResponse {
   status: OrderStatus;
   packageName: string;
   amountCents: number;
+  originalAmountCents: number;
+  discountAmountCents: number;
+  paidAmountCents: number;
+  inviteCode: string | null;
+  couponId: string | null;
+  couponAmountCents: number;
   credits: number;
   packageKind: CreditPackageKind;
   validityMonths: number | null;

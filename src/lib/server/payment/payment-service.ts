@@ -15,6 +15,12 @@ import { AlipayProvider, alipayAmountToCents, parseAlipayNotify } from "@/lib/se
 import { MockPaymentProvider } from "@/lib/server/payment/mock-payment-provider";
 import { WechatPayProvider, parseWechatPaymentNotify } from "@/lib/server/payment/wechat-pay-provider";
 import { availableCredits, grantOrderCredits } from "@/lib/server/credit-ledger";
+import {
+  CouponError,
+  markCouponUsed,
+  prepareCouponOrder,
+  releaseCouponForOrder
+} from "@/lib/server/coupon-service";
 import type { CreditPackage, CreditPackageId, CreditTransactionRecord, OrderRecord, PaymentOrderResponse } from "@/types/billing";
 import type {
   PaymentProvider,
@@ -170,19 +176,35 @@ function providerForOrder(order: OrderRecord): PaymentProviderName | undefined {
 }
 
 function createPendingOrder(
+  orderId: string,
   userId: string,
   packageItem: CreditPackage,
   providerName: PaymentProviderName,
-  targetTaskId?: string | null
+  targetTaskId?: string | null,
+  pricing?: {
+    couponId: string | null;
+    couponAmountCents: number;
+    originalAmountCents: number;
+    discountAmountCents: number;
+    paidAmountCents: number;
+  }
 ): OrderRecord {
   const now = nowIso();
   return {
-    id: randomUUID(),
+    id: orderId,
     userId,
     packageId: packageItem.id,
     packageKind: packageItem.kind,
     packageName: packageItem.name,
-    amountCents: packageItem.priceCents,
+    amountCents: pricing?.paidAmountCents ?? packageItem.priceCents,
+    originalAmountCents: pricing?.originalAmountCents ?? packageItem.priceCents,
+    discountAmountCents: pricing?.discountAmountCents ?? 0,
+    paidAmountCents: pricing?.paidAmountCents ?? packageItem.priceCents,
+    inviteCode: null,
+    inviterUserId: null,
+    inviteUsedAt: null,
+    couponId: pricing?.couponId ?? null,
+    couponAmountCents: pricing?.couponAmountCents ?? 0,
     credits: packageItem.credits,
     validityMonths: packageItem.validityMonths ?? null,
     validityDays: packageItem.validityDays ?? null,
@@ -240,7 +262,8 @@ export async function createPaymentOrder(
   userId: string,
   packageId: CreditPackageId,
   providerName: PaymentProviderName = "alipay",
-  targetTaskId?: string | null
+  targetTaskId?: string | null,
+  couponId?: string | null
 ) {
   if (providerName !== "wechat" && providerName !== "alipay") {
     throw new PaymentError("INVALID_PAYMENT_PROVIDER", "不支持的支付方式", 400);
@@ -261,20 +284,34 @@ export async function createPaymentOrder(
     }
   }
 
-  const reusableOrder = await getReusableLimitedPackageOrder(userId, packageItem);
+  const reusableOrder = couponId ? null : await getReusableLimitedPackageOrder(userId, packageItem);
   if (reusableOrder) {
     return reusableOrder;
   }
 
   await assertPaymentConfigReady(providerName);
   const provider = getPaymentProvider(providerName);
-  const order = createPendingOrder(userId, packageItem, providerName, targetTaskId);
-
-  await withDb((db) => {
+  const orderId = randomUUID();
+  const order = await withDb((db) => {
+    const user = db.users.find((item) => item.id === userId);
+    if (!user) {
+      throw new PaymentError("USER_NOT_FOUND", "用户不存在", 404);
+    }
+    let pricing;
+    try {
+      pricing = prepareCouponOrder({ db, user, packageItem, couponId, orderId });
+    } catch (error) {
+      if (error instanceof CouponError) {
+        throw new PaymentError(error.code, error.message, error.status);
+      }
+      throw error;
+    }
+    const order = createPendingOrder(orderId, userId, packageItem, providerName, targetTaskId, pricing);
     if (db.orders.some((item) => item.outTradeNo === order.outTradeNo)) {
       throw new PaymentError("DUPLICATE_OUT_TRADE_NO", "订单号生成失败，请重试");
     }
     db.orders.push(order);
+    return order;
   });
 
   try {
@@ -314,6 +351,7 @@ export async function createPaymentOrder(
       current.status = "failed";
       current.errorMessage = error instanceof Error ? error.message : "创建支付订单失败";
       current.updatedAt = nowIso();
+      releaseCouponForOrder(db, current);
     });
     throw new PaymentError("PAYMENT_CREATE_FAILED", "创建支付订单失败，请稍后重试", 502);
   }
@@ -344,6 +382,7 @@ async function expireOrderIfNeeded(orderId: string) {
     if (new Date(order.expiredAt).getTime() > Date.now()) return;
     order.status = "expired";
     order.updatedAt = nowIso();
+    releaseCouponForOrder(db, order);
   });
 }
 
@@ -363,6 +402,12 @@ export async function getPaymentOrderResponse(orderId: string, user: PublicUser)
     status: order.status,
     packageName: order.packageName,
     amountCents: order.amountCents,
+    originalAmountCents: order.originalAmountCents ?? order.amountCents,
+    discountAmountCents: order.discountAmountCents ?? 0,
+    paidAmountCents: order.paidAmountCents ?? order.amountCents,
+    inviteCode: order.inviteCode ?? null,
+    couponId: order.couponId ?? null,
+    couponAmountCents: order.couponAmountCents ?? 0,
     credits: order.credits,
     packageKind: order.packageKind ?? "credit_pack",
     validityMonths: order.validityMonths ?? null,
@@ -462,6 +507,7 @@ export async function markOrderPaid(input: {
       order.status = "failed";
       order.errorMessage = error instanceof Error ? error.message : "支付回调校验失败";
       order.updatedAt = nowIso();
+      releaseCouponForOrder(db, order);
       failedError = error instanceof PaymentError ? error : new PaymentError("PAYMENT_VERIFY_FAILED", order.errorMessage, 400);
       return { order, latestCredits: 0, alreadyPaid: false };
     }
@@ -472,6 +518,14 @@ export async function markOrderPaid(input: {
     }
 
     const now = input.paidAt || nowIso();
+    try {
+      markCouponUsed(db, order, now);
+    } catch (error) {
+      if (error instanceof CouponError) {
+        throw new PaymentError(error.code, error.message, error.status);
+      }
+      throw error;
+    }
     const grant = grantOrderCredits(user, order, now);
     if (order.packageKind === "single_unlock") {
       const targetTask = order.targetTaskId

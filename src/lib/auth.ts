@@ -11,6 +11,8 @@ import {
 } from "@/lib/server/email-service";
 import { sendSmsCode, SmsSendError } from "@/lib/server/sms/aliyun-sms-service";
 import type { PublicUser } from "@/types/user";
+import { generateUniqueInviteCode } from "@/lib/server/invite-code";
+import { applyInvitationAtRegistration, InvitationError } from "@/lib/server/invitation-service";
 import {
   getActiveMembershipCredits,
   getAvailableCreditBalance,
@@ -118,11 +120,12 @@ function validatePassword(password: string, code = "WEAK_PASSWORD") {
 }
 
 export function validateRegisterInput(input: unknown) {
-  const data = input as Partial<{ email: string; password: string; confirmPassword: string; name: string }>;
+  const data = input as Partial<{ email: string; password: string; confirmPassword: string; name: string; inviteCode: string }>;
   const email = normalizeEmail(String(data.email || ""));
   const password = String(data.password || "");
   const confirmPassword = String(data.confirmPassword || "");
   const name = String(data.name || "").trim();
+  const inviteCode = String(data.inviteCode || "");
 
   if (!name) {
     throw new AuthError("NAME_REQUIRED", "请输入昵称");
@@ -138,7 +141,18 @@ export function validateRegisterInput(input: unknown) {
     throw new AuthError("PASSWORD_MISMATCH", "两次输入的密码不一致");
   }
 
-  return { email, password, name };
+  return { email, password, name, inviteCode };
+}
+
+function applyRegistrationInvitation(db: Parameters<typeof applyInvitationAtRegistration>[0], user: DbUser, inviteCode: string, now: string) {
+  try {
+    applyInvitationAtRegistration(db, user, inviteCode, now);
+  } catch (error) {
+    if (error instanceof InvitationError) {
+      throw new AuthError(error.code, error.message, error.status);
+    }
+    throw error;
+  }
 }
 
 export function validateLoginInput(input: unknown) {
@@ -352,7 +366,7 @@ async function sendUserVerificationEmail(user: DbUser) {
 }
 
 export async function registerUser(input: unknown) {
-  const { email, password, name } = validateRegisterInput(input);
+  const { email, password, name, inviteCode } = validateRegisterInput(input);
   const now = nowIso();
   const passwordHash = await hashPassword(password);
 
@@ -369,6 +383,10 @@ export async function registerUser(input: unknown) {
       avatar: null,
       credits: 1,
       role: "user",
+      inviteCode: generateUniqueInviteCode(db.users),
+      invitedByUserId: null,
+      invitedAt: null,
+      paymentOrderGuard: null,
       emailVerified: false,
       emailVerifiedAt: null,
       phone: null,
@@ -379,6 +397,7 @@ export async function registerUser(input: unknown) {
       updatedAt: now
     };
 
+    applyRegistrationInvitation(db, created, inviteCode, now);
     db.users.push(created);
     db.creditTransactions.push({
       id: randomUUID(),
@@ -430,6 +449,7 @@ export async function loginUser(input: unknown) {
   await withDb((mutableDb) => {
     const mutableUser = mutableDb.users.find((item) => item.id === user.id);
     if (!mutableUser) return;
+    mutableUser.inviteCode ||= generateUniqueInviteCode(mutableDb.users);
     mutableUser.lastLoginAt = loginAt;
     mutableUser.updatedAt = loginAt;
   });
@@ -439,12 +459,13 @@ export async function loginUser(input: unknown) {
 }
 
 export async function registerPhoneUser(input: unknown) {
-  const data = input as Partial<{ phone: string; code: string; name: string; password: string; confirmPassword: string }>;
+  const data = input as Partial<{ phone: string; code: string; name: string; password: string; confirmPassword: string; inviteCode: string }>;
   const phone = normalizePhone(String(data.phone || ""));
   const code = String(data.code || "");
   const name = String(data.name || "").trim();
   const password = String(data.password || "");
   const confirmPassword = String(data.confirmPassword || "");
+  const inviteCode = String(data.inviteCode || "");
 
   assertValidPhone(phone);
   validatePassword(password);
@@ -472,6 +493,10 @@ export async function registerPhoneUser(input: unknown) {
       avatar: null,
       credits: 1,
       role: "user",
+      inviteCode: generateUniqueInviteCode(db.users),
+      invitedByUserId: null,
+      invitedAt: null,
+      paymentOrderGuard: null,
       emailVerified: false,
       emailVerifiedAt: null,
       phone,
@@ -482,6 +507,7 @@ export async function registerPhoneUser(input: unknown) {
       updatedAt: now
     };
 
+    applyRegistrationInvitation(db, created, inviteCode, now);
     db.users.push(created);
     db.creditTransactions.push({
       id: randomUUID(),
@@ -533,6 +559,7 @@ export async function loginPhoneUser(input: unknown) {
     await withDb((db) => {
       const mutableUser = userByPhone(db.users, phone);
       if (!mutableUser) return;
+      mutableUser.inviteCode ||= generateUniqueInviteCode(db.users);
       mutableUser.lastLoginAt = loginAt;
       mutableUser.updatedAt = loginAt;
     });
@@ -554,6 +581,7 @@ export async function loginPhoneUser(input: unknown) {
 
     const smsError = verifySmsCodeInDb(db, { phone, scene: "login", code });
     if (smsError) return { error: smsError };
+    existing.inviteCode ||= generateUniqueInviteCode(db.users);
     existing.phoneVerified = true;
     existing.phoneVerifiedAt = existing.phoneVerifiedAt ?? now;
     existing.lastLoginAt = now;

@@ -165,6 +165,8 @@ export default function CheckoutPage() {
           <h2 className="text-xl font-bold text-ink">订单信息</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Info label="套餐" value={order.packageName} />
+            {order.discountAmountCents > 0 ? <Info label="原价" value={formatCny(order.originalAmountCents)} /> : null}
+            {order.discountAmountCents > 0 ? <Info label="优惠券" value={`-${formatCny(order.discountAmountCents)}`} /> : null}
             <Info label="支付金额" value={formatCny(order.amountCents)} />
             <Info label="创作权益" value={isSingleUnlock ? "指定作品无水印下载" : `${order.credits} 张图片额度`} />
             <Info label="订单状态" value={statusLabels[order.status]} />

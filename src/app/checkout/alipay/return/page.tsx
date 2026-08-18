@@ -156,6 +156,8 @@ function AlipayReturnContent() {
 
             <div className="mt-6 grid gap-3 text-sm text-muted sm:grid-cols-2">
               <Info label="套餐" value={order.packageName} />
+              {order.discountAmountCents > 0 ? <Info label="原价" value={`¥${(order.originalAmountCents / 100).toFixed(2)}`} /> : null}
+              {order.discountAmountCents > 0 ? <Info label="优惠券" value={`-¥${(order.discountAmountCents / 100).toFixed(2)}`} /> : null}
               <Info label="支付金额" value={`¥${(order.amountCents / 100).toFixed(2)}`} />
               <Info
                 label="创作权益"

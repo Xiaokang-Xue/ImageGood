@@ -112,6 +112,9 @@ export default function AdminAnalyticsPage() {
           <Link href="/admin/orders">
             <Button variant="outline">查看订单后台</Button>
           </Link>
+          <Link href="/admin/feedback">
+            <Button variant="outline">用户反馈</Button>
+          </Link>
           <Button variant="dark" loading={loading} onClick={() => loadData(true)}>
             <RefreshCcw className="h-4 w-4" />
             刷新数据

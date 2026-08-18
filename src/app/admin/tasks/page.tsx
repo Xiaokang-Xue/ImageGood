@@ -107,6 +107,9 @@ export default function AdminTasksPage() {
           <Link href="/admin/orders">
             <Button variant="outline">支付订单</Button>
           </Link>
+          <Link href="/admin/feedback">
+            <Button variant="outline">用户反馈</Button>
+          </Link>
         </div>
       </div>
 

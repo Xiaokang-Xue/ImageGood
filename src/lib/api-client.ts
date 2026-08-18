@@ -37,6 +37,7 @@ import type {
 } from "@/types/task";
 import type { TemplateItem } from "@/types/template";
 import type { AuthResponse } from "@/types/user";
+import type { AdminFeedbackPage, FeedbackStatus, FeedbackType } from "@/types/feedback";
 import { prepareImageFileForUpload } from "@/lib/client-image-normalizer";
 import { parseTrialImageUrl } from "@/lib/trial-image";
 
@@ -471,7 +472,42 @@ export const apiClient = {
     return requestJson<CaptchaResponse>("/api/captcha");
   },
 
-  register(payload: { name: string; email: string; password: string; confirmPassword: string; captchaAnswer: string }) {
+  submitFeedback(payload: {
+    type: FeedbackType;
+    content: string;
+    contact?: string;
+    pageUrl?: string;
+    taskId?: string;
+  }) {
+    return requestJson<{ ok: true; id: string; message: string }>("/api/feedback", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  listAdminFeedback(options?: {
+    page?: number;
+    limit?: number;
+    type?: FeedbackType | "all";
+    status?: FeedbackStatus | "all";
+  }) {
+    const params = new URLSearchParams();
+    if (options?.page) params.set("page", String(options.page));
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.type && options.type !== "all") params.set("type", options.type);
+    if (options?.status && options.status !== "all") params.set("status", options.status);
+    const query = params.toString();
+    return requestJson<AdminFeedbackPage>(`/api/admin/feedback${query ? `?${query}` : ""}`);
+  },
+
+  updateFeedbackStatus(id: string, status: FeedbackStatus) {
+    return requestJson<{ ok: true }>(`/api/admin/feedback/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+  },
+
+  register(payload: { name: string; email: string; password: string; confirmPassword: string; captchaAnswer: string; inviteCode?: string }) {
     return requestJson<AuthResponse>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -485,7 +521,7 @@ export const apiClient = {
     });
   },
 
-  registerPhone(payload: { name: string; phone: string; code: string; password: string; confirmPassword: string }) {
+  registerPhone(payload: { name: string; phone: string; code: string; password: string; confirmPassword: string; inviteCode?: string }) {
     return requestJson<AuthResponse>("/api/auth/register-phone", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -574,11 +610,20 @@ export const apiClient = {
     packageId: CreditPackageId;
     provider?: Exclude<PaymentProvider, "manual">;
     targetTaskId?: string | null;
+    couponId?: string | null;
   }) {
     return requestJson<PaymentCreateResponse>("/api/payment/create", {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+
+  getMyInvitation() {
+    return requestJson<import("@/types/invitation").MyInvitationResponse>("/api/invitations/me");
+  },
+
+  listAvailableCoupons() {
+    return requestJson<import("@/types/coupon").AvailableCouponsResponse>("/api/coupons");
   },
 
   getPaymentOrder(id: string) {

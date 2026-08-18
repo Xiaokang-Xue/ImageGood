@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Download, Trash2 } from "lucide-react";
+import { Download, Flag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SmartImage } from "@/components/ui/SmartImage";
@@ -101,6 +101,12 @@ export default function HistoryDetailPage() {
           <h1 className="mt-2 text-3xl font-bold text-ink">{getHistoryTaskTitle(task)}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/feedback?type=report&taskId=${encodeURIComponent(task.id)}&from=${encodeURIComponent(`/history/${task.id}`)}`}>
+            <Button variant="outline">
+              <Flag className="h-4 w-4" />
+              举报结果
+            </Button>
+          </Link>
           <Button variant="ghost" loading={deleting} disabled={!canDelete} onClick={handleDelete}>
             <Trash2 className="h-4 w-4" />
             删除记录

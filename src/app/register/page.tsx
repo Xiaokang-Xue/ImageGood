@@ -36,6 +36,7 @@ function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [captchaQuestion, setCaptchaQuestion] = useState("");
   const [captchaAnswer, setCaptchaAnswer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -123,7 +124,8 @@ function RegisterForm() {
       phone,
       code: smsCode,
       password,
-      confirmPassword
+      confirmPassword,
+      inviteCode: inviteCode || undefined
     });
     setMessage(response.message || "注册成功");
     setCurrentUserCache(response.user);
@@ -141,7 +143,14 @@ function RegisterForm() {
     }
     if (!validateRequiredPassword()) return;
 
-    const response = await apiClient.register({ name, email, password, confirmPassword, captchaAnswer });
+    const response = await apiClient.register({
+      name,
+      email,
+      password,
+      confirmPassword,
+      captchaAnswer,
+      inviteCode: inviteCode || undefined
+    });
     setMessage(response.message || "注册成功，请前往邮箱完成验证。");
   };
 
@@ -218,6 +227,18 @@ function RegisterForm() {
               required
               className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
             />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">邀请码（选填）</span>
+            <input
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+              placeholder="填写好友的邀请码"
+              autoComplete="off"
+              className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm font-semibold uppercase tracking-wider outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
+            />
+            <span className="mt-1.5 block text-xs text-slate-500">注册成功后，你和好友各得一张 ¥10 优惠券</span>
           </label>
 
           {mode === "phone" ? (

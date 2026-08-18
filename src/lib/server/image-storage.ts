@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
@@ -277,29 +277,43 @@ export async function readStoredTaskImage(reference: string, taskId: string) {
   return loadResultImageBuffer(reference, taskId);
 }
 
-async function createTrialWatermark(buffer: Buffer) {
+export async function createTrialWatermark(buffer: Buffer, seed: string) {
   const image = sharp(buffer, { failOn: "warning" }).rotate();
   const metadata = await image.metadata();
   const width = metadata.width || 1024;
   const height = metadata.height || 1024;
   const shortestSide = Math.max(320, Math.min(width, height));
-  const fontSize = Math.max(22, Math.min(52, Math.round(shortestSide * 0.055)));
-  const patternWidth = Math.round(fontSize * 7.2);
-  const patternHeight = Math.round(fontSize * 4.2);
-  const badgeWidth = Math.min(width - 32, Math.round(fontSize * 8.5));
-  const badgeHeight = Math.round(fontSize * 1.9);
-  const badgeX = Math.round((width - badgeWidth) / 2);
-  const badgeY = Math.max(16, height - badgeHeight - Math.round(fontSize * 0.8));
+  const digest = createHash("sha256").update(seed).digest();
+  const angle = -(17 + (digest[0] % 12));
+  const fontSize = Math.max(26, Math.min(72, Math.round(shortestSide * 0.072)));
+  const bandHeight = Math.max(62, Math.round(fontSize * 2.35));
+  const bandY = Math.round((height - bandHeight) / 2 + ((digest[1] % 17) - 8) * (height * 0.004));
+  const badgeFontSize = Math.max(12, Math.round(fontSize * 0.34));
+  const badgeHeight = Math.max(30, Math.round(badgeFontSize * 2.35));
+  const badgeWidth = Math.max(128, Math.min(Math.max(128, width - 24), Math.round(badgeFontSize * 12.8)));
+  const marginX = Math.max(12, Math.round(width * (0.045 + (digest[2] % 6) * 0.006)));
+  const firstBadgeY = Math.max(12, Math.round(height * (0.12 + (digest[3] % 8) * 0.012)));
+  const secondBadgeY = Math.max(12, Math.min(height - badgeHeight - 12, Math.round(height * (0.76 + (digest[4] % 8) * 0.012))));
+  const taskCode = digest.toString("hex").slice(0, 6).toUpperCase();
+  const lineShift = Math.round(((digest[5] % 21) - 10) * (height * 0.0025));
   const overlay = Buffer.from(
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <pattern id="watermark" width="${patternWidth}" height="${patternHeight}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">
-          <text x="${Math.round(fontSize * 0.35)}" y="${Math.round(fontSize * 1.8)}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="1" fill="white" fill-opacity="0.26" stroke="black" stroke-opacity="0.12" stroke-width="1">ImageGood</text>
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#watermark)"/>
-      <rect x="${badgeX}" y="${badgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="${Math.round(badgeHeight / 2)}" fill="black" fill-opacity="0.62"/>
-      <text x="${Math.round(width / 2)}" y="${Math.round(badgeY + badgeHeight * 0.64)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${Math.round(fontSize * 0.72)}" font-weight="700" letter-spacing="1" fill="white">ImageGood FREE PREVIEW</text>
+      <path d="M ${-Math.round(width * 0.08)} ${Math.round(height * 0.34) + lineShift} C ${Math.round(width * 0.22)} ${Math.round(height * 0.18)}, ${Math.round(width * 0.62)} ${Math.round(height * 0.56)}, ${Math.round(width * 1.08)} ${Math.round(height * 0.31)}" fill="none" stroke="black" stroke-opacity="0.11" stroke-width="5"/>
+      <path d="M ${-Math.round(width * 0.08)} ${Math.round(height * 0.34) + lineShift} C ${Math.round(width * 0.22)} ${Math.round(height * 0.18)}, ${Math.round(width * 0.62)} ${Math.round(height * 0.56)}, ${Math.round(width * 1.08)} ${Math.round(height * 0.31)}" fill="none" stroke="white" stroke-opacity="0.18" stroke-width="2"/>
+      <path d="M ${-Math.round(width * 0.08)} ${Math.round(height * 0.69) - lineShift} C ${Math.round(width * 0.28)} ${Math.round(height * 0.48)}, ${Math.round(width * 0.7)} ${Math.round(height * 0.86)}, ${Math.round(width * 1.08)} ${Math.round(height * 0.63)}" fill="none" stroke="black" stroke-opacity="0.10" stroke-width="4"/>
+      <path d="M ${-Math.round(width * 0.08)} ${Math.round(height * 0.69) - lineShift} C ${Math.round(width * 0.28)} ${Math.round(height * 0.48)}, ${Math.round(width * 0.7)} ${Math.round(height * 0.86)}, ${Math.round(width * 1.08)} ${Math.round(height * 0.63)}" fill="none" stroke="white" stroke-opacity="0.16" stroke-width="1.5"/>
+      <g transform="rotate(${angle} ${Math.round(width / 2)} ${Math.round(height / 2)})">
+        <rect x="${-Math.round(width * 0.16)}" y="${bandY}" width="${Math.round(width * 1.32)}" height="${bandHeight}" rx="${Math.round(bandHeight * 0.18)}" fill="white" fill-opacity="0.075" stroke="black" stroke-opacity="0.09" stroke-width="2"/>
+        <line x1="${-Math.round(width * 0.16)}" y1="${bandY + Math.round(bandHeight * 0.2)}" x2="${Math.round(width * 1.16)}" y2="${bandY + Math.round(bandHeight * 0.2)}" stroke="white" stroke-opacity="0.16" stroke-width="2"/>
+        <line x1="${-Math.round(width * 0.16)}" y1="${bandY + Math.round(bandHeight * 0.8)}" x2="${Math.round(width * 1.16)}" y2="${bandY + Math.round(bandHeight * 0.8)}" stroke="black" stroke-opacity="0.09" stroke-width="2"/>
+        <text x="${Math.round(width / 2)}" y="${Math.round(bandY + bandHeight * 0.64)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="${Math.max(1, Math.round(fontSize * 0.055))}" fill="white" fill-opacity="0.19" stroke="black" stroke-opacity="0.18" stroke-width="${Math.max(1, Math.round(fontSize * 0.025))}" paint-order="stroke">ImageGood Preview</text>
+      </g>
+      <g>
+        <rect x="${marginX}" y="${firstBadgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="${Math.round(badgeHeight / 2)}" fill="black" fill-opacity="0.46" stroke="white" stroke-opacity="0.28"/>
+        <text x="${marginX + Math.round(badgeWidth / 2)}" y="${Math.round(firstBadgeY + badgeHeight * 0.64)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${badgeFontSize}" font-weight="700" letter-spacing="1" fill="white" fill-opacity="0.94">ImageGood · ${taskCode}</text>
+        <rect x="${width - marginX - badgeWidth}" y="${secondBadgeY}" width="${badgeWidth}" height="${badgeHeight}" rx="${Math.round(badgeHeight / 2)}" fill="white" fill-opacity="0.44" stroke="black" stroke-opacity="0.22"/>
+        <text x="${width - marginX - Math.round(badgeWidth / 2)}" y="${Math.round(secondBadgeY + badgeHeight * 0.64)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${badgeFontSize}" font-weight="700" letter-spacing="1" fill="black" fill-opacity="0.72">Preview · IG-${taskCode}</text>
+      </g>
     </svg>`
   );
 
@@ -322,7 +336,7 @@ export async function saveTrialResultImages(
         userId,
         taskId
       });
-      const watermarkedBuffer = await createTrialWatermark(source.buffer);
+      const watermarkedBuffer = await createTrialWatermark(source.buffer, `${taskId}:${index}`);
       const filename = index === 0 ? "result.png" : `result-${index + 1}.png`;
       const previewUrl = await savePublicResultBuffer({
         buffer: watermarkedBuffer,
