@@ -53,6 +53,8 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+const MAX_CONCURRENT_IMAGE_TASKS = 4;
+
 function userFacingImageError(error: unknown) {
   const message = error instanceof Error ? error.message : "生成失败，请稍后重试";
   const lower = message.toLowerCase();
@@ -128,8 +130,8 @@ async function insertTaskWithCreditCheck(task: ImageTaskRecord) {
         (item.status === "pending" || item.status === "processing")
     ).length;
 
-    if (unlimitedAccess && activeUnchargedTasks > 0) {
-      throw new BillingError("TASK_IN_PROGRESS", "已有图片任务正在生成，请完成后再继续", 409);
+    if (activeUnchargedTasks >= MAX_CONCURRENT_IMAGE_TASKS) {
+      throw new BillingError("TASK_IN_PROGRESS", "同时生成的图片已达 4 张，请等待部分任务完成后再继续", 409);
     }
 
     if (!unlimitedAccess && availableCredits(user) - activeUnchargedTasks <= 0) {

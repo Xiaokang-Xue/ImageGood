@@ -118,7 +118,7 @@ function eventTrafficDelta(event: AnalyticsEventRecord): TrafficCounts {
     delta.pageViews += 1;
     if (pathStartsWith(event.path, ["/pricing"])) delta.pricingPageViews += 1;
     if (pathStartsWith(event.path, ["/checkout"])) delta.checkoutPageViews += 1;
-    if (pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"])) {
+    if (pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster", "/batch"])) {
       delta.generationPageViews += 1;
     }
   } else if (event.type === "purchase_click") {
@@ -412,7 +412,7 @@ export async function GET(request: Request) {
   const pricingPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const checkoutPageViews = pageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
   const generationPageViews = pageViews.filter((event) =>
-    pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"])
+    pathStartsWith(event.path, ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster", "/batch"])
   );
   const activeCutoff = funnelRangeStart("7d", todayKey) ?? Date.now() - 7 * DAY_MS;
   const activeUserEvents7d = pageViews.filter((event) => {

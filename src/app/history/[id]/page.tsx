@@ -104,7 +104,7 @@ export default function HistoryDetailPage() {
           <Link href={`/feedback?type=report&taskId=${encodeURIComponent(task.id)}&from=${encodeURIComponent(`/history/${task.id}`)}`}>
             <Button variant="outline">
               <Flag className="h-4 w-4" />
-              举报结果
+              反馈此结果
             </Button>
           </Link>
           <Button variant="ghost" loading={deleting} disabled={!canDelete} onClick={handleDelete}>

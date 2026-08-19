@@ -270,7 +270,7 @@ export function RemoveBackgroundStudio() {
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <Card className={`${!mobileInputActive ? "hidden md:block" : ""} p-5`}>
           <div className="mb-5 flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-indigo-500/20">
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-button-gradient text-white shadow-lg shadow-black/10">
               <Eraser className="h-5 w-5" />
             </span>
             <div>

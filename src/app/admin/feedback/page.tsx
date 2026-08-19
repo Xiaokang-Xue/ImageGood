@@ -62,7 +62,7 @@ export default function AdminFeedbackPage() {
       <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <p className="text-sm font-semibold text-studio-600">管理员</p>
-          <h1 className="mt-2 text-3xl font-bold text-ink">举报与建议</h1>
+          <h1 className="mt-2 text-3xl font-bold text-ink">反馈与建议</h1>
           <p className="mt-3 text-sm text-muted">查看用户提交的建议、功能问题和内容举报，并记录处理状态。</p>
         </div>
         <div className="flex flex-wrap gap-2">

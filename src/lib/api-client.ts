@@ -799,7 +799,7 @@ export const apiClient = {
     formData.append("quality", payload.quality ?? "auto");
     formData.append("outputFormat", payload.outputFormat ?? "png");
 
-    return postTrackedTaskForm<EditImageResponse>("/api/images/edit", formData, "/editor");
+    return postTrackedTaskForm<EditImageResponse>("/api/images/edit", formData, payload.returnPath || "/editor");
   },
 
   async createProductImages(payload: ProductImageRequest) {
@@ -824,7 +824,7 @@ export const apiClient = {
     return postTrackedTaskJson<TextToImageResponse>(
       "/api/images/text-to-image",
       payload as unknown as Record<string, unknown>,
-      "/text-to-image"
+      payload.returnPath || "/text-to-image"
     );
   },
 

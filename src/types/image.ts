@@ -27,6 +27,7 @@ export type PosterLayerVisibility = Record<PosterLayerKey, boolean>;
 
 export interface EditImageRequest {
   requestId?: string;
+  returnPath?: string;
   image?: File;
   imageUrl?: string;
   prompt?: string;
@@ -117,6 +118,7 @@ export interface PosterImageResponse {
 
 export interface TextToImageRequest {
   requestId?: string;
+  returnPath?: string;
   prompt: string;
   style?: TextToImageStyle;
   size?: ImageSize | string;

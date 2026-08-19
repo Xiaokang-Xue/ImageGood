@@ -75,7 +75,7 @@ function FeedbackForm() {
     <PageShell>
       <main className="mx-auto max-w-3xl pb-16 pt-4 sm:pt-8">
         <header className="max-w-2xl">
-          <p className="text-sm font-semibold text-neutral-500">举报与建议</p>
+          <p className="text-sm font-semibold text-neutral-500">反馈与建议</p>
           <h1 className="mt-2 text-3xl font-bold text-neutral-950 sm:text-4xl">帮助我们把 ImageGood 做得更好</h1>
           <p className="mt-3 text-sm leading-6 text-neutral-600">请描述具体场景和期望结果。举报内容会进入管理员处理列表。</p>
         </header>

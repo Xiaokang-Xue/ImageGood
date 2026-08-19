@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, WandSparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, Images, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { UploadDropzone } from "@/components/ui/UploadDropzone";
@@ -62,9 +62,10 @@ export function HeroSection() {
               生成图片
             </Button>
           </Link>
-          <Link href="/remove-background">
+          <Link href="/batch">
             <Button size="lg" variant="secondary" className="border border-white/25 bg-white/10 text-white ring-white/20 hover:bg-white/18">
-              一键抠图
+              <Images className="h-4 w-4" />
+              批量生成
             </Button>
           </Link>
         </div>

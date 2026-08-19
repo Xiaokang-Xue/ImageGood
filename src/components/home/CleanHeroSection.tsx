@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, ImagePlus, Scissors, WandSparkles } from "lucide-react";
+import { ArrowRight, Check, ImagePlus, Images, WandSparkles } from "lucide-react";
 import { HomeUploadAction } from "@/components/home/HomeUploadAction";
 import { Button } from "@/components/ui/Button";
 import { SmartImage } from "@/components/ui/SmartImage";
@@ -8,7 +8,7 @@ import { imageAssets } from "@/lib/image-assets";
 const primaryActions = [
   { label: "开始修图", href: "/editor", icon: WandSparkles, primary: true },
   { label: "文生图", href: "/text-to-image", icon: ImagePlus, primary: false },
-  { label: "一键抠图", href: "/remove-background", icon: Scissors, primary: false }
+  { label: "批量生成", href: "/batch", icon: Images, primary: false }
 ] as const;
 
 export function CleanHeroSection() {
@@ -28,7 +28,7 @@ export function CleanHeroSection() {
       <div className="mx-auto max-w-[1280px] px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
         <div className="mx-auto max-w-4xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+            <span className="h-1.5 w-1.5 rounded-full bg-neutral-950" />
             AI 图片创作与处理工具
           </div>
 
@@ -66,7 +66,7 @@ export function CleanHeroSection() {
           <div className="mt-5 hidden flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-neutral-500 sm:flex">
             {["免费体验一次", "结果自动保存", "支持手机上传"].map((item) => (
               <span key={item} className="inline-flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-blue-600" />
+                <Check className="h-3.5 w-3.5 text-neutral-950" />
                 {item}
               </span>
             ))}

@@ -172,12 +172,14 @@ export function buildTextToImagePrompt(input: {
   prompt: string;
   style?: TextToImageStyle;
 }) {
-  const style = input.style || "realistic";
+  const style = input.style;
 
   return joinPrompt([
     "任务：根据描述生成图片。",
     `用户描述（优先执行）：${withFallback(input.prompt, "生成一张构图完整、内容自然的图片")}。`,
-    `参考风格：${textToImageStyleLabels[style]}，${textToImageStyleGuides[style]}。若与用户描述冲突，以用户描述为准。`,
+    style
+      ? `参考风格：${textToImageStyleLabels[style]}，${textToImageStyleGuides[style]}。若与用户描述冲突，以用户描述为准。`
+      : undefined,
     "忠实呈现用户指定的主体、数量、关系、场景和构图，不擅自增加关键元素。",
     "除非用户明确要求，否则不要生成文字、Logo、二维码、水印或边框。"
   ]);

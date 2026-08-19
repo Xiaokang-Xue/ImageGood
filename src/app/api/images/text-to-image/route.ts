@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 
 const textStyles = new Set<TextToImageStyle>(["realistic", "product", "poster", "illustration", "minimal"]);
 
-function normalizeTextStyle(value: unknown): TextToImageStyle {
-  return typeof value === "string" && textStyles.has(value as TextToImageStyle) ? (value as TextToImageStyle) : "realistic";
+function normalizeTextStyle(value: unknown): TextToImageStyle | undefined {
+  return typeof value === "string" && textStyles.has(value as TextToImageStyle) ? (value as TextToImageStyle) : undefined;
 }
 
 export async function POST(request: Request) {

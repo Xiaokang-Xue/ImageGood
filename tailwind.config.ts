@@ -13,11 +13,14 @@ const config: Config = {
         muted: "#666666",
         line: "#EAEAEA",
         studio: {
-          50: "#EFF6FF",
-          100: "#DBEAFE",
-          500: "#2563EB",
-          600: "#1D4ED8",
-          700: "#1E40AF"
+          50: "#FAFAFA",
+          100: "#F5F5F5",
+          200: "#E5E5E5",
+          300: "#D4D4D4",
+          400: "#A3A3A3",
+          500: "#525252",
+          600: "#404040",
+          700: "#171717"
         }
       },
       boxShadow: {
@@ -26,7 +29,7 @@ const config: Config = {
       },
       backgroundImage: {
         "studio-glow": "linear-gradient(180deg, #FAFAFA 0%, #FFFFFF 100%)",
-        "button-gradient": "linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%)"
+        "button-gradient": "linear-gradient(180deg, #171717 0%, #0A0A0A 100%)"
       }
     }
   },

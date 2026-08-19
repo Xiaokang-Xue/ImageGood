@@ -17,7 +17,7 @@ import type {
 
 const ANALYTICS_EVENT_TYPES = new Set(["page_view", "purchase_click", "acquisition_channel"]);
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
-const ANALYTICS_GENERATION_PATHS = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"];
+const ANALYTICS_GENERATION_PATHS = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster", "/batch"];
 
 export interface DbUser {
   id: string;

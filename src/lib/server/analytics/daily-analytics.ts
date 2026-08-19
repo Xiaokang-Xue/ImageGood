@@ -463,7 +463,7 @@ export async function getDailyAnalyticsReport(input: {
   const allPurchaseClicks = db.analyticsEvents.filter((event) => event.type === "purchase_click");
   const allPricingPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/pricing"]));
   const allCheckoutPageViews = allPageViews.filter((event) => pathStartsWith(event.path, ["/checkout"]));
-  const generationPaths = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster"];
+  const generationPaths = ["/editor", "/text-to-image", "/remove-background", "/image-enhancer", "/object-remover", "/product", "/poster", "/batch"];
   const allGenerationPageViews = allPageViews.filter((event) => pathStartsWith(event.path, generationPaths));
   const trafficCounters = buildTrafficCounters(db, generationPaths);
   const rangeTraffic = trafficCounters.byDate.get(date) ?? emptyTrafficCounts();

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Eraser,
   ImagePlus,
+  Images,
   LogIn,
   LogOut,
   Menu,
@@ -15,6 +16,7 @@ import {
   Scissors,
   ShoppingBag,
   Sparkles,
+  Type,
   UserRound,
   WandSparkles,
   X
@@ -49,10 +51,16 @@ const generationTools: ToolNavItem[] = [
   { label: "封面海报", description: "制作封面与海报背景", href: "/poster", icon: Sparkles }
 ];
 
-type DesktopMenu = "processing" | "generation" | null;
+const batchTools: ToolNavItem[] = [
+  { label: "批量图片处理", description: "图片与描述逐项生成", href: "/batch?mode=image", icon: Images },
+  { label: "批量文生图", description: "一份或多份描述批量创作", href: "/batch?mode=text", icon: Type }
+];
+
+type DesktopMenu = "processing" | "generation" | "batch" | null;
 
 function isActivePath(pathname: string, href: string) {
   const targetPath = href.split("?")[0];
+  if (href.includes("?")) return false;
   return pathname === targetPath || (targetPath !== "/" && pathname.startsWith(`${targetPath}/`));
 }
 
@@ -75,15 +83,15 @@ function ToolMenuLink({
       href={item.href}
       className={cn(
         "group flex items-center gap-3 rounded-lg border border-transparent transition",
-        compact ? "min-h-[68px] px-3 py-3" : "px-3 py-3",
+        compact ? "min-h-11 gap-2 px-2.5 py-2" : "px-3 py-3",
         active
           ? "border-neutral-200 bg-neutral-50 text-neutral-950"
           : "text-neutral-700 hover:border-neutral-200 hover:bg-neutral-50 hover:text-neutral-950"
       )}
       onClick={onClick}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-800 transition group-hover:border-neutral-500 group-hover:text-neutral-950">
-        <Icon className="h-5 w-5" />
+      <span className={cn("flex shrink-0 items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-800 transition group-hover:border-neutral-500 group-hover:text-neutral-950", compact ? "h-8 w-8" : "h-10 w-10")}>
+        <Icon className={compact ? "h-4 w-4" : "h-5 w-5"} />
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-semibold">{item.label}</span>
@@ -181,6 +189,7 @@ export function SiteHeader() {
   const trialHref = user ? "/editor" : "/login?redirect=/editor";
   const processingActive = processingTools.some((item) => isActivePath(pathname, item.href));
   const generationActive = generationTools.some((item) => isActivePath(pathname, item.href));
+  const batchActive = pathname === "/batch";
 
   return (
     <>
@@ -256,6 +265,32 @@ export function SiteHeader() {
             ) : null}
           </div>
 
+          <div className="relative">
+            <button
+              type="button"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition",
+                batchActive || desktopMenu === "batch"
+                  ? "bg-neutral-100 text-neutral-950"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950"
+              )}
+              aria-expanded={desktopMenu === "batch"}
+              onClick={() => toggleDesktopMenu("batch")}
+            >
+              批量生成
+              <ChevronDown className={cn("h-3.5 w-3.5 transition", desktopMenu === "batch" && "rotate-180")} />
+            </button>
+            {desktopMenu === "batch" ? (
+              <div className="absolute left-1/2 top-[calc(100%+10px)] w-[400px] -translate-x-1/2 rounded-lg border border-neutral-200 bg-white p-2 shadow-[0_16px_40px_rgba(0,0,0,0.10)]">
+                <div className="grid gap-1">
+                  {batchTools.map((item) => (
+                    <ToolMenuLink key={item.href} item={item} pathname={pathname} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           {[
             { label: "价格", href: "/pricing" },
             { label: "历史记录", href: "/history" }
@@ -316,7 +351,7 @@ export function SiteHeader() {
                       历史记录
                     </Link>
                     <Link href="/feedback" className="block rounded-md px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
-                      举报与建议
+                      反馈与建议
                     </Link>
                     {user.role === "admin" ? (
                       <>
@@ -386,11 +421,11 @@ export function SiteHeader() {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute inset-y-0 right-0 flex w-[84vw] max-w-[320px] flex-col overscroll-contain border-l border-neutral-300 bg-white shadow-2xl sm:max-w-[340px]">
-            <div className="scrollbar-soft flex-1 overflow-y-auto px-4 py-5">
+            <div className="scrollbar-soft flex-1 overflow-y-auto px-3 py-3">
               <Link
                 href="/"
                 className={cn(
-                  "mb-5 flex min-h-12 items-center rounded-lg border px-4 text-sm font-semibold",
+                  "mb-3 flex min-h-10 items-center rounded-lg border px-3 text-sm font-semibold",
                   pathname === "/"
                     ? "border-neutral-950 bg-neutral-950 text-white"
                     : "border-neutral-200 bg-white text-neutral-900"
@@ -401,7 +436,7 @@ export function SiteHeader() {
 
               <div>
                 <p className="px-1 text-xs font-semibold text-neutral-400">AI 图片处理</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                   {processingTools.map((item) => (
                     <ToolMenuLink
                       key={item.href}
@@ -414,9 +449,9 @@ export function SiteHeader() {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-4">
                 <p className="px-1 text-xs font-semibold text-neutral-400">AI 图片生成</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                   {generationTools.map((item) => (
                     <ToolMenuLink
                       key={item.href}
@@ -429,36 +464,51 @@ export function SiteHeader() {
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-2 border-t border-neutral-200 pt-5">
-                <Link href="/pricing" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
+              <div className="mt-4">
+                <p className="px-1 text-xs font-semibold text-neutral-400">批量生成</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  {batchTools.map((item) => (
+                    <ToolMenuLink
+                      key={item.href}
+                      item={item}
+                      pathname={pathname}
+                      compact
+                      onClick={() => setMobileOpen(false)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-1.5 border-t border-neutral-200 pt-4">
+                <Link href="/pricing" className="flex min-h-11 items-center justify-center rounded-lg border border-neutral-950 bg-neutral-950 text-sm font-semibold text-white">
                   价格
                 </Link>
-                <Link href="/history" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
+                <Link href="/history" className="flex min-h-11 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
                   历史记录
                 </Link>
-                <Link href="/feedback" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
-                  举报与建议
+                <Link href="/feedback" className="flex min-h-11 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
+                  反馈与建议
                 </Link>
                 {user ? (
-                  <Link href="/account" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
+                  <Link href="/account" className="flex min-h-11 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
                     账户中心
                   </Link>
                 ) : (
-                  <Link href="/register" className="flex min-h-12 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
+                  <Link href="/register" className="flex min-h-11 items-center justify-center rounded-lg border border-neutral-200 text-sm font-semibold text-neutral-800">
                     注册
                   </Link>
                 )}
                 {user ? (
                   <button
                     type="button"
-                    className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-rose-200 text-sm font-semibold text-rose-600"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose-200 text-sm font-semibold text-rose-600"
                     onClick={handleLogout}
                   >
                     <LogOut className="h-4 w-4" />
                     退出登录
                   </button>
                 ) : (
-                  <Link href="/login" className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-neutral-950 bg-neutral-950 text-sm font-semibold text-white">
+                  <Link href="/login" className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-neutral-950 bg-neutral-950 text-sm font-semibold text-white">
                     <LogIn className="h-4 w-4" />
                     登录
                   </Link>
