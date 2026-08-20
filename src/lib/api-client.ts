@@ -793,6 +793,9 @@ export const apiClient = {
     const formData = new FormData();
 
     if (image) formData.append("image", image);
+    for (const referenceImage of payload.referenceImages || []) {
+      formData.append("referenceImage", referenceImage);
+    }
     formData.append("prompt", payload.prompt ?? "");
     formData.append("tool", payload.tool);
     formData.append("size", payload.size ?? "auto");

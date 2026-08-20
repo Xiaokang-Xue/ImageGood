@@ -337,7 +337,7 @@ async function observeTaskStep<T>(input: {
   }
 }
 
-async function saveTaskInput(task: ImageTaskRecord, image: File) {
+async function saveTaskInput(task: ImageTaskRecord, image: File, inputImageCount = 1) {
   return observeTaskStep({
     task,
     stage: "input_storage",
@@ -348,7 +348,7 @@ async function saveTaskInput(task: ImageTaskRecord, image: File) {
       return inputImageUrl;
     },
     successFields: () => ({
-      inputImageCount: 1,
+      inputImageCount,
       storageProvider: isCosStorageEnabled() ? "cos" : "local"
     })
   });
@@ -459,6 +459,51 @@ async function runProviderImageStep<T>(
         provider: task.provider,
         stage: "provider",
         operation
+      });
+      return result;
+    }
+  });
+}
+
+async function runProviderImagesStep<T>(
+  task: ImageTaskRecord,
+  operation: string,
+  images: File[],
+  run: (providerImages: File[]) => Promise<T>
+) {
+  return runProviderStep(task, operation, async () => {
+    try {
+      return await run(images);
+    } catch (error) {
+      if (!isProviderImageCompatibilityError(error)) throw error;
+
+      logImageTaskEvent(
+        "input.compatibility_retry.started",
+        {
+          taskId: task.id,
+          userId: task.userId,
+          taskType: task.type,
+          provider: task.provider,
+          stage: "provider",
+          operation,
+          inputImageCount: images.length
+        },
+        "warn"
+      );
+
+      const retryImages = await Promise.all(
+        images.map((image) => normalizeImageInputFile(image, { forceReencode: true }))
+      );
+      const result = await run(retryImages);
+
+      logImageTaskEvent("input.compatibility_retry.succeeded", {
+        taskId: task.id,
+        userId: task.userId,
+        taskType: task.type,
+        provider: task.provider,
+        stage: "provider",
+        operation,
+        inputImageCount: retryImages.length
       });
       return result;
     }
@@ -656,6 +701,7 @@ export async function runEditTask(input: {
   requestId?: string;
   userId: string;
   image: File;
+  referenceImages?: File[];
   prompt?: string;
   tool: EditTool;
   size: ImageSize;
@@ -663,7 +709,11 @@ export async function runEditTask(input: {
   outputFormat: ImageOutputFormat;
 }) {
   const provider = getImageProviderService();
-  const prompt = appendImageSizeGuidance(buildEditPrompt(input.tool, input.prompt), input.size);
+  const referenceImages = input.referenceImages || [];
+  const basePrompt = appendImageSizeGuidance(buildEditPrompt(input.tool, input.prompt), input.size);
+  const prompt = referenceImages.length
+    ? `${basePrompt}\n参考图说明：第一张图片是待修改主图，其余图片仅作为内容、风格或细节参考；以用户要求为准，不要擅自替换主图主体。`
+    : basePrompt;
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,
@@ -677,12 +727,14 @@ export async function runEditTask(input: {
   if (!inserted.created) return startResponse(inserted.task);
 
   startBackgroundTask(task, async () => {
-    await saveTaskInput(task, input.image);
+    const providerInputs = [input.image, ...referenceImages];
+    await saveTaskInput(task, input.image, providerInputs.length);
 
-    const generated = await runProviderImageStep(task, "edit", input.image, (providerImage) =>
+    const generated = await runProviderImagesStep(task, "edit", providerInputs, (providerImages) =>
       provider.editImage({
         taskId: task.id,
-        image: providerImage,
+        image: providerImages[0],
+        referenceImages: providerImages.slice(1),
         prompt,
         size: input.size,
         quality: input.quality,

@@ -5,7 +5,7 @@ import {
   getUserTask,
   updateUserTaskMetadata
 } from "@/lib/server/image-task-service";
-import { toPublicImageTask } from "@/lib/server/image-task-access";
+import { toPublicImageTask, withImageTaskPreviews } from "@/lib/server/image-task-access";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -31,7 +31,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     }
 
     const hasPaidOrder = await hasPaidOrderForUser(user.id);
-    return NextResponse.json({ ok: true, task: toPublicImageTask(task, hasPaidOrder) });
+    const publicTask = toPublicImageTask(task, hasPaidOrder);
+    return NextResponse.json({ ok: true, task: await withImageTaskPreviews(publicTask, 1280) });
   } catch (error) {
     console.error("[tasks] failed to read task", {
       taskId: params.id,
@@ -131,7 +132,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       );
     }
     const hasPaidOrder = await hasPaidOrderForUser(user.id);
-    return NextResponse.json({ ok: true, task: toPublicImageTask(task, hasPaidOrder) });
+    const publicTask = toPublicImageTask(task, hasPaidOrder);
+    return NextResponse.json({ ok: true, task: await withImageTaskPreviews(publicTask, 480) });
   } catch (error) {
     console.error("[tasks] failed to update task metadata", {
       taskId: params.id,

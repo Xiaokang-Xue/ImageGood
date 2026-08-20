@@ -73,6 +73,11 @@ export default function HistoryDetailPage() {
   }
 
   const images = task.resultImages?.length ? task.resultImages : task.resultImageUrl ? [task.resultImageUrl] : [];
+  const previewImages = task.resultImagePreviewUrls?.length
+    ? task.resultImagePreviewUrls
+    : task.resultImagePreviewUrl
+      ? [task.resultImagePreviewUrl]
+      : [];
   const canDelete = task.status === "succeeded" || task.status === "failed";
 
   const handleDelete = async () => {
@@ -130,10 +135,11 @@ export default function HistoryDetailPage() {
               {images.map((image, index) => (
                 <div key={image} className="overflow-hidden rounded-lg border border-line bg-white">
                   <SmartImage
-                    src={image}
+                    src={previewImages[index] || image}
+                    fallbackSrc={image}
                     alt={`生成结果 ${index + 1}`}
                     priority={index === 0}
-                    previewWidth={1600}
+                    previewWidth={false}
                     sizes="(min-width: 1024px) 820px, 100vw"
                     loadingLabel="正在加载生成结果…"
                     className="h-[720px] max-h-[72vh] min-h-[420px] w-full rounded-none border-0 bg-slate-50"

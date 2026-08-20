@@ -3,6 +3,7 @@ import { assertContactVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import {
   getFormString,
+  getOptionalReferenceImageFiles,
   getRequiredImageFile,
   normalizeEditTool,
   normalizeImageQuality,
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const requestId = getFormString(formData, "requestId");
     const image = await getRequiredImageFile(formData);
+    const referenceImages = await getOptionalReferenceImageFiles(formData);
     const prompt = getFormString(formData, "prompt");
     const tool = normalizeEditTool(getFormString(formData, "tool", "custom"));
     const requestedSize = normalizeImageSize(getFormString(formData, "size", "auto"));
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
       requestId,
       userId: user.id,
       image,
+      referenceImages,
       prompt,
       tool,
       size,

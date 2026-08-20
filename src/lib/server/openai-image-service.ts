@@ -3,6 +3,7 @@ import type { ImageOutputFormat, ImageQuality, ImageSize } from "@/types/image";
 
 interface EditImageInput {
   image: File;
+  referenceImages?: File[];
   prompt: string;
   size: ImageSize;
   quality: ImageQuality;
@@ -143,10 +144,12 @@ function firstImageResult(
 }
 
 export async function editImage(input: EditImageInput) {
-  const image = await toUploadableImage(input.image);
+  const images = await Promise.all(
+    [input.image, ...(input.referenceImages || [])].map((image) => toUploadableImage(image))
+  );
   const result = await (await getClient()).images.edit({
     model: getImageModel(),
-    image,
+    image: images.length === 1 ? images[0] : images,
     prompt: input.prompt,
     size: input.size,
     quality: input.quality,

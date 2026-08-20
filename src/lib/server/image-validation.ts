@@ -1,4 +1,5 @@
 import type { EditTool, ImageOutputFormat, ImageQuality, ImageSize } from "@/types/image";
+import { MAX_EDIT_REFERENCE_IMAGES } from "@/config/image-upload";
 import { ImageInputNormalizationError, normalizeImageInputFile } from "@/lib/server/image-input-normalizer";
 const SUPPORTED_TOOLS = new Set<EditTool>(["background", "remove", "enhance", "style", "expand", "custom"]);
 const SUPPORTED_QUALITIES = new Set<ImageQuality>(["low", "medium", "high", "auto"]);
@@ -30,6 +31,25 @@ export async function getRequiredImageFile(formData: FormData) {
   }
 
   return validateImageFile(value);
+}
+
+export async function getOptionalReferenceImageFiles(formData: FormData) {
+  const values = formData.getAll("referenceImage");
+  if (values.length > MAX_EDIT_REFERENCE_IMAGES) {
+    throw new ImageRequestError(
+      "TOO_MANY_REFERENCE_IMAGES",
+      `最多可添加 ${MAX_EDIT_REFERENCE_IMAGES} 张参考图`
+    );
+  }
+
+  return Promise.all(
+    values.map(async (value) => {
+      if (!(value instanceof File)) {
+        throw new ImageRequestError("INVALID_REFERENCE_IMAGE", "参考图文件无效");
+      }
+      return validateImageFile(value);
+    })
+  );
 }
 
 export async function validateImageFile(file: File) {

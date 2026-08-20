@@ -17,6 +17,7 @@ const ratioClasses: Record<SmartImageRatio, string> = {
 
 interface SmartImageProps {
   src: string;
+  fallbackSrc?: string;
   alt: string;
   className?: string;
   imageClassName?: string;
@@ -60,6 +61,7 @@ function imagePreviewSource(src: string, width: number | false) {
 
 export function SmartImage({
   src,
+  fallbackSrc,
   alt,
   className,
   imageClassName,
@@ -78,6 +80,7 @@ export function SmartImage({
   const [failureCount, setFailureCount] = useState(0);
   const [requestVersion, setRequestVersion] = useState(0);
   const [previewDisabled, setPreviewDisabled] = useState(false);
+  const [fallbackActive, setFallbackActive] = useState(false);
   const retryTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -90,13 +93,14 @@ export function SmartImage({
     setFailureCount(0);
     setRequestVersion(0);
     setPreviewDisabled(false);
+    setFallbackActive(false);
 
     return () => {
       if (retryTimerRef.current !== null) {
         window.clearTimeout(retryTimerRef.current);
       }
     };
-  }, [src]);
+  }, [fallbackSrc, src]);
 
   const effectivePreviewWidth = previewWidth === false ? false : previewWidth ?? (priority ? 1280 : 720);
   const previewSrc = imagePreviewSource(src, effectivePreviewWidth);
@@ -107,6 +111,13 @@ export function SmartImage({
 
     if (usingPreview) {
       setPreviewDisabled(true);
+      setFailureCount(0);
+      setRequestVersion((current) => current + 1);
+      return;
+    }
+
+    if (!fallbackActive && fallbackSrc && fallbackSrc !== src) {
+      setFallbackActive(true);
       setFailureCount(0);
       setRequestVersion((current) => current + 1);
       return;
@@ -134,10 +145,14 @@ export function SmartImage({
     setLoaded(false);
     setFailureCount(0);
     setPreviewDisabled(false);
+    setFallbackActive(false);
     setRequestVersion((current) => current + 1);
   };
 
-  const resolvedSrc = imageSourceForAttempt(usingPreview ? previewSrc : src, requestVersion);
+  const resolvedSrc = imageSourceForAttempt(
+    fallbackActive ? fallbackSrc || src : usingPreview ? previewSrc : src,
+    requestVersion
+  );
 
   return (
     <div
@@ -195,17 +210,9 @@ export function SmartImage({
             fetchPriority={priority ? "high" : "auto"}
             sizes={sizes}
             referrerPolicy="no-referrer"
-            onLoad={(event) => {
-              const image = event.currentTarget;
-              const markLoaded = () => {
-                setLoaded(true);
-                setFailed(false);
-              };
-              if (typeof image.decode === "function") {
-                image.decode().catch(() => undefined).finally(markLoaded);
-              } else {
-                markLoaded();
-              }
+            onLoad={() => {
+              setLoaded(true);
+              setFailed(false);
             }}
             onError={handleLoadError}
           />

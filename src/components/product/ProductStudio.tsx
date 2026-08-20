@@ -84,7 +84,10 @@ interface ProductStudioDraft {
 }
 
 function persistableProductResults(results: ProductImageResult[]) {
-  return results.filter((result) => isPersistableImageUrl(result.url)).slice(-8);
+  return results
+    .filter((result) => isPersistableImageUrl(result.url))
+    .map(({ previewUrl: _previewUrl, ...result }) => result)
+    .slice(-8);
 }
 
 export function ProductStudio({ initialTemplate }: ProductStudioProps) {
@@ -195,6 +198,7 @@ export function ProductStudio({ initialTemplate }: ProductStudioProps) {
             {
               id: "product-result-1",
               url,
+              previewUrl: task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url,
               template: "商品图",
               title: "生成结果"
             }

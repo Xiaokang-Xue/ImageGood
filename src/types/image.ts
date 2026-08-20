@@ -30,6 +30,7 @@ export interface EditImageRequest {
   returnPath?: string;
   image?: File;
   imageUrl?: string;
+  referenceImages?: File[];
   prompt?: string;
   tool: EditTool;
   size?: ImageSize | string;
@@ -40,6 +41,7 @@ export interface EditImageRequest {
 export interface EditImageResult {
   id: string;
   url: string;
+  previewUrl?: string;
   type: "edited";
   label: string;
 }
@@ -76,6 +78,7 @@ export interface ProductImageRequest {
 export interface ProductImageResult {
   id: string;
   url: string;
+  previewUrl?: string;
   template: string;
   title: string;
 }
@@ -103,6 +106,7 @@ export interface PosterImageRequest {
 export interface PosterImageResult {
   id: string;
   url: string;
+  previewUrl?: string;
   title: string;
 }
 

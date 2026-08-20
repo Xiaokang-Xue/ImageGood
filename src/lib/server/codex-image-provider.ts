@@ -271,6 +271,10 @@ export function createCodexImageProvider(): ImageProviderService {
     formData.append("prompt", input.prompt);
     formData.append("jobId", input.taskId || "");
     formData.append("image", input.image, input.image.name || "reference.png");
+    const referenceImages = "referenceImages" in input ? input.referenceImages || [] : [];
+    for (const [index, image] of referenceImages.entries()) {
+      formData.append("image", image, image.name || `reference-${index + 2}.png`);
+    }
 
     return requestCodexJob(
       "/v1/jobs/reference",

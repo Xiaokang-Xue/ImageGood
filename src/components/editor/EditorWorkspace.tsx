@@ -7,6 +7,7 @@ import { CheckCircle2 } from "lucide-react";
 import { CreditPurchasePrompt, type CreditPurchasePromptVariant } from "@/components/billing/CreditPurchasePrompt";
 import { HistoryTimeline } from "@/components/editor/HistoryTimeline";
 import { PromptPanel } from "@/components/editor/PromptPanel";
+import { ReferenceImagePicker } from "@/components/editor/ReferenceImagePicker";
 import { ResultGallery } from "@/components/editor/ResultGallery";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
@@ -41,6 +42,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [taskId, setTaskId] = useState("");
+  const [referenceImages, setReferenceImages] = useState<File[]>([]);
   const [mobileInputActive, setMobileInputActive] = useState(true);
   const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
@@ -119,6 +121,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
         const response = await apiClient.editImage({
           image: selectedInputFile ?? undefined,
           imageUrl: currentImage ?? originalImage ?? undefined,
+          referenceImages,
           prompt: finalPrompt,
           tool: finalTool,
           size: "auto",
@@ -144,6 +147,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
           result = {
             id: "result-1",
             url,
+            previewUrl: task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url,
             type: "edited",
             label: "生成结果"
           };
@@ -305,6 +309,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
               setUploadedImage(imageUrl, file);
             }}
           />
+          <ReferenceImagePicker disabled={loading} onChange={setReferenceImages} />
         </Card>
 
         <div className={`${mobileInputActive ? "hidden md:grid" : "grid"} gap-6`}>

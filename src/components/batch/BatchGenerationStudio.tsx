@@ -52,6 +52,7 @@ interface BatchResultItem {
   status: BatchResultStatus;
   taskId: string;
   resultUrl: string;
+  previewUrl: string;
   error: string;
 }
 
@@ -64,6 +65,7 @@ const initialResults = (count: number): BatchResultItem[] =>
     status: "idle",
     taskId: "",
     resultUrl: "",
+    previewUrl: "",
     error: ""
   }));
 
@@ -165,7 +167,7 @@ export function BatchGenerationStudio() {
   const runResult = async (index: number, controller: AbortController) => {
     const sourceIndex = pattern === "repeat" ? 0 : index;
     const input = inputs[sourceIndex];
-    updateResult(index, { status: "submitting", taskId: "", resultUrl: "", error: "" });
+    updateResult(index, { status: "submitting", taskId: "", resultUrl: "", previewUrl: "", error: "" });
 
     try {
       const response = category === "image"
@@ -191,7 +193,12 @@ export function BatchGenerationStudio() {
       if (task.status === "failed") throw new Error(task.errorMessage || "图片生成失败，请稍后重试");
       const resultUrl = task.resultImages?.[0] || task.resultImageUrl || "";
       if (!resultUrl) throw new Error("生成完成但未检测到结果图片");
-      updateResult(index, { status: "succeeded", resultUrl, error: "" });
+      updateResult(index, {
+        status: "succeeded",
+        resultUrl,
+        previewUrl: task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || resultUrl,
+        error: ""
+      });
       return true;
     } catch (requestError) {
       if (isAbortError(requestError)) return false;
@@ -400,7 +407,8 @@ export function BatchGenerationStudio() {
               <div key={item.id} className="rounded-lg border border-neutral-300 bg-white p-3">
                 {item.status === "succeeded" && item.resultUrl ? (
                   <SmartImage
-                    src={item.resultUrl}
+                    src={item.previewUrl || item.resultUrl}
+                    fallbackSrc={item.resultUrl}
                     alt={`批量生成结果 ${index + 1}`}
                     previewWidth={720}
                     sizes="(min-width: 768px) 40vw, 100vw"

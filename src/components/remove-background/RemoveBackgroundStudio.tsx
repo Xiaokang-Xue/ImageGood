@@ -82,6 +82,7 @@ export function RemoveBackgroundStudio() {
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const [resultPreviewUrl, setResultPreviewUrl] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("transparent");
   const [customBackground, setCustomBackground] = useState("#f8fafc");
   const [downloadingBackground, setDownloadingBackground] = useState(false);
@@ -114,6 +115,7 @@ export function RemoveBackgroundStudio() {
     setCreditPrompt(null);
     setTaskId("");
     setResultUrl("");
+    setResultPreviewUrl("");
     setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
@@ -139,6 +141,7 @@ export function RemoveBackgroundStudio() {
       }
 
       setResultUrl(url);
+      setResultPreviewUrl(task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url);
       setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
@@ -383,7 +386,8 @@ export function RemoveBackgroundStudio() {
                 <GenerationErrorPanel message={error} onRetry={handleGenerate} minHeightClassName="min-h-[500px]" className="w-full" />
               ) : resultUrl ? (
                 <SmartImage
-                  src={resultUrl}
+                  src={resultPreviewUrl || resultUrl}
+                  fallbackSrc={resultUrl}
                   alt="智能抠图结果"
                   priority
                   previewWidth={1280}

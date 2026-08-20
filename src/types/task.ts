@@ -30,8 +30,11 @@ export interface ImageTaskRecord {
   status: ImageTaskStatus;
   provider?: ImageProvider | null;
   inputImageUrl?: string | null;
+  inputImagePreviewUrl?: string | null;
   resultImageUrl?: string | null;
   resultImages?: string[] | null;
+  resultImagePreviewUrl?: string | null;
+  resultImagePreviewUrls?: string[] | null;
   isFreeTrial?: boolean;
   hasWatermark?: boolean;
   unlockedAt?: string | null;

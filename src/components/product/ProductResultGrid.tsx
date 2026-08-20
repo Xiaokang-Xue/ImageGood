@@ -51,7 +51,8 @@ export function ProductResultGrid({ results, loading, taskId, previewUrl, error,
               className="group overflow-hidden rounded-lg border border-line bg-white transition hover:-translate-y-1 hover:border-studio-200 hover:shadow-card"
             >
               <SmartImage
-                src={result.url}
+                src={result.previewUrl || result.url}
+                fallbackSrc={result.url}
                 alt={result.title}
                 priority={index === 0}
                 previewWidth={720}

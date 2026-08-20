@@ -389,7 +389,13 @@ export default function HistoryPage() {
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {tasks.map((task, index) => {
               const resultImage = getHistoryTaskResult(task);
-              const image = resultImage || task.inputImageUrl || "";
+              const image =
+                task.resultImagePreviewUrl ||
+                task.resultImagePreviewUrls?.[0] ||
+                resultImage ||
+                task.inputImagePreviewUrl ||
+                task.inputImageUrl ||
+                "";
               const canDelete = task.status === "succeeded" || task.status === "failed";
               return (
                 <Card key={task.id} className="overflow-hidden">
@@ -420,9 +426,10 @@ export default function HistoryPage() {
                   {image ? (
                     <SmartImage
                       src={image}
+                      fallbackSrc={resultImage || task.inputImageUrl || undefined}
                       alt={getHistoryTaskTitle(task)}
-                      priority={index < 3}
-                      previewWidth={640}
+                      priority={index < 2}
+                      previewWidth={false}
                       sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
                       className="h-56 w-full rounded-none border-0"
                     />

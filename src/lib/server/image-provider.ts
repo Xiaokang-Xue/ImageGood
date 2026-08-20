@@ -10,6 +10,7 @@ import type { ImageOutputFormat, ImageQuality, ImageSize } from "@/types/image";
 export interface ProviderEditInput {
   taskId?: string;
   image: File;
+  referenceImages?: File[];
   prompt: string;
   size: ImageSize;
   quality: ImageQuality;

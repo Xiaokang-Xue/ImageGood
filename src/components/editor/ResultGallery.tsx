@@ -54,7 +54,8 @@ export function ResultGallery({ results, loading, taskId, previewUrl, error, onS
         <div>
           <div className="overflow-hidden rounded-2xl border border-line bg-slate-50 shadow-sm">
             <SmartImage
-              src={mainResult.url}
+              src={mainResult.previewUrl || mainResult.url}
+              fallbackSrc={mainResult.url}
               alt={mainResult.label || "生成结果"}
               priority
               previewWidth={1280}

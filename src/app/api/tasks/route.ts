@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasPaidOrderForUser } from "@/lib/db";
 import { deleteUserTasks, listUserTasks } from "@/lib/server/image-task-service";
-import { toPublicImageTask } from "@/lib/server/image-task-access";
+import { toPublicImageTask, withImageTaskPreviews } from "@/lib/server/image-task-access";
 import { getCurrentUser } from "@/lib/session";
 import type { ImageTaskStatus, ImageTaskTimeRange, ImageTaskType } from "@/types/task";
 
@@ -53,18 +53,25 @@ export async function GET(request: Request) {
     }),
     hasPaidOrderForUser(user.id)
   ]);
+  const tasks = await Promise.all(
+    result.tasks.map(async (storedTask) => {
+      const task = toPublicImageTask(storedTask, hasPaidOrder);
+      return withImageTaskPreviews(
+        {
+          ...task,
+          prompt: task.prompt.slice(0, 500),
+          resultImages: task.resultImages?.slice(0, 1) ?? []
+        },
+        480
+      );
+    })
+  );
+
   return NextResponse.json(
     {
       ok: true,
       ...result,
-      tasks: result.tasks.map((storedTask) => {
-        const task = toPublicImageTask(storedTask, hasPaidOrder);
-        return {
-          ...task,
-          prompt: task.prompt.slice(0, 500),
-          resultImages: task.resultImages?.slice(0, 1) ?? []
-        };
-      })
+      tasks
     },
     {
       headers: { "Cache-Control": "private, no-store" }

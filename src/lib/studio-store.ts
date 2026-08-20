@@ -32,7 +32,8 @@ type PersistedStudioState = Pick<
 
 function persistableResult(result: EditImageResult | null) {
   if (!result || !isPersistableImageUrl(result.url)) return null;
-  return result;
+  const { previewUrl: _previewUrl, ...persistable } = result;
+  return persistable;
 }
 
 function persistableHistoryItem(item: HistoryItem) {
@@ -98,7 +99,10 @@ export const useStudioStore = create<StudioState>()(
         currentImageFile: null,
         prompt: state.prompt,
         selectedTool: state.selectedTool,
-        editResults: state.editResults.filter((result) => isPersistableImageUrl(result.url)).slice(-5),
+        editResults: state.editResults
+          .filter((result) => isPersistableImageUrl(result.url))
+          .map((result) => persistableResult(result) as EditImageResult)
+          .slice(-5),
         selectedResult: persistableResult(state.selectedResult),
         history: state.history.slice(-10).map(persistableHistoryItem)
       })

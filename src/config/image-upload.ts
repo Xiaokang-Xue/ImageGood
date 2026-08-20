@@ -1,5 +1,6 @@
 export const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024;
 export const MAX_PROVIDER_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_EDIT_REFERENCE_IMAGES = 4;
 export const PROVIDER_INPUT_IMAGE_FORMAT = "png" as const;
 export const PROVIDER_INPUT_IMAGE_MIME_TYPE = "image/png";
 

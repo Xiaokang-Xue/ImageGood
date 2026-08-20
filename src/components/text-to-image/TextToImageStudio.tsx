@@ -49,6 +49,7 @@ export function TextToImageStudio() {
   const [errorActionHref, setErrorActionHref] = useState("");
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
+  const [resultPreviewUrl, setResultPreviewUrl] = useState("");
   const [mobileInputActive, setMobileInputActive] = useState(true);
   const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
@@ -81,6 +82,7 @@ export function TextToImageStudio() {
     setErrorActionHref("");
     setCreditPrompt(null);
     setResultUrl("");
+    setResultPreviewUrl("");
     setTaskId("");
     setMobileInputActive(false);
     pollingController.current?.abort();
@@ -108,6 +110,7 @@ export function TextToImageStudio() {
       }
 
       setResultUrl(url);
+      setResultPreviewUrl(task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url);
       setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
@@ -268,7 +271,8 @@ export function TextToImageStudio() {
               <GenerationErrorPanel message={error} onRetry={handleGenerate} minHeightClassName="min-h-[500px]" className="w-full" />
             ) : resultUrl ? (
               <SmartImage
-                src={resultUrl}
+                src={resultPreviewUrl || resultUrl}
+                fallbackSrc={resultUrl}
                 alt="文生图生成结果"
                 priority
                 previewWidth={1280}

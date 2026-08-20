@@ -68,7 +68,9 @@ interface PosterStudioDraft {
 }
 
 function persistablePosterResult(result: PosterImageResult | null) {
-  return result && isPersistableImageUrl(result.url) ? result : null;
+  if (!result || !isPersistableImageUrl(result.url)) return null;
+  const { previewUrl: _previewUrl, ...persistableResult } = result;
+  return persistableResult;
 }
 
 export function PosterStudio({ initialUsage }: PosterStudioProps) {
@@ -140,7 +142,12 @@ export function PosterStudio({ initialUsage }: PosterStudioProps) {
 
         const url = task.resultImages?.[0] || task.resultImageUrl;
         if (!url) throw new Error("生成完成但未检测到结果图片");
-        nextResult = { id: task.id, url, title: "封面生成结果" };
+        nextResult = {
+          id: task.id,
+          url,
+          previewUrl: task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url,
+          title: "封面生成结果"
+        };
       }
 
       setResult(nextResult);
@@ -274,7 +281,8 @@ export function PosterStudio({ initialUsage }: PosterStudioProps) {
             <div>
               <div className="flex min-h-[420px] items-center justify-center rounded-xl border border-neutral-300 bg-neutral-100 p-3 sm:p-5">
                 <SmartImage
-                  src={result.url}
+                  src={result.previewUrl || result.url}
+                  fallbackSrc={result.url}
                   alt="AI 生成的封面海报"
                   priority
                   previewWidth={1280}

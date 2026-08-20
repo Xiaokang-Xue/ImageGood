@@ -125,7 +125,7 @@ export function buildEditPrompt(tool: EditTool, userPrompt?: string) {
       "扩展内容应延续原图的透视、光线、景深和纹理，不复制主体。"
     ]),
     custom: joinPrompt([
-      "任务：按要求精确编辑图片。",
+      "任务：根据用户要求处理图片。",
       `用户要求（优先执行）：${requirement}。`,
       "只修改要求涉及的对象和区域，未提及内容保持不变。",
       "结果应自然可信，不添加用户未要求的阴影、描边、文字、物体或特效。"
