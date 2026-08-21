@@ -710,10 +710,7 @@ export async function runEditTask(input: {
 }) {
   const provider = getImageProviderService();
   const referenceImages = input.referenceImages || [];
-  const basePrompt = appendImageSizeGuidance(buildEditPrompt(input.tool, input.prompt), input.size);
-  const prompt = referenceImages.length
-    ? `${basePrompt}\n参考图说明：第一张图片是待修改主图，其余图片仅作为内容、风格或细节参考；以用户要求为准，不要擅自替换主图主体。`
-    : basePrompt;
+  const prompt = appendImageSizeGuidance(buildEditPrompt(input.tool, input.prompt), input.size);
   const task = createTask({
     requestId: input.requestId,
     userId: input.userId,

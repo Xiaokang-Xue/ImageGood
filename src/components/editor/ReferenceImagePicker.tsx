@@ -152,7 +152,7 @@ export function ReferenceImagePicker({ disabled = false, onChange }: ReferenceIm
               ))}
             </div>
           ) : (
-            <p className="text-xs leading-5 text-neutral-500">可补充人物、商品、风格或细节参考，主图仍是最终编辑对象。</p>
+            <p className="text-xs leading-5 text-neutral-500">可上传多张图片，并在需求中说明希望如何组合、参考或修改。</p>
           )}
 
           {items.length < MAX_EDIT_REFERENCE_IMAGES ? (
