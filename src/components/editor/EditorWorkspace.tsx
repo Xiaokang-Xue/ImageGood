@@ -148,6 +148,7 @@ export function EditorWorkspace({ initialTool }: EditorWorkspaceProps) {
             id: "result-1",
             url,
             previewUrl: task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url,
+            placeholderUrl: task.resultImagePlaceholderUrls?.[0] || task.resultImagePlaceholderUrl || undefined,
             type: "edited",
             label: "生成结果"
           };

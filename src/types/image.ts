@@ -11,7 +11,15 @@ export type ImageApiMode = "real" | "mock";
 export type ImageProvider = "mock" | "codex" | "openai";
 export type ImageQuality = "low" | "medium" | "high" | "auto";
 export type ImageOutputFormat = "png" | "jpeg" | "webp";
-export type ImageSize = "1024x1024" | "1024x1536" | "1536x1024" | "auto";
+export type ImageSize =
+  | "1024x1024"
+  | "1024x1536"
+  | "1536x1024"
+  | "1152x1536"
+  | "1536x1152"
+  | "1536x864"
+  | "864x1536"
+  | "auto";
 export type TextToImageStyle = "realistic" | "product" | "poster" | "illustration" | "minimal";
 
 export type ProductTemplate = "white-bg" | "lifestyle" | "festival" | "social";
@@ -42,6 +50,7 @@ export interface EditImageResult {
   id: string;
   url: string;
   previewUrl?: string;
+  placeholderUrl?: string;
   type: "edited";
   label: string;
 }
@@ -79,6 +88,7 @@ export interface ProductImageResult {
   id: string;
   url: string;
   previewUrl?: string;
+  placeholderUrl?: string;
   template: string;
   title: string;
 }
@@ -107,6 +117,7 @@ export interface PosterImageResult {
   id: string;
   url: string;
   previewUrl?: string;
+  placeholderUrl?: string;
   title: string;
 }
 

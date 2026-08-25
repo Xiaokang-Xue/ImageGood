@@ -27,8 +27,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cosBucket = process.env.TENCENT_COS_BUCKET?.trim();
+  const cosRegion = process.env.TENCENT_COS_REGION?.trim();
+  const cosOrigin = cosBucket && cosRegion ? `https://${cosBucket}.cos.${cosRegion}.myqcloud.com` : "";
+
   return (
     <html lang="zh-CN">
+      {cosOrigin ? (
+        <head>
+          <link rel="dns-prefetch" href={cosOrigin} />
+          <link rel="preconnect" href={cosOrigin} crossOrigin="anonymous" />
+        </head>
+      ) : null}
       <body>
         <SiteHeader />
         <PageViewTracker />

@@ -427,6 +427,7 @@ export default function HistoryPage() {
                     <SmartImage
                       src={image}
                       fallbackSrc={resultImage || task.inputImageUrl || undefined}
+                      placeholderSrc={task.resultImagePlaceholderUrl || task.resultImagePlaceholderUrls?.[0] || undefined}
                       alt={getHistoryTaskTitle(task)}
                       priority={index < 2}
                       previewWidth={false}

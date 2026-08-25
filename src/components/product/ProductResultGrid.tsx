@@ -53,6 +53,7 @@ export function ProductResultGrid({ results, loading, taskId, previewUrl, error,
               <SmartImage
                 src={result.previewUrl || result.url}
                 fallbackSrc={result.url}
+                placeholderSrc={result.placeholderUrl}
                 alt={result.title}
                 priority={index === 0}
                 previewWidth={720}

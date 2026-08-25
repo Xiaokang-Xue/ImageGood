@@ -35,6 +35,8 @@ export interface ImageTaskRecord {
   resultImages?: string[] | null;
   resultImagePreviewUrl?: string | null;
   resultImagePreviewUrls?: string[] | null;
+  resultImagePlaceholderUrl?: string | null;
+  resultImagePlaceholderUrls?: string[] | null;
   isFreeTrial?: boolean;
   hasWatermark?: boolean;
   unlockedAt?: string | null;

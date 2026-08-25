@@ -53,6 +53,7 @@ interface BatchResultItem {
   taskId: string;
   resultUrl: string;
   previewUrl: string;
+  placeholderUrl: string;
   error: string;
 }
 
@@ -66,6 +67,7 @@ const initialResults = (count: number): BatchResultItem[] =>
     taskId: "",
     resultUrl: "",
     previewUrl: "",
+    placeholderUrl: "",
     error: ""
   }));
 
@@ -167,7 +169,7 @@ export function BatchGenerationStudio() {
   const runResult = async (index: number, controller: AbortController) => {
     const sourceIndex = pattern === "repeat" ? 0 : index;
     const input = inputs[sourceIndex];
-    updateResult(index, { status: "submitting", taskId: "", resultUrl: "", previewUrl: "", error: "" });
+    updateResult(index, { status: "submitting", taskId: "", resultUrl: "", previewUrl: "", placeholderUrl: "", error: "" });
 
     try {
       const response = category === "image"
@@ -197,6 +199,7 @@ export function BatchGenerationStudio() {
         status: "succeeded",
         resultUrl,
         previewUrl: task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || resultUrl,
+        placeholderUrl: task.resultImagePlaceholderUrls?.[0] || task.resultImagePlaceholderUrl || "",
         error: ""
       });
       return true;
@@ -409,6 +412,7 @@ export function BatchGenerationStudio() {
                   <SmartImage
                     src={item.previewUrl || item.resultUrl}
                     fallbackSrc={item.resultUrl}
+                    placeholderSrc={item.placeholderUrl || undefined}
                     alt={`批量生成结果 ${index + 1}`}
                     previewWidth={720}
                     sizes="(min-width: 768px) 40vw, 100vw"

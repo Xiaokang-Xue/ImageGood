@@ -56,6 +56,7 @@ export function ResultGallery({ results, loading, taskId, previewUrl, error, onS
             <SmartImage
               src={mainResult.previewUrl || mainResult.url}
               fallbackSrc={mainResult.url}
+              placeholderSrc={mainResult.placeholderUrl}
               alt={mainResult.label || "生成结果"}
               priority
               previewWidth={1280}

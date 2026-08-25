@@ -77,6 +77,7 @@ export function SingleImageEditToolStudio({
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
   const [resultPreviewUrl, setResultPreviewUrl] = useState("");
+  const [resultPlaceholderUrl, setResultPlaceholderUrl] = useState("");
   const [mobileInputActive, setMobileInputActive] = useState(true);
   const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
@@ -112,6 +113,7 @@ export function SingleImageEditToolStudio({
     setTaskId("");
     setResultUrl("");
     setResultPreviewUrl("");
+    setResultPlaceholderUrl("");
     setMobileInputActive(false);
     pollingController.current?.abort();
     const controller = new AbortController();
@@ -137,6 +139,7 @@ export function SingleImageEditToolStudio({
 
       setResultUrl(url);
       setResultPreviewUrl(task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url);
+      setResultPlaceholderUrl(task.resultImagePlaceholderUrls?.[0] || task.resultImagePlaceholderUrl || "");
       setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
@@ -233,6 +236,7 @@ export function SingleImageEditToolStudio({
               setImageUrl(previewUrl);
               setImageFile(file);
               setResultUrl("");
+              setResultPlaceholderUrl("");
               setError("");
               setMobileInputActive(true);
             }}
@@ -293,6 +297,7 @@ export function SingleImageEditToolStudio({
               <SmartImage
                 src={resultPreviewUrl || resultUrl}
                 fallbackSrc={resultUrl}
+                placeholderSrc={resultPlaceholderUrl || undefined}
                 alt={resultAlt}
                 priority
                 previewWidth={1280}

@@ -29,7 +29,7 @@ export default function HistoryDetailPage() {
     setLoading(true);
     setError("");
     apiClient
-      .getTask(params.id)
+      .getTask(params.id, { previewWidth: 1280 })
       .then((response) => setTask(response.task))
       .catch((requestError) => {
         if (isUnauthorizedError(requestError)) {
@@ -77,6 +77,11 @@ export default function HistoryDetailPage() {
     ? task.resultImagePreviewUrls
     : task.resultImagePreviewUrl
       ? [task.resultImagePreviewUrl]
+      : [];
+  const placeholderImages = task.resultImagePlaceholderUrls?.length
+    ? task.resultImagePlaceholderUrls
+    : task.resultImagePlaceholderUrl
+      ? [task.resultImagePlaceholderUrl]
       : [];
   const canDelete = task.status === "succeeded" || task.status === "failed";
 
@@ -137,6 +142,7 @@ export default function HistoryDetailPage() {
                   <SmartImage
                     src={previewImages[index] || image}
                     fallbackSrc={image}
+                    placeholderSrc={placeholderImages[index] || undefined}
                     alt={`生成结果 ${index + 1}`}
                     priority={index === 0}
                     previewWidth={false}

@@ -4,7 +4,16 @@ import { ImageInputNormalizationError, normalizeImageInputFile } from "@/lib/ser
 const SUPPORTED_TOOLS = new Set<EditTool>(["background", "remove", "enhance", "style", "expand", "custom"]);
 const SUPPORTED_QUALITIES = new Set<ImageQuality>(["low", "medium", "high", "auto"]);
 const SUPPORTED_OUTPUT_FORMATS = new Set<ImageOutputFormat>(["png", "jpeg", "webp"]);
-const SUPPORTED_IMAGE_SIZES = new Set<ImageSize>(["1024x1024", "1024x1536", "1536x1024", "auto"]);
+const SUPPORTED_IMAGE_SIZES = new Set<ImageSize>([
+  "1024x1024",
+  "1024x1536",
+  "1536x1024",
+  "1152x1536",
+  "1536x1152",
+  "1536x864",
+  "864x1536",
+  "auto"
+]);
 
 export class ImageRequestError extends Error {
   code: string;

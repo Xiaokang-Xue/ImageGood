@@ -18,8 +18,9 @@ function normalize<T extends string>(value: string, allowed: Set<T>, fallback: T
 }
 
 function sizeFromRatio(ratio: ProductRatio): ImageSize {
-  if (ratio === "3:4") return "1024x1536";
-  if (ratio === "4:3" || ratio === "16:9") return "1536x1024";
+  if (ratio === "3:4") return "1152x1536";
+  if (ratio === "4:3") return "1536x1152";
+  if (ratio === "16:9") return "1536x864";
   return "1024x1024";
 }
 

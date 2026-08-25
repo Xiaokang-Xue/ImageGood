@@ -723,8 +723,10 @@ export const apiClient = {
     return requestJson<ImageTaskListResponse>(`/api/tasks${query ? `?${query}` : ""}`);
   },
 
-  getTask(id: string) {
-    return requestJson<ImageTaskDetailResponse>(`/api/tasks/${id}`);
+  getTask(id: string, options?: { previewWidth?: number }) {
+    const previewWidth = options?.previewWidth;
+    const query = previewWidth ? `?previewWidth=${encodeURIComponent(String(previewWidth))}` : "";
+    return requestJson<ImageTaskDetailResponse>(`/api/tasks/${id}${query}`);
   },
 
   updateTask(id: string, payload: { title?: string | null; isFavorite?: boolean }) {

@@ -3,6 +3,7 @@ import { assertContactVerified } from "@/lib/server/auth-guards";
 import { imageErrorResponse } from "@/lib/server/image-route-utils";
 import { ImageRequestError } from "@/lib/server/image-validation";
 import { runPosterTask } from "@/lib/server/image-task-service";
+import { resolveGeneratedImageSize } from "@/lib/server/image-size-policy";
 import { getCurrentUser } from "@/lib/session";
 import type { ImageSize, PosterImageRequest, PosterUsage } from "@/types/image";
 
@@ -14,7 +15,7 @@ function normalize<T extends string>(value: unknown, allowed: Set<T>, fallback: 
   return typeof value === "string" && allowed.has(value as T) ? (value as T) : fallback;
 }
 
-function sizeForUsage(usage: PosterUsage): ImageSize {
+function sizeForUsage(usage: PosterUsage): Exclude<ImageSize, "auto"> {
   return usage === "wechat" || usage === "course" ? "1536x1024" : "1024x1536";
 }
 
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       userId: user.id,
       usage,
       prompt,
-      size: sizeForUsage(usage)
+      size: resolveGeneratedImageSize({ prompt, fallback: sizeForUsage(usage) })
     });
 
     return NextResponse.json(data);

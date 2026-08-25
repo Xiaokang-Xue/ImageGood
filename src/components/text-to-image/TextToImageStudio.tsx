@@ -50,6 +50,7 @@ export function TextToImageStudio() {
   const [taskId, setTaskId] = useState("");
   const [resultUrl, setResultUrl] = useState("");
   const [resultPreviewUrl, setResultPreviewUrl] = useState("");
+  const [resultPlaceholderUrl, setResultPlaceholderUrl] = useState("");
   const [mobileInputActive, setMobileInputActive] = useState(true);
   const [creditPrompt, setCreditPrompt] = useState<CreditPurchasePromptVariant | null>(null);
   const pollingController = useRef<AbortController | null>(null);
@@ -83,6 +84,7 @@ export function TextToImageStudio() {
     setCreditPrompt(null);
     setResultUrl("");
     setResultPreviewUrl("");
+    setResultPlaceholderUrl("");
     setTaskId("");
     setMobileInputActive(false);
     pollingController.current?.abort();
@@ -111,6 +113,7 @@ export function TextToImageStudio() {
 
       setResultUrl(url);
       setResultPreviewUrl(task.resultImagePreviewUrls?.[0] || task.resultImagePreviewUrl || url);
+      setResultPlaceholderUrl(task.resultImagePlaceholderUrls?.[0] || task.resultImagePlaceholderUrl || "");
       setCreditPrompt((await refreshCreditsAfterGeneration()) ? "experience-complete" : null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
@@ -273,6 +276,7 @@ export function TextToImageStudio() {
               <SmartImage
                 src={resultPreviewUrl || resultUrl}
                 fallbackSrc={resultUrl}
+                placeholderSrc={resultPlaceholderUrl || undefined}
                 alt="文生图生成结果"
                 priority
                 previewWidth={1280}

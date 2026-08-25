@@ -62,7 +62,12 @@ function storageProxyKey(imageUrl: string | null | undefined) {
 }
 
 async function createDirectPreviewUrl(imageUrl: string | null | undefined, width: number) {
-  if (!isCosStorageEnabled()) return imageUrl || null;
+  if (!imageUrl) return null;
+  if (!isCosStorageEnabled()) {
+    if (!imageUrl.startsWith("/api/task-images/")) return imageUrl;
+    const separator = imageUrl.includes("?") ? "&" : "?";
+    return `${imageUrl}${separator}image_preview=${width}`;
+  }
   const key = storageProxyKey(imageUrl);
   if (!key) return imageUrl || null;
 
@@ -78,20 +83,32 @@ export async function withImageTaskPreviews(task: ImageTaskRecord, width: number
     ? task.resultImagePreviewUrls
     : task.resultImages || [];
   const shouldPreviewInput = resultImages.length === 0 && task.status !== "pending" && task.status !== "processing";
-  const [inputImagePreviewUrl, resultImagePreviewUrls] = await Promise.all([
+  const placeholderWidth = Math.min(240, width);
+  const [inputImagePreviewUrl, resultPreviewPairs] = await Promise.all([
     shouldPreviewInput ? createDirectPreviewUrl(task.inputImageUrl, width) : Promise.resolve(null),
     Promise.all(
-      resultImages.map(async (imageUrl) =>
-        (await createDirectPreviewUrl(imageUrl, width)) || imageUrl
-      )
+      resultImages.map(async (imageUrl) => {
+        const [previewUrl, placeholderUrl] = await Promise.all([
+          createDirectPreviewUrl(imageUrl, width),
+          createDirectPreviewUrl(imageUrl, placeholderWidth)
+        ]);
+        return {
+          previewUrl: previewUrl || imageUrl,
+          placeholderUrl: placeholderUrl && placeholderUrl !== previewUrl ? placeholderUrl : ""
+        };
+      })
     )
   ]);
+  const resultImagePreviewUrls = resultPreviewPairs.map((item) => item.previewUrl);
+  const resultImagePlaceholderUrls = resultPreviewPairs.map((item) => item.placeholderUrl);
 
   return {
     ...task,
     inputImagePreviewUrl,
     resultImagePreviewUrl:
       resultImagePreviewUrls[0] || (await createDirectPreviewUrl(task.resultImageUrl, width)),
-    resultImagePreviewUrls
+    resultImagePreviewUrls,
+    resultImagePlaceholderUrl: resultImagePlaceholderUrls[0] || null,
+    resultImagePlaceholderUrls
   } satisfies ImageTaskRecord;
 }

@@ -18,6 +18,7 @@ const ratioClasses: Record<SmartImageRatio, string> = {
 interface SmartImageProps {
   src: string;
   fallbackSrc?: string;
+  placeholderSrc?: string;
   alt: string;
   className?: string;
   imageClassName?: string;
@@ -62,6 +63,7 @@ function imagePreviewSource(src: string, width: number | false) {
 export function SmartImage({
   src,
   fallbackSrc,
+  placeholderSrc,
   alt,
   className,
   imageClassName,
@@ -81,6 +83,7 @@ export function SmartImage({
   const [requestVersion, setRequestVersion] = useState(0);
   const [previewDisabled, setPreviewDisabled] = useState(false);
   const [fallbackActive, setFallbackActive] = useState(false);
+  const [placeholderFailed, setPlaceholderFailed] = useState(false);
   const retryTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -94,13 +97,14 @@ export function SmartImage({
     setRequestVersion(0);
     setPreviewDisabled(false);
     setFallbackActive(false);
+    setPlaceholderFailed(false);
 
     return () => {
       if (retryTimerRef.current !== null) {
         window.clearTimeout(retryTimerRef.current);
       }
     };
-  }, [fallbackSrc, src]);
+  }, [fallbackSrc, placeholderSrc, src]);
 
   const effectivePreviewWidth = previewWidth === false ? false : previewWidth ?? (priority ? 1280 : 720);
   const previewSrc = imagePreviewSource(src, effectivePreviewWidth);
@@ -194,6 +198,23 @@ export function SmartImage({
               ) : null}
             </div>
           ) : null}
+          {placeholderSrc && placeholderSrc !== resolvedSrc && !placeholderFailed ? (
+            <img
+              src={placeholderSrc}
+              alt=""
+              aria-hidden="true"
+              className={cn(
+                "absolute inset-0 h-full w-full scale-[1.02] object-cover blur-sm transition-opacity duration-300",
+                loaded ? "opacity-0" : "opacity-100",
+                imageClassName
+              )}
+              loading={priority ? "eager" : "lazy"}
+              decoding="async"
+              fetchPriority={priority ? "high" : "low"}
+              referrerPolicy="no-referrer"
+              onError={() => setPlaceholderFailed(true)}
+            />
+          ) : null}
           <img
             key={requestVersion}
             src={resolvedSrc}
@@ -201,7 +222,7 @@ export function SmartImage({
             width={width}
             height={height}
             className={cn(
-              "h-full w-full object-cover transition-opacity duration-300",
+              "relative h-full w-full object-cover transition-opacity duration-300",
               loaded ? "opacity-100" : "opacity-0",
               imageClassName
             )}

@@ -58,6 +58,9 @@ let cosClient: CosClient | null = null;
 
 const OBJECT_CACHE_TTL_MS = 10 * 60 * 1000;
 const OBJECT_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const SIGNED_URL_CACHE_TTL_MS = 8 * 60 * 1000;
+const SIGNED_URL_CACHE_MAX_ENTRIES = 500;
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 const OBJECT_CACHE_MAX_ITEM_BYTES = 16 * 1024 * 1024;
 const objectBufferCache = new Map<string, { buffer: Buffer; expiresAt: number }>();
 let objectBufferCacheBytes = 0;
@@ -313,12 +316,26 @@ export async function getCosObjectSignedUrl(key: string, query?: string) {
   const config = getCosConfig();
   const client = await getCosClient();
   const normalizedKey = normalizeCosKey(key);
+  const cacheKey = `${normalizedKey}?${query || ""}`;
+  const cached = signedUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.url;
+  }
+  if (cached) signedUrlCache.delete(cacheKey);
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
     const finish = (url?: string) => {
       if (settled || !url) return;
       settled = true;
+      if (signedUrlCache.size >= SIGNED_URL_CACHE_MAX_ENTRIES) {
+        const oldestKey = signedUrlCache.keys().next().value;
+        if (oldestKey) signedUrlCache.delete(oldestKey);
+      }
+      signedUrlCache.set(cacheKey, {
+        url,
+        expiresAt: Date.now() + SIGNED_URL_CACHE_TTL_MS
+      });
       resolve(url);
     };
 

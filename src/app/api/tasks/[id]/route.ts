@@ -10,7 +10,7 @@ import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser();
 
@@ -32,7 +32,11 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
     const hasPaidOrder = await hasPaidOrderForUser(user.id);
     const publicTask = toPublicImageTask(task, hasPaidOrder);
-    return NextResponse.json({ ok: true, task: await withImageTaskPreviews(publicTask, 1280) });
+    const requestedWidth = Number.parseInt(new URL(request.url).searchParams.get("previewWidth") || "1024", 10);
+    const previewWidth = Number.isFinite(requestedWidth)
+      ? Math.min(1600, Math.max(480, requestedWidth))
+      : 1024;
+    return NextResponse.json({ ok: true, task: await withImageTaskPreviews(publicTask, previewWidth) });
   } catch (error) {
     console.error("[tasks] failed to read task", {
       taskId: params.id,

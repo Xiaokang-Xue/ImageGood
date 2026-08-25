@@ -12,7 +12,7 @@ export function parseImagePreviewWidth(value: string | null) {
 }
 
 export function cosImagePreviewQuery(width: number) {
-  return `imageMogr2/thumbnail/${width}x>/format/webp/quality/85`;
+  return `imageMogr2/thumbnail/${width}x>/format/webp/quality/80/strip`;
 }
 
 export async function createImagePreview(buffer: Buffer, width: number) {
