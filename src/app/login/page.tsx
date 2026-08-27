@@ -6,15 +6,13 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
+import { PhoneNumberField } from "@/components/auth/PhoneNumberField";
+import { composePhoneNumber, isValidLocalPhone } from "@/config/phone-countries";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
 import { setCurrentUserCache } from "@/lib/client-current-user";
 
 type LoginMode = "phone" | "email";
 type PhoneLoginMethod = "code" | "password";
-
-function isValidPhone(phone: string) {
-  return /^1[3-9]\d{9}$/.test(phone.trim());
-}
 
 export default function LoginPage() {
   return (
@@ -29,6 +27,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/";
   const [mode, setMode] = useState<LoginMode>("phone");
+  const [phoneCountry, setPhoneCountry] = useState("CN");
   const [phone, setPhone] = useState("");
   const [smsCode, setSmsCode] = useState("");
   const [phonePassword, setPhonePassword] = useState("");
@@ -62,14 +61,17 @@ function LoginForm() {
   const sendSms = async () => {
     setError("");
     setMessage("");
-    if (!isValidPhone(phone)) {
+    if (!isValidLocalPhone(phoneCountry, phone)) {
       setError("请输入正确的手机号");
       return;
     }
 
     setSmsLoading(true);
     try {
-      const response = await apiClient.sendSmsCode({ phone, scene: "login" });
+      const response = await apiClient.sendSmsCode({
+        phone: composePhoneNumber(phoneCountry, phone),
+        scene: "login"
+      });
       setMessage(response.message || "验证码已发送");
       setSmsCountdown(60);
     } catch (requestError) {
@@ -80,16 +82,17 @@ function LoginForm() {
   };
 
   const handlePhoneLogin = async () => {
-    if (!isValidPhone(phone)) {
+    if (!isValidLocalPhone(phoneCountry, phone)) {
       setError("请输入正确的手机号");
       return;
     }
+    const completePhone = composePhoneNumber(phoneCountry, phone);
     if (phoneLoginMethod === "password") {
       if (!phonePassword) {
         setError("请输入密码");
         return;
       }
-      const response = await apiClient.loginPhone({ phone, password: phonePassword });
+      const response = await apiClient.loginPhone({ phone: completePhone, password: phonePassword });
       setCurrentUserCache(response.user);
       router.push(redirect);
       router.refresh();
@@ -101,7 +104,7 @@ function LoginForm() {
       return;
     }
 
-    const response = await apiClient.loginPhone({ phone, code: smsCode });
+    const response = await apiClient.loginPhone({ phone: completePhone, code: smsCode });
     setCurrentUserCache(response.user);
     router.push(redirect);
     router.refresh();
@@ -177,17 +180,16 @@ function LoginForm() {
         <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
           {mode === "phone" ? (
             <>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">手机号</span>
-                <input
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))}
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
-                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-                />
-              </label>
+              <PhoneNumberField
+                countryCode={phoneCountry}
+                value={phone}
+                onCountryChange={(countryCode) => {
+                  setPhoneCountry(countryCode);
+                  setPhone("");
+                }}
+                onChange={setPhone}
+                required
+              />
               <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
                 {(["code", "password"] as PhoneLoginMethod[]).map((item) => (
                   <button

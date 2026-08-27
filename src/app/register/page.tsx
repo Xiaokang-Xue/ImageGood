@@ -6,14 +6,12 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
+import { PhoneNumberField } from "@/components/auth/PhoneNumberField";
+import { composePhoneNumber, isValidLocalPhone } from "@/config/phone-countries";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
 import { setCurrentUserCache } from "@/lib/client-current-user";
 
 type RegisterMode = "phone" | "email";
-
-function isValidPhone(phone: string) {
-  return /^1[3-9]\d{9}$/.test(phone.trim());
-}
 
 export default function RegisterPage() {
   return (
@@ -29,6 +27,7 @@ function RegisterForm() {
   const redirect = searchParams.get("redirect") || "/";
   const [mode, setMode] = useState<RegisterMode>("phone");
   const [name, setName] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState("CN");
   const [phone, setPhone] = useState("");
   const [smsCode, setSmsCode] = useState("");
   const [smsCountdown, setSmsCountdown] = useState(0);
@@ -62,14 +61,17 @@ function RegisterForm() {
   const sendSms = async () => {
     setError("");
     setMessage("");
-    if (!isValidPhone(phone)) {
+    if (!isValidLocalPhone(phoneCountry, phone)) {
       setError("请输入正确的手机号");
       return;
     }
 
     setSmsLoading(true);
     try {
-      const response = await apiClient.sendSmsCode({ phone, scene: "register" });
+      const response = await apiClient.sendSmsCode({
+        phone: composePhoneNumber(phoneCountry, phone),
+        scene: "register"
+      });
       setMessage(response.message || "验证码已发送");
       setSmsCountdown(60);
     } catch (requestError) {
@@ -109,7 +111,7 @@ function RegisterForm() {
 
   const handlePhoneRegister = async () => {
     if (!validateShared()) return;
-    if (!isValidPhone(phone)) {
+    if (!isValidLocalPhone(phoneCountry, phone)) {
       setError("请输入正确的手机号");
       return;
     }
@@ -121,7 +123,7 @@ function RegisterForm() {
 
     const response = await apiClient.registerPhone({
       name,
-      phone,
+      phone: composePhoneNumber(phoneCountry, phone),
       code: smsCode,
       password,
       confirmPassword,
@@ -243,17 +245,16 @@ function RegisterForm() {
 
           {mode === "phone" ? (
             <>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">手机号</span>
-                <input
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))}
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
-                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-                />
-              </label>
+              <PhoneNumberField
+                countryCode={phoneCountry}
+                value={phone}
+                onCountryChange={(countryCode) => {
+                  setPhoneCountry(countryCode);
+                  setPhone("");
+                }}
+                onChange={setPhone}
+                required
+              />
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">短信验证码</span>
                 <div className="mt-2 grid grid-cols-[1fr_128px] gap-2">

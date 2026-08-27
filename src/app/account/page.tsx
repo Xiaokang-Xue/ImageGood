@@ -3,28 +3,32 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { ArrowRight, Check, Copy, CreditCard, History, KeyRound, LogOut, Mail, ShieldCheck, Smartphone } from "lucide-react";
+import { PhoneNumberField } from "@/components/auth/PhoneNumberField";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PasswordField } from "@/components/ui/PasswordField";
+import { composePhoneNumber, isValidLocalPhone, maskPhoneNumber } from "@/config/phone-countries";
 import { apiClient, getImageErrorMessage } from "@/lib/api-client";
-import {
-  clearCurrentUserCache,
-  getCurrentUserCached,
-  setCurrentUserCache
-} from "@/lib/client-current-user";
+import { clearCurrentUserCache, getCurrentUserCached, setCurrentUserCache } from "@/lib/client-current-user";
 import type { CreditTransactionRecord } from "@/types/billing";
 import type { PublicUser } from "@/types/user";
 
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<PublicUser | null>(null);
-  const [taskSummary, setTaskSummary] = useState({
-    succeeded: 0,
-    latestCreatedAt: null as string | null
-  });
+  const [succeededTasks, setSucceededTasks] = useState(0);
   const [transactions, setTransactions] = useState<CreditTransactionRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [phonePanelOpen, setPhonePanelOpen] = useState(false);
+  const [phoneCountry, setPhoneCountry] = useState("CN");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneCountdown, setPhoneCountdown] = useState(0);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [passwordPanelOpen, setPasswordPanelOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,12 +38,6 @@ export default function AccountPage() {
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState("");
   const [verificationError, setVerificationError] = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [phoneCode, setPhoneCode] = useState("");
-  const [phoneCountdown, setPhoneCountdown] = useState(0);
-  const [phoneLoading, setPhoneLoading] = useState(false);
-  const [phoneMessage, setPhoneMessage] = useState("");
-  const [phoneError, setPhoneError] = useState("");
   const [myInviteCode, setMyInviteCode] = useState("");
   const [inviteCouponSummary, setInviteCouponSummary] = useState({ count: 0, amountCents: 0 });
   const [inviteCopied, setInviteCopied] = useState(false);
@@ -52,17 +50,12 @@ export default function AccountPage() {
     ]);
     if (!currentUser) throw new Error("UNAUTHORIZED");
     setUser(currentUser);
-    setTaskSummary({
-      succeeded: taskResponse.summary.succeeded,
-      latestCreatedAt: taskResponse.summary.latestCreatedAt
-    });
+    setSucceededTasks(taskResponse.summary.succeeded);
     setTransactions(transactionResponse.transactions);
   };
 
   useEffect(() => {
-    refreshAccount()
-      .catch(() => router.push("/login?redirect=/account"))
-      .finally(() => setLoading(false));
+    refreshAccount().catch(() => router.push("/login?redirect=/account")).finally(() => setLoading(false));
   }, [router]);
 
   useEffect(() => {
@@ -109,7 +102,6 @@ export default function AccountPage() {
       const response = await apiClient.resendVerificationEmail();
       setVerificationMessage(response.message);
       await refreshAccount();
-      window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (error) {
       setVerificationError(getImageErrorMessage(error));
     } finally {
@@ -118,18 +110,18 @@ export default function AccountPage() {
   };
 
   const phoneScene = user?.phone ? "change_phone" : "bind_phone";
+  const completePhone = composePhoneNumber(phoneCountry, phoneInput);
 
   const sendPhoneCode = async () => {
     setPhoneError("");
     setPhoneMessage("");
-    if (!/^1[3-9]\d{9}$/.test(phoneInput)) {
+    if (!isValidLocalPhone(phoneCountry, phoneInput)) {
       setPhoneError("请输入正确的手机号");
       return;
     }
-
     setPhoneLoading(true);
     try {
-      const response = await apiClient.sendSmsCode({ phone: phoneInput, scene: phoneScene });
+      const response = await apiClient.sendSmsCode({ phone: completePhone, scene: phoneScene });
       setPhoneMessage(response.message || "验证码已发送");
       setPhoneCountdown(60);
     } catch (error) {
@@ -143,8 +135,7 @@ export default function AccountPage() {
     event.preventDefault();
     setPhoneError("");
     setPhoneMessage("");
-
-    if (!/^1[3-9]\d{9}$/.test(phoneInput)) {
+    if (!isValidLocalPhone(phoneCountry, phoneInput)) {
       setPhoneError("请输入正确的手机号");
       return;
     }
@@ -152,16 +143,16 @@ export default function AccountPage() {
       setPhoneError("请输入短信验证码");
       return;
     }
-
     setPhoneLoading(true);
     try {
-      const response = await apiClient.bindPhone({ phone: phoneInput, code: phoneCode, scene: phoneScene });
+      const response = await apiClient.bindPhone({ phone: completePhone, code: phoneCode, scene: phoneScene });
       setPhoneMessage(response.message || "手机号已更新");
       setPhoneInput("");
       setPhoneCode("");
       setPhoneCountdown(0);
       setCurrentUserCache(response.user);
       setUser(response.user);
+      setPhonePanelOpen(false);
       await refreshAccount();
       window.dispatchEvent(new CustomEvent("ai-image-credits-updated"));
     } catch (error) {
@@ -176,7 +167,6 @@ export default function AccountPage() {
     setPasswordLoading(true);
     setPasswordError("");
     setPasswordMessage("");
-
     if (!oldPassword) {
       setPasswordError("请输入旧密码");
       setPasswordLoading(false);
@@ -197,7 +187,6 @@ export default function AccountPage() {
       setPasswordLoading(false);
       return;
     }
-
     try {
       const response = await apiClient.changePassword({ oldPassword, newPassword });
       setPasswordMessage(response.message);
@@ -213,241 +202,141 @@ export default function AccountPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-[1440px] px-5 py-10 lg:px-8">
-        <Card className="h-56 animate-pulse p-6" />
+      <main className="mx-auto max-w-6xl px-5 py-10 lg:px-8">
+        <div className="h-8 w-40 animate-pulse rounded bg-neutral-200" />
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <Card className="h-80 animate-pulse" />
+          <Card className="h-64 animate-pulse" />
+        </div>
       </main>
     );
   }
-
   if (!user) return null;
 
+  const benefitLabel = user.membershipUnlimited
+    ? user.membershipPlan || "不限次权益"
+    : user.credits > 0 ? `${user.credits} 张图片可用` : "暂无可用额度";
+
   return (
-    <main className="mx-auto max-w-[1440px] px-5 py-10 lg:px-8">
-      <div className="mb-6">
-        <p className="text-sm font-semibold text-studio-600">账户中心</p>
-        <h1 className="mt-2 text-3xl font-bold text-ink">账户信息与使用概览</h1>
-      </div>
+    <main className="mx-auto max-w-6xl px-5 py-10 lg:px-8 lg:py-14">
+      <header className="flex flex-col gap-5 border-b border-neutral-200 pb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-neutral-500">账户中心</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-neutral-950">你好，{user.name}</h1>
+          <p className="mt-2 text-sm text-neutral-500">管理创作权益、联系方式与账户安全。</p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/history" className="inline-flex h-10 items-center gap-2 rounded-md border border-neutral-300 px-3.5 text-sm font-medium text-neutral-800 transition hover:border-neutral-950 hover:bg-neutral-50"><History className="h-4 w-4" />历史记录</Link>
+          <Link href="/pricing" className="inline-flex h-10 items-center gap-2 rounded-md bg-neutral-950 px-3.5 text-sm font-medium text-white transition hover:bg-neutral-800"><CreditCard className="h-4 w-4" />购买方案</Link>
+        </div>
+      </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-studio-100 text-2xl font-bold text-studio-700">
-              {user.name.slice(0, 1).toUpperCase()}
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-ink">{user.name}</h2>
-              <p className="mt-1 text-sm text-muted">{user.email || "手机号账号"}</p>
-            </div>
-          </div>
-
-          <div className="mt-6 flex flex-col gap-4 rounded-xl border border-neutral-300 bg-neutral-950 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-neutral-300">我的邀请码</p>
-              <p className="mt-1 text-2xl font-bold tracking-[0.18em]">{myInviteCode || "生成中…"}</p>
-              <p className="mt-2 text-xs text-neutral-400">好友注册时填写，双方各得一张 ¥10 优惠券</p>
-              {inviteCouponSummary.count > 0 ? (
-                <p className="mt-1 text-xs font-semibold text-emerald-300">
-                  可用邀请券 {inviteCouponSummary.count} 张，共 ¥{(inviteCouponSummary.amountCents / 100).toFixed(0)}
-                </p>
-              ) : null}
-            </div>
-            <Button type="button" variant="outline" className="border-neutral-600 text-white hover:border-white hover:bg-white/10" disabled={!myInviteCode} onClick={handleCopyInviteCode}>
-              {inviteCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-              {inviteCopied ? "已复制" : "复制邀请码"}
-            </Button>
-          </div>
-
-          <div className={`mt-6 rounded-lg border p-4 ${user.phoneVerified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className={`text-sm font-bold ${user.phoneVerified ? "text-emerald-700" : "text-amber-700"}`}>
-                  {user.phoneVerified ? "手机号已验证" : "手机号尚未绑定"}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {user.phone
-                    ? `当前手机号：${user.phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2")}`
-                    : "绑定手机号后，可以使用短信验证码登录并使用完整功能。"}
-                </p>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid min-w-0 gap-6">
+          <Card className="overflow-hidden">
+            <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-xl font-semibold text-white">{user.name.slice(0, 1).toUpperCase()}</div>
+                <div className="min-w-0">
+                  <h2 className="truncate text-xl font-semibold text-neutral-950">{user.name}</h2>
+                  <p className="mt-1 truncate text-sm text-neutral-500">{user.email || (user.phone ? maskPhoneNumber(user.phone) : "ImageGood 用户")}</p>
+                </div>
               </div>
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />{user.hasVerifiedContact ? "联系方式已验证" : "待验证"}</span>
             </div>
-
-            <form className="mt-4 grid gap-3 md:grid-cols-[1fr_160px_120px]" onSubmit={handleBindPhone}>
-              <input
-                value={phoneInput}
-                onChange={(event) => setPhoneInput(event.target.value.replace(/\D/g, "").slice(0, 11))}
-                inputMode="tel"
-                placeholder={user.phone ? "输入新手机号" : "输入手机号"}
-                className="h-11 rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-              />
-              <input
-                value={phoneCode}
-                onChange={(event) => setPhoneCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                inputMode="numeric"
-                placeholder="短信验证码"
-                className="h-11 rounded-lg border border-line bg-white px-4 text-sm outline-none transition focus:border-studio-400 focus:ring-4 focus:ring-studio-500/10"
-              />
-              <Button type="button" variant="outline" loading={phoneLoading} disabled={phoneCountdown > 0} onClick={sendPhoneCode}>
-                {phoneCountdown > 0 ? `${phoneCountdown}s` : "发送验证码"}
-              </Button>
-              <div className="md:col-span-3">
-                <Button type="submit" loading={phoneLoading}>
-                  {user.phone ? "更换手机号" : "绑定手机号"}
-                </Button>
-              </div>
-            </form>
-            {phoneMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700">{phoneMessage}</p> : null}
-            {phoneError ? <p className="mt-3 text-sm font-semibold text-rose-700">{phoneError}</p> : null}
-          </div>
-
-          <div className={`mt-6 rounded-lg border p-4 ${user.emailVerified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className={`text-sm font-bold ${user.emailVerified ? "text-emerald-700" : "text-amber-700"}`}>
-                  {user.emailVerified ? "邮箱已验证" : user.email ? "邮箱尚未验证" : "邮箱未绑定"}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {!user.email
-                    ? "当前账号未绑定邮箱。"
-                    : user.emailVerified
-                      ? `验证时间：${user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString("zh-CN") : "已完成"}`
-                      : "完成手机号或邮箱任一验证后可使用图片生成和创作方案功能。"}
-                </p>
-              </div>
-              {user.email && !user.emailVerified ? (
-                <Button size="sm" loading={verificationLoading} onClick={handleResendVerification}>
-                  重新发送验证邮件
-                </Button>
-              ) : null}
+            <div className="grid border-t border-neutral-200 sm:grid-cols-3 sm:divide-x sm:divide-neutral-200">
+              <AccountMetric label="当前创作权益" value={benefitLabel} />
+              <AccountMetric label="累计生成" value={`${succeededTasks} 次`} />
+              <AccountMetric label="注册时间" value={new Date(user.createdAt).toLocaleDateString("zh-CN")} />
             </div>
-            {verificationMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700">{verificationMessage}</p> : null}
-            {verificationError ? <p className="mt-3 text-sm font-semibold text-rose-700">{verificationError}</p> : null}
-          </div>
+          </Card>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoBlock
-              label="当前创作权益"
-              value={
-                user.membershipUnlimited
-                  ? user.membershipPlan || "历史不限次权益"
-                  : user.credits > 0
-                    ? `${user.credits} 张图片可用`
-                    : "暂未开通"
-              }
-            />
-            <InfoBlock
-              label="权益有效期"
-              value={
-                user.membershipUnlimited
-                  ? user.membershipLifetime
-                    ? "长期有效"
-                    : user.membershipExpiresAt
-                      ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期`
-                      : "有效"
-                  : "图片额度长期有效"
-              }
-            />
-            <InfoBlock label="注册时间" value={new Date(user.createdAt).toLocaleDateString("zh-CN")} />
-            <InfoBlock label="累计生成次数" value={`${taskSummary.succeeded} 次`} />
-          </div>
+          <Card className="overflow-hidden">
+            <div className="border-b border-neutral-200 px-6 py-5">
+              <h2 className="text-lg font-semibold text-neutral-950">账户与安全</h2>
+              <p className="mt-1 text-sm text-neutral-500">仅在需要时展开并修改安全信息。</p>
+            </div>
+            <SecurityRow icon={<Smartphone className="h-5 w-5" />} title="手机号" detail={user.phone ? maskPhoneNumber(user.phone) : undefined} status={user.phoneVerified ? "已验证" : undefined} actionLabel={user.phone ? "更换手机号" : "绑定手机号"} onAction={() => { setPhonePanelOpen((value) => !value); setPhoneError(""); setPhoneMessage(""); }} />
+            {phonePanelOpen ? (
+              <form className="border-b border-neutral-200 bg-neutral-50 px-6 py-5" onSubmit={handleBindPhone}>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                  <PhoneNumberField countryCode={phoneCountry} value={phoneInput} onCountryChange={(countryCode) => { setPhoneCountry(countryCode); setPhoneInput(""); }} onChange={setPhoneInput} label={user.phone ? "新手机号" : "手机号"} required />
+                  <label className="block">
+                    <span className="text-sm font-semibold text-neutral-800">短信验证码</span>
+                    <input value={phoneCode} onChange={(event) => setPhoneCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="6 位验证码" className="mt-2 h-11 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+                  </label>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" loading={phoneLoading} disabled={phoneCountdown > 0} onClick={sendPhoneCode}>{phoneCountdown > 0 ? `${phoneCountdown} 秒后重发` : "发送验证码"}</Button>
+                  <Button type="submit" loading={phoneLoading}>{user.phone ? "确认更换" : "确认绑定"}</Button>
+                  <Button type="button" variant="ghost" onClick={() => setPhonePanelOpen(false)}>取消</Button>
+                </div>
+                {phoneMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{phoneMessage}</p> : null}
+                {phoneError ? <p className="mt-3 text-sm font-medium text-rose-700">{phoneError}</p> : null}
+              </form>
+            ) : null}
+            <SecurityRow icon={<Mail className="h-5 w-5" />} title="邮箱" detail={user.email || "未绑定"} status={user.emailVerified ? "已验证" : user.email ? "待验证" : undefined} actionLabel={user.email && !user.emailVerified ? "发送验证邮件" : undefined} actionLoading={verificationLoading} onAction={user.email && !user.emailVerified ? handleResendVerification : undefined} />
+            {verificationMessage || verificationError ? <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-3 text-sm font-medium"><span className={verificationError ? "text-rose-700" : "text-emerald-700"}>{verificationError || verificationMessage}</span></div> : null}
+            <SecurityRow icon={<KeyRound className="h-5 w-5" />} title="登录密码" detail="用于手机号或邮箱密码登录" actionLabel="修改密码" onAction={() => { setPasswordPanelOpen((value) => !value); setPasswordError(""); setPasswordMessage(""); }} last />
+            {passwordPanelOpen ? (
+              <form className="border-t border-neutral-200 bg-neutral-50 px-6 py-5" onSubmit={handleChangePassword}>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <PasswordField label="旧密码" value={oldPassword} onChange={setOldPassword} autoComplete="current-password" required />
+                  <PasswordField label="新密码" value={newPassword} onChange={setNewPassword} autoComplete="new-password" required />
+                  <PasswordField label="确认新密码" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" required />
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2"><Button type="submit" loading={passwordLoading}>保存新密码</Button><Button type="button" variant="ghost" onClick={() => setPasswordPanelOpen(false)}>取消</Button></div>
+                {passwordMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{passwordMessage}</p> : null}
+                {passwordError ? <p className="mt-3 text-sm font-medium text-rose-700">{passwordError}</p> : null}
+              </form>
+            ) : null}
+          </Card>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <InfoBlock
-              label="最近一次生成"
-              value={taskSummary.latestCreatedAt ? new Date(taskSummary.latestCreatedAt).toLocaleString("zh-CN") : "暂无记录"}
-            />
-            <InfoBlock
-              label="最近登录时间"
-              value={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("zh-CN") : "暂无记录"}
-            />
-          </div>
-
-          <div className="mt-8 rounded-lg border border-line bg-white p-5">
-            <h2 className="text-xl font-bold text-ink">最近权益与使用记录</h2>
-            <div className="mt-4 grid gap-3">
-              {transactions.slice(0, 5).length === 0 ? (
-                <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-muted">暂无权益记录。</p>
-              ) : null}
+          <Card className="overflow-hidden">
+            <div className="border-b border-neutral-200 px-6 py-5"><h2 className="text-lg font-semibold text-neutral-950">最近权益记录</h2><p className="mt-1 text-sm text-neutral-500">展示最近 5 条额度变化。</p></div>
+            <div className="divide-y divide-neutral-200">
+              {transactions.slice(0, 5).length === 0 ? <p className="px-6 py-8 text-center text-sm text-neutral-500">暂无权益记录</p> : null}
               {transactions.slice(0, 5).map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{transaction.reason}</p>
-                    <p className="mt-1 text-xs text-muted">{new Date(transaction.createdAt).toLocaleString("zh-CN")}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${transaction.amount >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {transaction.amount === 0 ? "已生效" : `${transaction.amount > 0 ? "+" : ""}${transaction.amount}`}
-                    </p>
-                    {transaction.amount !== 0 ? <p className="mt-1 text-xs text-muted">历史额度 {transaction.balanceAfter}</p> : null}
-                  </div>
+                <div key={transaction.id} className="flex items-center justify-between gap-4 px-6 py-4">
+                  <div className="min-w-0"><p className="truncate text-sm font-medium text-neutral-900">{transaction.reason}</p><p className="mt-1 text-xs text-neutral-500">{new Date(transaction.createdAt).toLocaleString("zh-CN")}</p></div>
+                  <p className={`shrink-0 text-sm font-semibold ${transaction.amount >= 0 ? "text-emerald-700" : "text-neutral-900"}`}>{transaction.amount === 0 ? "已生效" : `${transaction.amount > 0 ? "+" : ""}${transaction.amount}`}</p>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
+        </div>
 
-          <div className="mt-8 rounded-lg border border-line bg-white p-5">
-            <h2 className="text-xl font-bold text-ink">修改密码</h2>
-            <p className="mt-2 text-sm text-muted">修改成功后当前登录状态会保留，新密码将在下次登录时生效。</p>
-
-            {passwordError ? (
-              <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-                {passwordError}
-              </div>
-            ) : null}
-            {passwordMessage ? (
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                {passwordMessage}
-              </div>
-            ) : null}
-
-            <form className="mt-5 grid gap-4 md:grid-cols-3" onSubmit={handleChangePassword}>
-              <PasswordInput label="旧密码" value={oldPassword} onChange={setOldPassword} autoComplete="current-password" />
-              <PasswordInput label="新密码" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
-              <PasswordInput label="确认新密码" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
-              <div className="md:col-span-3">
-                <Button type="submit" loading={passwordLoading}>
-                  保存新密码
-                </Button>
-              </div>
-            </form>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-xl font-bold text-ink">快捷操作</h2>
-          <div className="mt-5 grid gap-3">
-            <Link href="/pricing">
-              <Button className="w-full">查看创作方案</Button>
-            </Link>
-            <Link href="/history">
-              <Button variant="outline" className="w-full">查看历史记录</Button>
-            </Link>
-            <Link href="/editor">
-              <Button variant="outline" className="w-full">开始智能修图</Button>
-            </Link>
-            <Button variant="ghost" className="w-full text-rose-600 hover:bg-rose-50" onClick={handleLogout}>
-              退出登录
-            </Button>
-          </div>
-        </Card>
+        <aside className="grid content-start gap-6">
+          <Card className="overflow-hidden border-neutral-950 bg-neutral-950 p-6 text-white shadow-none">
+            <p className="text-sm font-medium text-neutral-400">我的邀请码</p>
+            <p className="mt-3 text-3xl font-semibold tracking-[0.16em]">{myInviteCode || "生成中…"}</p>
+            <p className="mt-3 text-sm leading-6 text-neutral-400">好友注册时填写，双方各得一张 ¥10 优惠券。</p>
+            {inviteCouponSummary.count > 0 ? <p className="mt-3 text-xs font-medium text-emerald-300">可用邀请券 {inviteCouponSummary.count} 张，共 ¥{(inviteCouponSummary.amountCents / 100).toFixed(0)}</p> : null}
+            <Button type="button" variant="outline" className="mt-5 w-full border-neutral-700 text-white hover:border-neutral-500 hover:bg-neutral-900" disabled={!myInviteCode} onClick={handleCopyInviteCode}>{inviteCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{inviteCopied ? "已复制" : "复制邀请码"}</Button>
+          </Card>
+          <Card className="p-6">
+            <p className="text-sm font-medium text-neutral-500">当前权益</p>
+            <p className="mt-2 text-xl font-semibold text-neutral-950">{benefitLabel}</p>
+            <p className="mt-2 text-sm leading-6 text-neutral-500">{user.membershipUnlimited ? user.membershipLifetime ? "长期有效" : user.membershipExpiresAt ? `${new Date(user.membershipExpiresAt).toLocaleDateString("zh-CN")} 到期` : "权益有效" : "图片额度长期有效"}</p>
+            <Link href="/pricing" className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-neutral-950 hover:underline">查看可用方案 <ArrowRight className="h-4 w-4" /></Link>
+          </Card>
+          <button type="button" onClick={handleLogout} className="inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-rose-700"><LogOut className="h-4 w-4" />退出登录</button>
+        </aside>
       </div>
     </main>
   );
 }
 
-function InfoBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-slate-50 p-4">
-      <p className="text-sm font-semibold text-muted">{label}</p>
-      <p className="mt-2 text-lg font-bold text-ink">{value}</p>
-    </div>
-  );
+function AccountMetric({ label, value }: { label: string; value: string }) {
+  return <div className="border-t border-neutral-200 px-6 py-5 first:border-t-0 sm:border-t-0"><p className="text-xs font-medium text-neutral-500">{label}</p><p className="mt-1.5 text-base font-semibold text-neutral-950">{value}</p></div>;
 }
 
-function PasswordInput(props: {
-  label: string;
-  value: string;
-  autoComplete: string;
-  onChange: (value: string) => void;
-}) {
-  return <PasswordField {...props} required />;
+function SecurityRow({ icon, title, detail, status, actionLabel, actionLoading, onAction, last }: { icon: React.ReactNode; title: string; detail?: string; status?: string; actionLabel?: string; actionLoading?: boolean; onAction?: () => void; last?: boolean }) {
+  return (
+    <div className={`flex items-center gap-4 px-6 py-5 ${last ? "" : "border-b border-neutral-200"}`}>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-700">{icon}</div>
+      <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-semibold text-neutral-950">{title}</p>{status ? <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600">{status}</span> : null}</div>{detail ? <p className="mt-1 truncate text-sm text-neutral-500">{detail}</p> : null}</div>
+      {actionLabel && onAction ? <Button type="button" size="sm" variant="outline" loading={actionLoading} onClick={onAction}>{actionLabel}</Button> : null}
+    </div>
+  );
 }

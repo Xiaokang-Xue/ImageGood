@@ -18,9 +18,9 @@ import {
   getAvailableCreditBalance,
   hasActiveMembership
 } from "@/lib/credit-balance";
+import { normalizeStoredPhone } from "@/config/phone-countries";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^1[3-9]\d{9}$/;
 const SMS_SCENES = new Set(["register", "login", "bind_phone", "change_phone"] as const);
 type SmsScene = "register" | "login" | "bind_phone" | "change_phone";
 
@@ -41,11 +41,11 @@ function normalizeEmail(email: string) {
 }
 
 function normalizePhone(phone: string) {
-  return phone.replace(/\D/g, "");
+  return normalizeStoredPhone(phone) || "";
 }
 
 function assertValidPhone(phone: string) {
-  if (!PHONE_PATTERN.test(phone)) {
+  if (!normalizeStoredPhone(phone)) {
     throw new AuthError("INVALID_PHONE", "请输入正确的手机号");
   }
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { maskPhoneNumber } from "@/config/phone-countries";
 
 export class SmsSendError extends Error {
   constructor(message: string) {
@@ -13,10 +14,6 @@ function requiredEnv(name: string) {
     throw new SmsSendError("短信服务配置不完整，请联系管理员");
   }
   return value;
-}
-
-function maskPhone(phone: string) {
-  return phone.replace(/^(\d{3})\d{4}(\d{4})$/, "$1****$2");
 }
 
 export function isSmsServiceConfigured() {
@@ -64,7 +61,7 @@ export async function sendSmsCode(input: { phone: string; code: string }) {
 
   const client = new Dysmsapi(config);
   const request = new SendSmsRequest({
-    phoneNumbers: input.phone,
+    phoneNumbers: input.phone.replace(/^\+/, ""),
     signName,
     templateCode,
     templateParam: JSON.stringify({ code: input.code })
@@ -75,12 +72,12 @@ export async function sendSmsCode(input: { phone: string; code: string }) {
 
   if (body?.code !== "OK") {
     console.warn("[sms] aliyun send failed", {
-      phone: maskPhone(input.phone),
+      phone: maskPhoneNumber(input.phone),
       code: body?.code,
       message: body?.message
     });
     throw new SmsSendError(body?.message || "短信验证码发送失败，请稍后重试");
   }
 
-  console.info("[sms] code sent", { phone: maskPhone(input.phone), requestId: body?.requestId });
+  console.info("[sms] code sent", { phone: maskPhoneNumber(input.phone), requestId: body?.requestId });
 }
