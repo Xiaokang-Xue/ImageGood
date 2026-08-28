@@ -69,11 +69,12 @@ export async function GET(
     const responseBuffer = previewWidth ? await createImagePreview(buffer, previewWidth) : buffer;
     const responseMimeType = previewWidth ? "image/webp" : mimeType;
 
+    const isDownload = request.nextUrl.searchParams.get("download") === "1";
     return new NextResponse(new Uint8Array(responseBuffer), {
       headers: {
         "Content-Type": responseMimeType,
         "Content-Length": String(responseBuffer.length),
-        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Content-Disposition": `${isDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "Cache-Control": "private, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff",
         Vary: "Cookie"

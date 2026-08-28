@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getImageTaskById, hasPaidOrderForUser } from "@/lib/db";
 import { imageExtensionFromMimeType } from "@/lib/server/image-file";
-import { readPrivateResultImage } from "@/lib/server/image-storage";
+import { getPrivateResultSignedUrl, readPrivateResultImage } from "@/lib/server/image-storage";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -49,9 +49,26 @@ export async function GET(
   }
 
   try {
-    const result = await readPrivateResultImage(task.originalResultImages[0]);
-    const extension = imageExtensionFromMimeType(result.mimeType);
     const inline = request.nextUrl.searchParams.get("inline") === "1";
+    const storedReference = task.originalResultImages[0];
+    const referenceExtension = storedReference.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase();
+    const provisionalFilename = `imagegood-${task.type}-${task.id}.${referenceExtension || "png"}`;
+    const forceServerTransfer = request.nextUrl.searchParams.get("image_proxy") === "1";
+    const signedUrl = forceServerTransfer
+      ? null
+      : await getPrivateResultSignedUrl(storedReference, {
+          filename: provisionalFilename,
+          inline
+        });
+    if (signedUrl) {
+      const response = NextResponse.redirect(signedUrl, 307);
+      response.headers.set("Cache-Control", "private, no-store");
+      response.headers.set("Vary", "Cookie");
+      return response;
+    }
+
+    const result = await readPrivateResultImage(storedReference);
+    const extension = imageExtensionFromMimeType(result.mimeType);
     const filename = `imagegood-${task.type}-${task.id}.${extension}`;
     return new NextResponse(new Uint8Array(result.buffer), {
       headers: {

@@ -32,10 +32,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const hasPaidOrder = await hasPaidOrderForUser(user.id);
     const publicTask = toPublicImageTask(task, hasPaidOrder);
-    const requestedWidth = Number.parseInt(new URL(request.url).searchParams.get("previewWidth") || "1024", 10);
+    const requestedWidth = Number.parseInt(new URL(request.url).searchParams.get("previewWidth") || "960", 10);
     const previewWidth = Number.isFinite(requestedWidth)
       ? Math.min(1600, Math.max(480, requestedWidth))
-      : 1024;
+      : 960;
     return NextResponse.json({ ok: true, task: await withImageTaskPreviews(publicTask, previewWidth) });
   } catch (error) {
     console.error("[tasks] failed to read task", {

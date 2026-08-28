@@ -72,7 +72,10 @@ async function createDirectPreviewUrl(imageUrl: string | null | undefined, width
   if (!key) return imageUrl || null;
 
   try {
-    return await getCosObjectSignedUrl(key, cosImagePreviewQuery(width));
+    return await getCosObjectSignedUrl(key, {
+      [cosImagePreviewQuery(width)]: "",
+      "response-content-disposition": "inline"
+    });
   } catch {
     return imageUrl || null;
   }
@@ -83,18 +86,14 @@ export async function withImageTaskPreviews(task: ImageTaskRecord, width: number
     ? task.resultImagePreviewUrls
     : task.resultImages || [];
   const shouldPreviewInput = resultImages.length === 0 && task.status !== "pending" && task.status !== "processing";
-  const placeholderWidth = Math.min(240, width);
   const [inputImagePreviewUrl, resultPreviewPairs] = await Promise.all([
     shouldPreviewInput ? createDirectPreviewUrl(task.inputImageUrl, width) : Promise.resolve(null),
     Promise.all(
       resultImages.map(async (imageUrl) => {
-        const [previewUrl, placeholderUrl] = await Promise.all([
-          createDirectPreviewUrl(imageUrl, width),
-          createDirectPreviewUrl(imageUrl, placeholderWidth)
-        ]);
+        const previewUrl = await createDirectPreviewUrl(imageUrl, width);
         return {
           previewUrl: previewUrl || imageUrl,
-          placeholderUrl: placeholderUrl && placeholderUrl !== previewUrl ? placeholderUrl : ""
+          placeholderUrl: ""
         };
       })
     )

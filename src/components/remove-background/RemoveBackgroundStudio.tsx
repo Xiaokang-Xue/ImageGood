@@ -16,6 +16,7 @@ import {
   apiClient,
   downloadImage,
   getImageErrorMessage,
+  imageUrlForBrowserRead,
   isAbortError,
   isContactNotVerifiedError,
   isInsufficientCreditsError,
@@ -204,7 +205,7 @@ export function RemoveBackgroundStudio() {
     setDownloadingBackground(true);
     setError("");
     try {
-      const response = await fetch(resultUrl);
+      const response = await fetch(imageUrlForBrowserRead(resultUrl));
       if (!response.ok) {
         throw new Error("无法读取抠图结果，请稍后重试");
       }

@@ -216,7 +216,7 @@ export async function imageUrlToUploadFile(imageUrl: string, filename: string) {
     return dataUrlToFile(imageUrl, filename);
   }
 
-  const response = await fetch(imageUrl);
+  const response = await fetch(imageUrlForBrowserRead(imageUrl));
 
   if (!response.ok) {
     throw new ImageApiClientError("IMAGE_READ_FAILED", "无法读取当前图片，请重新上传后再试");
@@ -231,6 +231,20 @@ export async function imageUrlToUploadFile(imageUrl: string, filename: string) {
   return new File([arrayBuffer], `${filename}.${fileExtensionFromMime(mime)}`, {
     type: mime
   });
+}
+
+export function imageUrlForBrowserRead(imageUrl: string) {
+  const source = imageUrl.split("#")[0];
+  if (
+    !source.startsWith("/api/storage/images/") &&
+    !/^\/api\/tasks\/[^/]+\/download(?:\?|$)/.test(source)
+  ) {
+    return source;
+  }
+
+  const url = new URL(source, window.location.origin);
+  url.searchParams.set("image_proxy", "1");
+  return `${url.pathname}${url.search}`;
 }
 
 async function resolveImageFile(image?: File, imageUrl?: string, filename = "input-image") {
@@ -452,6 +466,30 @@ export async function downloadImage(url: string, filename = `ai-image-result-${D
 
   if (url.startsWith("data:")) {
     triggerDownload(url);
+    return;
+  }
+
+  const sourceWithoutMarker = url.split("#")[0];
+  if (sourceWithoutMarker.startsWith("/api/storage/images/")) {
+    const directUrl = new URL(sourceWithoutMarker, window.location.origin);
+    directUrl.searchParams.set("download", "1");
+    triggerDownload(`${directUrl.pathname}${directUrl.search}`);
+    return;
+  }
+  if (/^\/api\/tasks\/[^/]+\/download(?:\?|$)/.test(sourceWithoutMarker)) {
+    const directUrl = new URL(sourceWithoutMarker, window.location.origin);
+    directUrl.searchParams.delete("inline");
+    triggerDownload(`${directUrl.pathname}${directUrl.search}`);
+    return;
+  }
+  if (sourceWithoutMarker.startsWith("/api/task-images/")) {
+    const directUrl = new URL(sourceWithoutMarker, window.location.origin);
+    directUrl.searchParams.set("download", "1");
+    triggerDownload(`${directUrl.pathname}${directUrl.search}`);
+    return;
+  }
+  if (sourceWithoutMarker.startsWith("/generated/")) {
+    triggerDownload(sourceWithoutMarker);
     return;
   }
 

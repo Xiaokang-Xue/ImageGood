@@ -6,6 +6,7 @@ import {
   buildTaskObjectKey,
   cosObjectUrl,
   getCosObjectBuffer,
+  getCosObjectSignedUrl,
   isCosStorageEnabled,
   uploadBufferToCos
 } from "@/lib/server/cos-storage";
@@ -268,6 +269,21 @@ export async function readPrivateResultImage(reference: string) {
   }
 
   throw new Error("无水印结果引用无效");
+}
+
+export async function getPrivateResultSignedUrl(
+  reference: string,
+  options: { filename: string; inline?: boolean }
+) {
+  if (!reference.startsWith(PRIVATE_RESULT_PREFIX)) return null;
+  const value = reference.slice(PRIVATE_RESULT_PREFIX.length);
+  if (!value.startsWith("cos:") || !isCosStorageEnabled()) return null;
+
+  const key = value.slice(4);
+  const safeFilename = options.filename.replace(/[^a-zA-Z0-9_.-]/g, "-");
+  return getCosObjectSignedUrl(key, {
+    "response-content-disposition": `${options.inline ? "inline" : "attachment"}; filename="${safeFilename}"`
+  });
 }
 
 export async function readStoredTaskImage(reference: string, taskId: string) {

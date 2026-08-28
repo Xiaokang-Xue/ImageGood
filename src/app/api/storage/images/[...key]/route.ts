@@ -62,13 +62,41 @@ export async function GET(
   const previewWidth = parseImagePreviewWidth(request.nextUrl.searchParams.get("image_preview"));
   if (previewWidth) {
     try {
-      const signedUrl = await getCosObjectSignedUrl(taskInfo.key, cosImagePreviewQuery(previewWidth));
+      const signedUrl = await getCosObjectSignedUrl(taskInfo.key, {
+        [cosImagePreviewQuery(previewWidth)]: "",
+        "response-content-disposition": "inline"
+      });
       const response = NextResponse.redirect(signedUrl, 307);
-      response.headers.set("Cache-Control", "private, max-age=240");
+      response.headers.set("Cache-Control", "private, max-age=1500");
       response.headers.set("Vary", "Cookie");
       return response;
     } catch (error) {
       console.warn("[storage-image] failed to create preview URL, falling back to original image", {
+        taskId: taskInfo.taskId,
+        filename: taskInfo.filename,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  const forceServerTransfer = request.nextUrl.searchParams.get("image_proxy") === "1";
+  if (!forceServerTransfer) {
+    try {
+      const isDownload = request.nextUrl.searchParams.get("download") === "1";
+      const signedUrl = await getCosObjectSignedUrl(
+        taskInfo.key,
+        isDownload
+          ? {
+              "response-content-disposition": `attachment; filename="imagegood-${taskInfo.taskId}${extension}"`
+            }
+          : { "response-content-disposition": "inline" }
+      );
+      const response = NextResponse.redirect(signedUrl, 307);
+      response.headers.set("Cache-Control", "private, max-age=1500");
+      response.headers.set("Vary", "Cookie");
+      return response;
+    } catch (error) {
+      console.warn("[storage-image] failed to create direct image URL, falling back to server transfer", {
         taskId: taskInfo.taskId,
         filename: taskInfo.filename,
         error: error instanceof Error ? error.message : String(error)

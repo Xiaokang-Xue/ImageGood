@@ -52,13 +52,16 @@ type CosClient = {
   ) => string | void;
 };
 
+type CosSignedUrlQuery = string | Record<string, string>;
+
 type CosConstructor = new (options: { SecretId: string; SecretKey: string }) => CosClient;
 
 let cosClient: CosClient | null = null;
 
 const OBJECT_CACHE_TTL_MS = 10 * 60 * 1000;
 const OBJECT_CACHE_MAX_BYTES = 64 * 1024 * 1024;
-const SIGNED_URL_CACHE_TTL_MS = 8 * 60 * 1000;
+const SIGNED_URL_EXPIRES_SECONDS = 30 * 60;
+const SIGNED_URL_CACHE_TTL_MS = 25 * 60 * 1000;
 const SIGNED_URL_CACHE_MAX_ENTRIES = 500;
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 const OBJECT_CACHE_MAX_ITEM_BYTES = 16 * 1024 * 1024;
@@ -312,11 +315,22 @@ export async function getCosObjectBuffer(key: string) {
   });
 }
 
-export async function getCosObjectSignedUrl(key: string, query?: string) {
+function normalizeSignedUrlQuery(query?: CosSignedUrlQuery) {
+  if (!query) return undefined;
+  if (typeof query === "string") return { [query]: "" };
+  return Object.fromEntries(
+    Object.entries(query)
+      .filter(([name]) => Boolean(name))
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+export async function getCosObjectSignedUrl(key: string, query?: CosSignedUrlQuery) {
   const config = getCosConfig();
   const client = await getCosClient();
   const normalizedKey = normalizeCosKey(key);
-  const cacheKey = `${normalizedKey}?${query || ""}`;
+  const normalizedQuery = normalizeSignedUrlQuery(query);
+  const cacheKey = `${normalizedKey}?${JSON.stringify(normalizedQuery || {})}`;
   const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.url;
@@ -345,8 +359,8 @@ export async function getCosObjectSignedUrl(key: string, query?: string) {
         Region: config.region,
         Key: normalizedKey,
         Sign: true,
-        Expires: 10 * 60,
-        Query: query ? { [query]: "" } : undefined
+        Expires: SIGNED_URL_EXPIRES_SECONDS,
+        Query: normalizedQuery
       },
       (error, data) => {
         if (error) {
